@@ -1,6 +1,6 @@
-using LibSSH
-using Test
+import ReTest: retest
+import LibSSH
 
-@testset "LibSSH.jl" begin
-    # Write your tests here.
-end
+include("LibSSHTests.jl")
+
+retest(LibSSH, LibSSHTests)
