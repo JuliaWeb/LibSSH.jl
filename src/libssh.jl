@@ -3,6 +3,7 @@ module lib
 using CEnum
 
 using libssh_jll
+using DocStringExtensions
 
 
 const __uid_t = Cuint
@@ -227,7 +228,7 @@ end
     SSH_KEY_CMP_PRIVATE = 1
 end
 
-@cenum var"##Ctag#434"::UInt32 begin
+@cenum var"##Ctag#348"::UInt32 begin
     SSH_LOG_NOLOG = 0
     SSH_LOG_WARNING = 1
     SSH_LOG_PROTOCOL = 2
@@ -281,7 +282,7 @@ end
     SSH_OPTIONS_IDENTITY_AGENT = 42
 end
 
-@cenum var"##Ctag#435"::UInt32 begin
+@cenum var"##Ctag#349"::UInt32 begin
     SSH_SCP_WRITE = 0
     SSH_SCP_READ = 1
     SSH_SCP_RECURSIVE = 16
@@ -2679,23 +2680,27 @@ const SSH_SOCKET_CONNECTED_ERROR = 2
 
 const SSH_SOCKET_CONNECTED_TIMEOUT = 3
 
+# Skipping MacroDefinition: ssh_callbacks_init ( p ) do { ( p ) -> size = sizeof ( * ( p ) ) ; \
+#} while ( 0 ) ;
+
 const SSH_PACKET_USED = 1
 
 const SSH_PACKET_NOT_USED = 2
 
-@enum AuthMethod begin
-    AuthMethod_Unknown = SSH_AUTH_METHOD_UNKNOWN
-    AuthMethod_None = SSH_AUTH_METHOD_NONE
-    AuthMethod_Password = SSH_AUTH_METHOD_PASSWORD
-    AuthMethod_PublicKey = SSH_AUTH_METHOD_PUBLICKEY
-    AuthMethod_HostBased = SSH_AUTH_METHOD_HOSTBASED
-    AuthMethod_Interactive = SSH_AUTH_METHOD_INTERACTIVE
-    AuthMethod_GSSAPI_MIC = SSH_AUTH_METHOD_GSSAPI_MIC
+"""
+$(TYPEDSIGNATURES)
+
+Manual copy of the upstream macro.
+"""
+function ssh_callbacks_init(callbacks::Union{ssh_callbacks_struct, ssh_server_callbacks_struct,
+                                             ssh_socket_callbacks_struct, ssh_packet_callbacks_struct,
+                                             ssh_channel_callbacks_struct})
+    callbacks.size = sizeof(typeof(callbacks))
 end
 
 
 # exports
-const PREFIXES = ["SSH_LOG_", "SSH_OPTIONS_", "SSH_AUTH_", "AuthMethod"]
+const PREFIXES = ["SSH_LOG_", "SSH_OPTIONS_", "SSH_BIND_OPTIONS_", "SSH_AUTH_"]
 for name in names(@__MODULE__; all=true), prefix in PREFIXES
     if startswith(string(name), prefix)
         @eval export $name

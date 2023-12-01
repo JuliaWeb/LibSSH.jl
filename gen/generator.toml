@@ -3,9 +3,9 @@ library_name = "libssh"
 module_name = "lib"
 output_file_path = "../src/libssh.jl"
 output_ignorelist = ["SERVERBANNER"]
-export_symbol_prefixes = ["SSH_LOG_", "SSH_OPTIONS_", "SSH_AUTH_", "AuthMethod"]
+export_symbol_prefixes = ["SSH_LOG_", "SSH_OPTIONS_", "SSH_BIND_OPTIONS_", "SSH_AUTH_"]
 prologue_file_path = "./prologue.jl"
 epilogue_file_path = "./epilogue.jl"
 
 [codegen.macro]
-functionlike_macro_includelist = ["SSH_VERSION", "SSH_VERSION_INT", "SSH_VERSION_DOT"]
+functionlike_macro_includelist = ["SSH_VERSION", "SSH_VERSION_INT", "SSH_VERSION_DOT", "ssh_callbacks_init"]
