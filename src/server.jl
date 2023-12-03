@@ -1,37 +1,47 @@
 import .Callbacks: ServerCallbacks
 
 """
-`SessionEvent(session::Session)`
+`SshEvent(session::Session)`
 
 This object holds a `LibSSH.lib.ssh_event` that has a single `Session` added to
 it. Note: it should be closed *before* `session` is closed.
 """
-mutable struct SessionEvent
+mutable struct SshEvent
     ptr::Union{lib.ssh_event, Nothing}
-    session::Session
 
-    function SessionEvent(session::Session)
+    function SshEvent()
         ptr = lib.ssh_event_new()
         if ptr == C_NULL
             throw(LibSSHException("Could not allocate ssh_event"))
         end
 
-        ret = lib.ssh_event_add_session(ptr, session.ptr)
-        if ret != SSH_OK
-            lib.ssh_event_free(ptr)
-            throw(LibSSHException("Could not add Session to SessionEvent"))
-        end
+        self = new(ptr)
+        finalizer(close, self)
+    end
+end
 
-        self = new(ptr, session)
-        finalizer(self) do event
-            try
-                close(event)
-            catch ex
-                # If closing threw, the only thing we can do is schedule an
-                # error to be printed later.
-                @async @error "Caught error when cleaning up SessionEvent!" exception=(ex, catch_backtrace())
-            end
-        end
+"""
+$(TYPEDSIGNATURES)
+
+Wrapper around `LibSSH.lib.ssh_event_add_session()`. Warning: the session should
+be removed from the event before the event is closed!
+"""
+function event_add_session(event::SshEvent, session::Session)
+    ret = lib.ssh_event_add_session(event.ptr, session.ptr)
+    if ret != SSH_OK
+        throw(LibSSHException("Could not add Session to SshEvent: $(ret)"))
+    end
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Wrapper around `LibSSH.lib.ssh_event_remove_session()`.
+"""
+function event_remove_session(event::SshEvent, session::Session)
+    ret = lib.ssh_event_remove_session(event.ptr, session.ptr)
+    if ret != SSH_OK
+        throw(LibSSHException("Could not remove Session from SshEvent: $(ret)"))
     end
 end
 
@@ -45,24 +55,10 @@ unusable afterwards.
 If removing the session fails a `LibSSH.LibSSHException` will be thrown, which
 could happen if the session is closed before the event is.
 """
-function Base.close(event::SessionEvent)
+function Base.close(event::SshEvent)
     if !isnothing(event.ptr)
-        session_remove_ret = SSH_OK
-        if !isnothing(event.session.ptr)
-            session_remove_ret = lib.ssh_event_remove_session(event.ptr, event.session.ptr::lib.ssh_session)
-        end
-
-        # No matter what, we always free the event
         lib.ssh_event_free(event.ptr)
         event.ptr = nothing
-
-        # Throw an exception if removing the session failed. Currently this
-        # always fails so it's disabled :( In my defense, the return value isn't
-        # checked in other codebases I looked at but I can't tell if that's
-        # because no-one cares enough or if it doesn't matter.
-        # if session_remove_ret != SSH_OK
-        #     throw(LibSSHException("Removing Session from SessionEvent failed: $(session_remove_ret)"))
-        # end
     end
 end
 
@@ -280,12 +276,12 @@ end
 $(TYPEDSIGNATURES)
 
 Non-blocking wrapper around `LibSSH.lib.ssh_event_dopoll()`, only to be used for
-events that have a single session added to them (i.e. a `SessionEvent`).
+events that have a single session added to them (i.e. a `SshEvent`).
 
 Returns either `SSH_OK` or `SSH_ERROR`.
 """
-function sessionevent_dopoll(event::SessionEvent)
-    ret = _trywait(event.session) do
+function event_dopoll(event::SshEvent, session::Session)
+    ret = _trywait(session) do
         lib.ssh_event_dopoll(event.ptr, 0)
     end
 
