@@ -62,6 +62,7 @@ function Base.close(event::SshEvent)
     end
 end
 
+
 """
 `Server(addr::String, port::UInt, hostkey::String; log_verbosity, auth_methods)`
 
@@ -71,32 +72,64 @@ mutable struct Server
     bind_ptr::Union{lib.ssh_bind, Nothing}
     addr::String
     port::UInt
-    hostkey::String
+    hostkey::Union{String, Nothing}
+    key::Union{PKI.SshKey, Nothing}
     auth_methods::Vector{AuthMethod}
     log_verbosity::Int
 
     # Internal things
     _listener_event::Base.Event
     _listener_started::Bool
+    _lock::ReentrantLock
 
-    function Server(addr::String, port, hostkey::String;
+    function Server(port, addr="0.0.0.0";
+                    hostkey=nothing,
+                    key=nothing,
                     log_verbosity=SSH_LOG_NOLOG,
                     auth_methods=[AuthMethod_Password])
+        if isnothing(hostkey) && isnothing(key)
+            throw(ArgumentError("Server requires either `hostkey` or `key` to be set"))
+        elseif !isnothing(hostkey) && !isnothing(key)
+            throw(ArgumentError("Cannot pass both `hostkey` and `key` to Server"))
+        end
+
         bind_ptr = lib.ssh_bind_new()
         lib.ssh_bind_set_blocking(bind_ptr, 0)
 
-        server = new(bind_ptr, addr, port, hostkey, auth_methods, log_verbosity,
-                     Base.Event(), false)
+        server = new(bind_ptr, addr, port, hostkey, key, auth_methods, log_verbosity,
+                     Base.Event(), false, ReentrantLock())
         server.addr = addr
         server.port = port
-        server.hostkey = hostkey
+        if !isnothing(hostkey)
+            server.hostkey = hostkey
+        end
+        if !isnothing(key)
+            server.key = key
+        end
         server.auth_methods = auth_methods
         server.log_verbosity = log_verbosity
 
-        finalizer(close, server)
+        finalizer(server) do server
+            close(server)
+
+            # When a SshKey (lib.ssh_key) is added to a lib.ssh_bind,
+            # lib.ssh_bind_free() will automatically free the key. This means
+            # that when the SshKey finalizer is executed it will attempt to do a
+            # double-free, causing a segfault. We get around that by manually
+            # setting SshKey.ptr to nothing to tell its finalizer the memory has
+            # already been free'd.
+            if !isnothing(key)
+                key.ptr = nothing
+            end
+        end
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Close and free the server.
+"""
 function Base.close(server::Server)
     if isopen(server)
         lib.ssh_bind_free(server.bind_ptr)
@@ -104,40 +137,90 @@ function Base.close(server::Server)
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Lock a server for thread-safe operations.
+"""
+Base.lock(server::Server) = lock(server._lock)
+
+"""
+$(TYPEDSIGNATURES)
+
+Unlock a server.
+"""
+Base.unlock(server::Server) = unlock(server._lock)
+
+"""
+$(TYPEDSIGNATURES)
+
+Check if the server has been free'd yet.
+"""
 Base.isopen(server::Server) = !isnothing(server.bind_ptr)
 
 # Supported bind options
 BIND_PROPERTY_OPTIONS = Dict(:addr => (SSH_BIND_OPTIONS_BINDADDR, Cstring),
                              :port => (SSH_BIND_OPTIONS_BINDPORT, Cuint),
                              :hostkey => (SSH_BIND_OPTIONS_HOSTKEY, Cstring),
+                             :key => (SSH_BIND_OPTIONS_IMPORT_KEY, lib.ssh_key),
                              :log_verbosity => (SSH_BIND_OPTIONS_LOG_VERBOSITY, Cint))
 
+# Helper function to get the types in a Union
+union_types(x::Union) = (x.a, union_types(x.b)...)
+union_types(x::Type) = (x,)
+
 function Base.setproperty!(server::Server, name::Symbol, value)
-    if name ∉ fieldnames(Server)
-        error("type Server has no field $(name)")
-    end
-
-    ret = -1
-
-    if name ∉ keys(BIND_PROPERTY_OPTIONS)
-        return setfield!(server, name, value)
-    else
-        # There's some weirdness around saving strings, so we do some special-casing
-        # here to handle them.
-        option, ctype = BIND_PROPERTY_OPTIONS[name]
-        is_string = ctype == Cstring
-        GC.@preserve value begin
-            cvalue = is_string ? Base.unsafe_convert(ctype, value) : Base.cconvert(ctype, value)
-            ret = lib.ssh_bind_options_set(server.bind_ptr, option, is_string ? Ptr{Cvoid}(cvalue) : Ref(cvalue))
+    @lock server begin
+        if name ∉ fieldnames(Server)
+            error("type Server has no field $(name)")
         end
-    end
 
-    if ret != 0
-        throw(LibSSHException("Error setting Server.$(name) to $(value): $(ret)"))
-    end
+        ret = -1
 
-    saved_type = fieldtype(Server, name)
-    return setfield!(server, name, saved_type(value))
+        if name ∉ keys(BIND_PROPERTY_OPTIONS)
+            return setfield!(server, name, value)
+        else
+            # We don't allow 'unsetting' options, that would be too complicated to implement
+            if isnothing(value)
+                throw(ArgumentError("Setting Server options to nothing is unsupported"))
+            end
+
+            # There's some weirdness around saving strings, so we do some special-casing
+            # here to handle them.
+            option, ctype = BIND_PROPERTY_OPTIONS[name]
+            is_string = ctype == Cstring
+            GC.@preserve value begin
+                cvalue = if is_string
+                    Ptr{Cvoid}(Base.unsafe_convert(ctype, value))
+                elseif value isa PKI.SshKey
+                    value.ptr
+                else
+                    Ref(Base.cconvert(ctype, value))
+                end
+
+                ret = lib.ssh_bind_options_set(server.bind_ptr, option, cvalue)
+            end
+        end
+
+        if ret != 0
+            throw(LibSSHException("Error setting Server.$(name) to $(value): $(ret)"))
+        end
+
+        # Get the type of the field in the struct. Some of them are unions, in which
+        # case we select the first non-Nothing type in the Union. If the saved type
+        # doesn't match the type of the passed value, we convert it.
+        final_value = value
+        saved_type = fieldtype(Server, name)
+        if saved_type isa Union
+            possible_types = filter(!=(Nothing), union_types(saved_type))
+            saved_type = possible_types[1]
+        end
+        if !(value isa saved_type)
+            final_value = saved_type(value)
+        end
+
+        return setfield!(server, name, final_value)
+    end
 end
 
 """
@@ -146,6 +229,12 @@ $(TYPEDSIGNATURES)
 High-level function to listen for incoming requests and pass them off to a
 handler function. This will already set the auth methods on the session (from
 Server.auth_methods) before calling the handler.
+
+The `poll_timeout` argument refers to the timeout for polling the server
+socket for new connections. It must be >0 because otherwise it would never wake
+up if the socket was closed while waiting, but other than that the exact value
+doesn't matter much. It'll only control how frequently the listen loop wakes up
+to check if the server has been closed yet.
 """
 function listen(handler::Function, server::Server; poll_timeout=0.1)
     if poll_timeout < 0
@@ -225,6 +314,10 @@ function set_auth_methods(session::Session, auth_methods::Vector{AuthMethod})
     lib.ssh_set_auth_methods(session.ptr, bitflag)
 end
 
+"""
+Helper function to aid with calling non-blocking functions. It will try calling
+`f()` as long as `f()` returns `SSH_AGAIN`.
+"""
 function _trywait(f::Function, session::Session)
     ret = SSH_ERROR
 
@@ -265,6 +358,11 @@ function handle_key_exchange(session::Session)::Bool
     return ret == SSH_OK
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Set callbacks for a Session. Wrapper around `LibSSH.lib.ssh_set_server_callbacks()`.
+"""
 function set_server_callbacks(session::Session, callbacks::ServerCallbacks)
     ret = lib.ssh_set_server_callbacks(session.ptr, Ref(callbacks.cb_struct::lib.ssh_server_callbacks_struct))
     if ret != SSH_OK
@@ -286,4 +384,197 @@ function event_dopoll(event::SshEvent, session::Session)
     end
 
     return ret
+end
+
+
+module Test
+
+import Printf: @printf
+
+using DocStringExtensions
+
+import ...LibSSH as ssh
+import ...LibSSH.PKI as pki
+import ..Server
+import ..Callbacks.ServerCallbacks
+import ..Callbacks.ChannelCallbacks
+
+
+function exec_command(command, sshchan)
+    cmd_stdout = IOBuffer()
+    cmd_stderr = IOBuffer()
+
+    result = run(pipeline(`sh -c $command`; stdout=cmd_stdout, stderr=cmd_stderr))
+    write(sshchan, String(take!(cmd_stdout)))
+    write(sshchan, String(take!(cmd_stderr)); stderr=true)
+    ssh.channel_request_send_exit_status(sshchan, result.exitcode)
+    ssh.channel_send_eof(sshchan)
+    close(sshchan)
+end
+
+function on_auth_password(session, user, password, test_server)::ssh.AuthStatus
+    _add_log_event!(test_server, :auth_password, (user, password))
+
+    return ssh.AuthStatus_Success
+end
+
+function on_auth_none(session, user, test_server)::ssh.AuthStatus
+    _add_log_event!(test_server, :auth_none, true)
+    return ssh.AuthStatus_Denied
+end
+
+function on_service_request(session, service, test_server)::Bool
+    _add_log_event!(test_server, :service_request, service)
+    return true
+end
+
+function on_channel_open(session, test_server)::Union{ssh.SshChannel, Nothing}
+    _add_log_event!(test_server, :channel_open, true)
+    sshchan = ssh.SshChannel(session)
+    test_server.sshchan = sshchan
+    return sshchan
+end
+
+function on_channel_write_wontblock(session, sshchan, n_bytes, test_server)::Int
+    _add_log_event!(test_server, :channel_write_wontblock, n_bytes)
+    return 0
+end
+
+function on_channel_env_request(session, sshchan, name, value, test_server)::Bool
+    _add_log_event!(test_server, :channel_env_request, (name, value))
+    return true
+end
+
+function on_channel_exec_request(session, sshchan, command, test_server)::Bool
+    _add_log_event!(test_server, :channel_exec_request, command)
+    Threads.@spawn exec_command(command, sshchan)
+    return true
+end
+
+function on_channel_eof(session, sshchan, test_server)::Nothing
+    _add_log_event!(test_server, :channel_eof, true)
+    return nothing
+end
+
+function on_channel_close(session, sshchan, test_server)::Nothing
+    _add_log_event!(test_server, :channel_close, true)
+    close(sshchan)
+end
+
+function handle_session(session, ts)
+    empty!(ts.callback_log)
+    for callback_sym in keys(merge(ts.server_callbacks.functions,
+                                   ts.channel_callbacks.functions))
+        ts.callback_log[callback_sym] = []
+    end
+
+    ssh.set_server_callbacks(session, ts.server_callbacks)
+    if !ssh.handle_key_exchange(session)
+        @error "Key exchange failed"
+        return
+    end
+
+    event = ssh.SshEvent()
+    ssh.event_add_session(event, session)
+    while isnothing(ts.sshchan)
+        ret = ssh.event_dopoll(event, session)
+
+        if ret != ssh.SSH_OK
+            break
+        end
+    end
+
+    if !isnothing(ts.sshchan)
+        ssh.Callbacks.set_channel_callbacks(ts.sshchan, ts.channel_callbacks)
+        while ssh.event_dopoll(event, session) == ssh.SSH_OK
+            continue
+        end
+
+        close(ts.sshchan)
+    end
+
+    try
+        ssh.event_remove_session(event, session)
+    catch ex
+        # This is commented out because it doesn't seem to be a critical
+        # error. Worth investigating in the future though.
+        # @error "Error removing session from event" exception=ex
+    end
+
+    close(event)
+end
+
+@kwdef mutable struct TestServer
+    server::Server
+    server_callbacks::ServerCallbacks = ServerCallbacks()
+    channel_callbacks::ChannelCallbacks = ChannelCallbacks()
+    listener_task::Union{Task, Nothing} = nothing
+    sshchan::Union{ssh.SshChannel, Nothing} = nothing
+
+    callback_log::Dict{Symbol, Vector} = Dict{Symbol, Vector}()
+    log_timeline::Vector = []
+    log_lock::ReentrantLock = ReentrantLock()
+    log_id::Int = 1
+end
+
+function TestServer(port::Int; auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_Password])
+    key = pki.generate(pki.KeyType_ed25519)
+    server = ssh.Server(port; auth_methods, key)
+
+    test_server = TestServer(; server)
+
+    test_server.server_callbacks = ServerCallbacks(test_server;
+                                                   auth_password_function=on_auth_password,
+                                                   auth_none_function=on_auth_none,
+                                                   service_request_function=on_service_request,
+                                                   channel_open_request_session_function=on_channel_open)
+    test_server.channel_callbacks = ChannelCallbacks(test_server;
+                                                     channel_eof_function=on_channel_eof,
+                                                     channel_close_function=on_channel_close,
+                                                     channel_exec_request_function=on_channel_exec_request,
+                                                     channel_env_request_function=on_channel_env_request,
+                                                     channel_write_wontblock_function=on_channel_write_wontblock)
+
+    return test_server
+end
+
+function start(test_server::TestServer)
+    handle_wrapper = session -> handle_session(session, test_server)
+    test_server.listener_task = Threads.@spawn ssh.listen(handle_wrapper, test_server.server)
+    ssh.wait_for_listener(test_server.server)
+end
+
+function stop(test_server::TestServer)
+    if !isnothing(test_server.listener_task)
+        close(test_server.server)
+        wait(test_server.listener_task)
+        test_server.listener_task = nothing
+    end
+end
+
+function _add_log_event!(ts::TestServer, callback_name::Symbol, event)
+    @lock ts.log_lock begin
+        log_vector = ts.callback_log[callback_name]
+        push!(log_vector, event)
+        push!(ts.log_timeline, (callback_name, lastindex(log_vector), time()))
+    end
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Print a nicely formatted timeline of callbacks and their logged data.
+"""
+function print_timeline(ts::TestServer)
+    duration = ts.log_timeline[end][3] - ts.log_timeline[1][3]
+    @printf("%d callbacks in %.3fs\n", length(ts.log_timeline), duration)
+
+    for (id, (callback_name, log_idx, _)) in enumerate(ts.log_timeline)
+        @printf("%-4d %-30s %s\n",
+                id,
+                callback_name,
+                string(ts.callback_log[callback_name][log_idx]))
+    end
+end
+
 end

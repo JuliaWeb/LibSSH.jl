@@ -3,7 +3,7 @@ library_name = "libssh"
 module_name = "lib"
 output_file_path = "../src/libssh.jl"
 output_ignorelist = ["SERVERBANNER"]
-export_symbol_prefixes = ["SSH_LOG_", "SSH_OPTIONS_", "SSH_BIND_OPTIONS_", "SSH_AUTH_"]
+export_symbol_prefixes = ["SSH_LOG_", "SSH_OPTIONS_", "SSH_BIND_OPTIONS_", "SSH_AUTH_", "SSH_KEYTYPE_"]
 prologue_file_path = "./prologue.jl"
 epilogue_file_path = "./epilogue.jl"
 

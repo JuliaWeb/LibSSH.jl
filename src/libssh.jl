@@ -228,7 +228,7 @@ end
     SSH_KEY_CMP_PRIVATE = 1
 end
 
-@cenum var"##Ctag#348"::UInt32 begin
+@cenum var"##Ctag#250"::UInt32 begin
     SSH_LOG_NOLOG = 0
     SSH_LOG_WARNING = 1
     SSH_LOG_PROTOCOL = 2
@@ -282,7 +282,7 @@ end
     SSH_OPTIONS_IDENTITY_AGENT = 42
 end
 
-@cenum var"##Ctag#349"::UInt32 begin
+@cenum var"##Ctag#251"::UInt32 begin
     SSH_SCP_WRITE = 0
     SSH_SCP_READ = 1
     SSH_SCP_RECURSIVE = 16
@@ -2692,15 +2692,14 @@ $(TYPEDSIGNATURES)
 
 Manual copy of the upstream macro.
 """
-function ssh_callbacks_init(callbacks::Union{ssh_callbacks_struct, ssh_server_callbacks_struct,
-                                             ssh_socket_callbacks_struct, ssh_packet_callbacks_struct,
-                                             ssh_channel_callbacks_struct})
+function ssh_callbacks_init(callbacks::Union{ssh_callbacks_struct, ssh_bind_callbacks_struct,
+                                             ssh_server_callbacks_struct, ssh_channel_callbacks_struct})
     callbacks.size = sizeof(typeof(callbacks))
 end
 
 
 # exports
-const PREFIXES = ["SSH_LOG_", "SSH_OPTIONS_", "SSH_BIND_OPTIONS_", "SSH_AUTH_"]
+const PREFIXES = ["SSH_LOG_", "SSH_OPTIONS_", "SSH_BIND_OPTIONS_", "SSH_AUTH_", "SSH_KEYTYPE_"]
 for name in names(@__MODULE__; all=true), prefix in PREFIXES
     if startswith(string(name), prefix)
         @eval export $name

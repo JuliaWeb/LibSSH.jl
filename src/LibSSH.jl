@@ -33,6 +33,7 @@ end
     AuthStatus_Again = Int(SSH_AUTH_AGAIN)
 end
 
+include("pki.jl")
 include("session.jl")
 include("channel.jl")
 include("callbacks.jl")
