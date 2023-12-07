@@ -70,6 +70,20 @@ end
 
 Base.isopen(session::Session) = !isnothing(session.ptr)
 
+"""
+$(TYPEDSIGNATURES)
+
+Get the last error set by libssh.
+"""
+function get_error(session::Session)
+    if isnothing(session.ptr)
+        throw(ArgumentError("Session data has been free'd, cannot get its error"))
+    end
+
+    ret = lib.ssh_get_error(Ptr{Cvoid}(session.ptr))
+    return unsafe_string(ret)
+end
+
 # Mapping from option name to the corresponding enum and C type
 const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
                                       :port => (SSH_OPTIONS_PORT, Cuint),
@@ -192,7 +206,7 @@ function connect(session::Session)
         elseif ret == SSH_OK
             break
         else
-            throw(LibSSHException("Error connecting to $(session.host): $(ret)"))
+            throw(LibSSHException("Error connecting to $(session.host) (port $(session.port)): $(get_error(session))"))
         end
     end
 end
@@ -203,7 +217,9 @@ $(TYPEDSIGNATURES)
 Wrapper around `LibSSH.lib.ssh_disconnect()`.
 """
 function disconnect(session::Session)
-    lib.ssh_disconnect(session.ptr)
+    if isconnected(session)
+        lib.ssh_disconnect(session.ptr)
+    end
 end
 
 """

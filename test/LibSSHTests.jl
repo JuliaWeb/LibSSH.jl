@@ -9,8 +9,8 @@ import LibSSH.PKI as pki
 import LibSSH: lib
 import LibSSH.Test as sshtest
 
-username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
 
+username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
 
 @testset "Server" begin
     hostkey = joinpath(@__DIR__, "ed25519_test_key")
@@ -29,6 +29,7 @@ username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
     # Basic listener test
     t = @async ssh.listen(_ -> nothing, server)
     ssh.wait_for_listener(server)
+
     @test istaskstarted(t)
     close(server)
     wait(t)
@@ -38,13 +39,14 @@ username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
     @test server.bind_ptr == nothing
 
     # More complicated test, where we run a command and check the output
-    test_server = sshtest.TestServer(2222)
-    sshtest.start(test_server)
+    test_server = sshtest.TestServer(2222; password="bar") do
+        cmd_out = IOBuffer()
+        cmd = `sshpass -p bar ssh -o NoHostAuthenticationForLocalhost=yes -p 2222 foo@localhost whoami`
+        cmd_result = run(pipeline(ignorestatus(cmd); stdout=cmd_out))
 
-    cmd_out = IOBuffer()
-    cmd = `sshpass -p bar ssh -o NoHostAuthenticationForLocalhost=yes -p 2222 foo@localhost whoami`
-    result = run(pipeline(ignorestatus(cmd); stdout=cmd_out))
-    sshtest.stop(test_server)
+        @test cmd_result.exitcode == 0
+        @test strip(String(take!(cmd_out))) == username()
+    end
 
     logs = test_server.callback_log
 
@@ -54,10 +56,6 @@ username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
 
     # And a channel was created
     @test !isnothing(test_server.sshchan)
-
-    # And that the command succeeded
-    @test result.exitcode == 0
-    @test strip(String(take!(cmd_out))) == username()
 end
 
 @testset "SshChannel" begin
@@ -82,6 +80,20 @@ end
     session.host = "quux"
     @test session.host == "quux"
     @test_throws ErrorException session.foo
+
+    @test !ssh.isconnected(session)
+
+    # Test connecting to a server
+    session = ssh.Session("127.0.0.1", 2222; log_verbosity=lib.SSH_LOG_NOLOG)
+    test_server = sshtest.TestServer(2222; password="foo") do
+        ssh.connect(session)
+
+        @test ssh.isconnected(session)
+        ssh.userauth_list(session)
+        @test ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
+
+        ssh.disconnect(session)
+    end
 
     # Test the finalizer
     finalize(session)

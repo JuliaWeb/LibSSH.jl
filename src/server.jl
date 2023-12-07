@@ -1,5 +1,6 @@
 import .Callbacks: ServerCallbacks
 
+
 """
 `SshEvent(session::Session)`
 
@@ -158,6 +159,20 @@ Check if the server has been free'd yet.
 """
 Base.isopen(server::Server) = !isnothing(server.bind_ptr)
 
+"""
+$(TYPEDSIGNATURES)
+
+Get the last error set by libssh.
+"""
+function get_error(server::Server)
+    if isnothing(server.bind_ptr)
+        throw(ArgumentError("Server data has been free'd, cannot get its error"))
+    end
+
+    ret = lib.ssh_get_error(Ptr{Cvoid}(server.bind_ptr))
+    return unsafe_string(ret)
+end
+
 # Supported bind options
 BIND_PROPERTY_OPTIONS = Dict(:addr => (SSH_BIND_OPTIONS_BINDADDR, Cstring),
                              :port => (SSH_BIND_OPTIONS_BINDPORT, Cuint),
@@ -254,8 +269,21 @@ function listen(handler::Function, server::Server; poll_timeout=0.1)
             notify(server._listener_event)
         end
 
-        # Wait for new connection attempts
-        poll_result = FileWatching.poll_fd(fd, poll_timeout; readable=true)
+        # Wait for new connection attempts. Note that there's a race condition
+        # between the loop condition evaluation and this line, so we wrap
+        # poll_fd() in a try-catch in case the server (and thus the file
+        # descriptor) has been closed in the meantime, which would cause
+        # poll_fd() to throw an IOError.
+        local poll_result
+        try
+            poll_result = FileWatching.poll_fd(fd, poll_timeout; readable=true)
+        catch ex
+            if ex isa Base.IOError
+                continue
+            else
+                rethrow()
+            end
+        end
 
         # The first thing we do is check if the Server has been closed, because
         # that means that the file descriptor was closed while we were polling
@@ -415,7 +443,7 @@ end
 function on_auth_password(session, user, password, test_server)::ssh.AuthStatus
     _add_log_event!(test_server, :auth_password, (user, password))
 
-    return ssh.AuthStatus_Success
+    return password == test_server.password ? ssh.AuthStatus_Success : ssh.AuthStatus_Denied
 end
 
 function on_auth_none(session, user, test_server)::ssh.AuthStatus
@@ -510,6 +538,8 @@ end
     channel_callbacks::ChannelCallbacks = ChannelCallbacks()
     listener_task::Union{Task, Nothing} = nothing
     sshchan::Union{ssh.SshChannel, Nothing} = nothing
+    verbose::Bool = false
+    password::Union{String, Nothing} = nothing
 
     callback_log::Dict{Symbol, Vector} = Dict{Symbol, Vector}()
     log_timeline::Vector = []
@@ -517,11 +547,19 @@ end
     log_id::Int = 1
 end
 
-function TestServer(port::Int; auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_Password])
+"""
+$(TYPEDSIGNATURES)
+"""
+function TestServer(port::Int; verbose=false, password=nothing,
+                    auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_Password])
+    if ssh.AuthMethod_Password in auth_methods && isnothing(password)
+        throw(ArgumentError("You must pass `password` to TestServer since password authentication is enabled"))
+    end
+
     key = pki.generate(pki.KeyType_ed25519)
     server = ssh.Server(port; auth_methods, key)
 
-    test_server = TestServer(; server)
+    test_server = TestServer(; server, verbose, password)
 
     test_server.server_callbacks = ServerCallbacks(test_server;
                                                    auth_password_function=on_auth_password,
@@ -534,6 +572,25 @@ function TestServer(port::Int; auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod
                                                      channel_exec_request_function=on_channel_exec_request,
                                                      channel_env_request_function=on_channel_env_request,
                                                      channel_write_wontblock_function=on_channel_write_wontblock)
+
+    return test_server
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Do-constructor to execute a function while the server is running and have it
+safely cleaned up afterwards.
+"""
+function TestServer(f::Function, args...; kwargs...)
+    test_server = TestServer(args...; kwargs...)
+    start(test_server)
+
+    try
+        f()
+    finally
+        stop(test_server)
+    end
 
     return test_server
 end
@@ -557,6 +614,10 @@ function _add_log_event!(ts::TestServer, callback_name::Symbol, event)
         log_vector = ts.callback_log[callback_name]
         push!(log_vector, event)
         push!(ts.log_timeline, (callback_name, lastindex(log_vector), time()))
+
+        if ts.verbose
+            @info "$callback_name $event"
+        end
     end
 end
 
