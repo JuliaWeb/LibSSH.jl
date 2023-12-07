@@ -58,11 +58,6 @@ username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
     @test !isnothing(test_server.sshchan)
 end
 
-@testset "SshChannel" begin
-    session = ssh.Session("localhost")
-    @test_throws ArgumentError ssh.SshChannel(session)
-end
-
 @testset "Session" begin
     session = ssh.Session("localhost")
 
@@ -83,9 +78,13 @@ end
 
     @test !ssh.isconnected(session)
 
-    # Test connecting to a server
-    session = ssh.Session("127.0.0.1", 2222; log_verbosity=lib.SSH_LOG_NOLOG)
+    # Test the finalizer
+    finalize(session)
+    @test session.ptr == nothing
+
+    # Test connecting to a server and doing password authentication
     test_server = sshtest.TestServer(2222; password="foo") do
+        session = ssh.Session("127.0.0.1", 2222; log_verbosity=lib.SSH_LOG_NOLOG)
         ssh.connect(session)
 
         @test ssh.isconnected(session)
@@ -93,11 +92,32 @@ end
         @test ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
 
         ssh.disconnect(session)
+        close(session)
     end
+end
 
-    # Test the finalizer
-    finalize(session)
-    @test session.ptr == nothing
+@testset "SshChannel" begin
+    session = ssh.Session("localhost")
+    @test_throws ArgumentError ssh.SshChannel(session)
+
+    test_server = sshtest.TestServer(2222; password="foo") do
+        session = ssh.Session("127.0.0.1", 2222; log_verbosity=lib.SSH_LOG_NOLOG)
+        ssh.connect(session)
+        @test ssh.isconnected(session)
+        @test ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
+
+        # Create a channel
+        sshchan = ssh.SshChannel(session)
+
+        # Create a non-owning channel and make sure that we can't close it
+        non_owning_sshchan = ssh.SshChannel(sshchan.ptr; own=false)
+        @test_throws ArgumentError close(non_owning_sshchan)
+
+        close(sshchan)
+        @test isnothing(sshchan.ptr)
+
+        ssh.disconnect(session)
+    end
 end
 
 @testset "PKI" begin

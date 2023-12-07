@@ -18,7 +18,7 @@ function _c_to_jl(cvalue)
     elseif cvalue isa lib.ssh_session
         ssh.Session(cvalue; own=false)
     elseif cvalue isa lib.ssh_channel
-        ssh.SshChannel(cvalue)
+        ssh.SshChannel(cvalue; own=false)
     else
         cvalue
     end

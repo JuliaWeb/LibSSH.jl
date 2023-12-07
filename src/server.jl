@@ -119,8 +119,8 @@ mutable struct Server
             # double-free, causing a segfault. We get around that by manually
             # setting SshKey.ptr to nothing to tell its finalizer the memory has
             # already been free'd.
-            if !isnothing(key)
-                key.ptr = nothing
+            if !isnothing(server.key)
+                server.key.ptr = nothing
             end
         end
     end
@@ -402,13 +402,19 @@ end
 $(TYPEDSIGNATURES)
 
 Non-blocking wrapper around `LibSSH.lib.ssh_event_dopoll()`, only to be used for
-events that have a single session added to them (i.e. a `SshEvent`).
+events that have a single session added to them (i.e. a `SshEvent`). All of the
+channel locks passed in `sshchan_locks` will be locked while
+`lib.ssh_event_dopoll()` executes (but unlocked while waiting).
 
 Returns either `SSH_OK` or `SSH_ERROR`.
 """
-function event_dopoll(event::SshEvent, session::Session)
+function event_dopoll(event::SshEvent, session::Session, sshchan_locks...)
     ret = _trywait(session) do
-        lib.ssh_event_dopoll(event.ptr, 0)
+        lock.(sshchan_locks)
+        ret = lib.ssh_event_dopoll(event.ptr, 0)
+        unlock.(sshchan_locks)
+
+        return ret
     end
 
     return ret
@@ -475,7 +481,20 @@ end
 
 function on_channel_exec_request(session, sshchan, command, test_server)::Bool
     _add_log_event!(test_server, :channel_exec_request, command)
-    Threads.@spawn exec_command(command, sshchan)
+
+    # Note that we ignore the `sshchan` argument in favour of
+    # `test_server.sshchan`. That's extremely important! `sshchan` is a
+    # non-owning SshChannel created by the callback over the underlying
+    # lib.ssh_channel pointer, which means that `sshchan` and
+    # `test_server.sshchan` are two distinct Julia objects with pointers to the
+    # same lib.ssh_channel struct.
+    #
+    # If we were to pass `sshchan` instead, exec_command() would attempt to
+    # close `sshchan`, which would free the underlying lib.ssh_channel, which
+    # would cause a double-free later when we close
+    # `test_server.sshchan`. That's why close()'ing non-owning SshChannels is
+    # forbidden.
+    Threads.@spawn exec_command(command, test_server.sshchan)
     return true
 end
 
@@ -486,7 +505,7 @@ end
 
 function on_channel_close(session, sshchan, test_server)::Nothing
     _add_log_event!(test_server, :channel_close, true)
-    close(sshchan)
+    close(test_server.sshchan)
 end
 
 function handle_session(session, ts)
@@ -514,7 +533,7 @@ function handle_session(session, ts)
 
     if !isnothing(ts.sshchan)
         ssh.Callbacks.set_channel_callbacks(ts.sshchan, ts.channel_callbacks)
-        while ssh.event_dopoll(event, session) == ssh.SSH_OK
+        while ssh.event_dopoll(event, session, ts.sshchan.close_lock) == ssh.SSH_OK
             continue
         end
 
@@ -617,6 +636,7 @@ function _add_log_event!(ts::TestServer, callback_name::Symbol, event)
 
         if ts.verbose
             @info "$callback_name $event"
+            flush(stdout)
         end
     end
 end

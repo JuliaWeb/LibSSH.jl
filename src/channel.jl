@@ -1,9 +1,43 @@
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+
+Wraps a `LibSSH.lib.ssh_channel`. An `SshChannel` can be owning or non-owning
+of a pointer to the underlying `lib.ssh_channel`, and only owning `SshChannel`s
+can be closed with `close()`.
+
+!!! warning
+    Make sure that `close(::SshChannel)` isn't called during the execution of
+    `ssh.event_dopoll()`, or you will get deeply mystifying segfaults. The best
+    way to prevent this is by passing in the `SshChannel.close_lock` of each
+    channel like so:
+    ```julia
+    ssh.event_dopoll(event, session, sshchan1.close_lock, sshchan2.close_lock)
+    ```
+
+    This will lock the channels during the execution of any channel callbacks by
+    `ssh.event_dopoll()`.
+"""
 mutable struct SshChannel
     ptr::Union{lib.ssh_channel, Nothing}
+    owning::Bool
+    close_lock::ReentrantLock
+
+    function SshChannel(ptr::lib.ssh_channel; own=true)
+        self = new(ptr, own, ReentrantLock())
+        if own
+            finalizer(_finalizer, self)
+        end
+
+        return self
+    end
 end
 
 """
 $(TYPEDSIGNATURES)
+
+Create a channel from an existing session. Note that creating the channel will
+fail unless the session is connected *and* authenticated.
 """
 function SshChannel(session::Session)
     if !isconnected(session)
@@ -15,8 +49,19 @@ function SshChannel(session::Session)
         throw(LibSSHException("Could not allocate ssh_channel"))
     end
 
-    self = SshChannel(ptr)
-    finalizer(close, self)
+    return SshChannel(ptr)
+end
+
+# close(SshChannel) can throw, which we don't want to happen in a finalizer so
+# we wrap it in a try-catch.
+function _finalizer(sshchan::SshChannel)
+    try
+        close(sshchan)
+    catch ex
+        # Note the use of @async to avoid a task switch, which is forbidden in a
+        # finalizer.
+        Threads.@spawn @error "Caught exception while finalizing SshChannel" exception=(ex, catch_backtrace())
+    end
 end
 
 """
@@ -35,13 +80,27 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Closes the channel, and then frees its memory.
+Closes the channel, and then frees its memory. To avoid the risk of
+double-frees, this function may only be called on *owning* `SshChannel`s. It
+will hold the `close_lock` of the channel during execution.
 """
 function Base.close(sshchan::SshChannel)
-    if !isnothing(sshchan.ptr) && isopen(sshchan)
-        lib.ssh_channel_close(sshchan.ptr)
-        lib.ssh_channel_free(sshchan.ptr)
-        sshchan.ptr = nothing
+    if !sshchan.owning
+        throw(ArgumentError("Calling close() on a non-owning SshChannel is not allowed to avoid accidental double-frees, see the docs for more information."))
+    end
+
+    @lock sshchan.close_lock begin
+        if !isnothing(sshchan.ptr)
+            if isopen(sshchan)
+                ret = lib.ssh_channel_close(sshchan.ptr)
+                if ret != SSH_OK
+                    throw(LibSSHException("Closing SshChannel failed: $(ret)"))
+                end
+            end
+
+            lib.ssh_channel_free(sshchan.ptr)
+            sshchan.ptr = nothing
+        end
     end
 end
 

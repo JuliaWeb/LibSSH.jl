@@ -20,7 +20,7 @@ const mode_t = __mode_t
 
 const __fd_mask = Clong
 
-struct fd_set
+mutable struct fd_set
     __fds_bits::NTuple{16, __fd_mask}
 end
 
@@ -30,7 +30,7 @@ mutable struct ssh_key_struct end
 
 const ssh_key = Ptr{ssh_key_struct}
 
-struct ssh_knownhosts_entry
+mutable struct ssh_knownhosts_entry
     hostname::Ptr{Cchar}
     unparsed::Ptr{Cchar}
     publickey::ssh_key
@@ -73,7 +73,7 @@ function ssh_buffer_free(buffer)
     ccall((:ssh_buffer_free, libssh), Cvoid, (ssh_buffer,), buffer)
 end
 
-struct ssh_counter_struct
+mutable struct ssh_counter_struct
     in_bytes::UInt64
     out_bytes::UInt64
     in_packets::UInt64
@@ -228,7 +228,7 @@ end
     SSH_KEY_CMP_PRIVATE = 1
 end
 
-@cenum var"##Ctag#250"::UInt32 begin
+@cenum var"##Ctag#248"::UInt32 begin
     SSH_LOG_NOLOG = 0
     SSH_LOG_WARNING = 1
     SSH_LOG_PROTOCOL = 2
@@ -282,7 +282,7 @@ end
     SSH_OPTIONS_IDENTITY_AGENT = 42
 end
 
-@cenum var"##Ctag#251"::UInt32 begin
+@cenum var"##Ctag#249"::UInt32 begin
     SSH_SCP_WRITE = 0
     SSH_SCP_READ = 1
     SSH_SCP_RECURSIVE = 16
@@ -1532,7 +1532,7 @@ end
 
 const sftp_session = Ptr{sftp_session_struct}
 
-struct sftp_client_message_struct
+mutable struct sftp_client_message_struct
     sftp::sftp_session
     type::UInt8
     id::UInt32
@@ -1552,7 +1552,7 @@ end
 
 const sftp_client_message = Ptr{sftp_client_message_struct}
 
-struct sftp_dir_struct
+mutable struct sftp_dir_struct
     sftp::sftp_session
     name::Ptr{Cchar}
     handle::ssh_string
@@ -1563,7 +1563,7 @@ end
 
 const sftp_dir = Ptr{sftp_dir_struct}
 
-struct sftp_file_struct
+mutable struct sftp_file_struct
     sftp::sftp_session
     name::Ptr{Cchar}
     offset::UInt64
@@ -1583,7 +1583,7 @@ end
 
 const sftp_message = Ptr{sftp_message_struct}
 
-struct sftp_status_message_struct
+mutable struct sftp_status_message_struct
     id::UInt32
     status::UInt32
     error_unused::ssh_string
@@ -1594,7 +1594,7 @@ end
 
 const sftp_status_message = Ptr{sftp_status_message_struct}
 
-struct sftp_statvfs_struct
+mutable struct sftp_statvfs_struct
     f_bsize::UInt64
     f_frsize::UInt64
     f_blocks::UInt64
@@ -1610,13 +1610,13 @@ end
 
 const sftp_statvfs_t = Ptr{sftp_statvfs_struct}
 
-struct sftp_packet_struct
+mutable struct sftp_packet_struct
     sftp::sftp_session
     type::UInt8
     payload::ssh_buffer
 end
 
-struct sftp_request_queue_struct
+mutable struct sftp_request_queue_struct
     next::sftp_request_queue
     message::sftp_message
 end
@@ -1913,7 +1913,7 @@ const ssh_bind = Ptr{ssh_bind_struct}
 # typedef void ( * ssh_bind_incoming_connection_callback ) ( ssh_bind sshbind , void * userdata )
 const ssh_bind_incoming_connection_callback = Ptr{Cvoid}
 
-struct ssh_bind_callbacks_struct
+mutable struct ssh_bind_callbacks_struct
     size::Csize_t
     incoming_connection::ssh_bind_incoming_connection_callback
 end
@@ -2192,7 +2192,7 @@ const ssh_channel_open_request_x11_callback = Ptr{Cvoid}
 # typedef ssh_channel ( * ssh_channel_open_request_auth_agent_callback ) ( ssh_session session , void * userdata )
 const ssh_channel_open_request_auth_agent_callback = Ptr{Cvoid}
 
-struct ssh_callbacks_struct
+mutable struct ssh_callbacks_struct
     size::Csize_t
     userdata::Ptr{Cvoid}
     auth_function::ssh_auth_callback
@@ -2232,7 +2232,7 @@ const ssh_gssapi_accept_sec_ctx_callback = Ptr{Cvoid}
 # typedef int ( * ssh_gssapi_verify_mic_callback ) ( ssh_session session , ssh_string mic , void * mic_buffer , size_t mic_buffer_size , void * userdata )
 const ssh_gssapi_verify_mic_callback = Ptr{Cvoid}
 
-struct ssh_server_callbacks_struct
+mutable struct ssh_server_callbacks_struct
     size::Csize_t
     userdata::Ptr{Cvoid}
     auth_password_function::ssh_auth_password_callback
@@ -2252,7 +2252,7 @@ function ssh_set_server_callbacks(session, cb)
     ccall((:ssh_set_server_callbacks, libssh), Cint, (ssh_session, ssh_server_callbacks), session, cb)
 end
 
-struct ssh_socket_callbacks_struct
+mutable struct ssh_socket_callbacks_struct
     userdata::Ptr{Cvoid}
     data::ssh_callback_data
     controlflow::ssh_callback_int
@@ -2265,7 +2265,7 @@ const ssh_socket_callbacks = Ptr{ssh_socket_callbacks_struct}
 # typedef int ( * ssh_packet_callback ) ( ssh_session session , uint8_t type , ssh_buffer packet , void * user )
 const ssh_packet_callback = Ptr{Cvoid}
 
-struct ssh_packet_callbacks_struct
+mutable struct ssh_packet_callbacks_struct
     start::UInt8
     n_callbacks::UInt8
     callbacks::Ptr{ssh_packet_callback}
@@ -2323,7 +2323,7 @@ const ssh_channel_subsystem_request_callback = Ptr{Cvoid}
 # typedef int ( * ssh_channel_write_wontblock_callback ) ( ssh_session session , ssh_channel channel , uint32_t bytes , void * userdata )
 const ssh_channel_write_wontblock_callback = Ptr{Cvoid}
 
-struct ssh_channel_callbacks_struct
+mutable struct ssh_channel_callbacks_struct
     size::Csize_t
     userdata::Ptr{Cvoid}
     channel_data_function::ssh_channel_data_callback
@@ -2363,7 +2363,7 @@ const ssh_thread_callback = Ptr{Cvoid}
 # typedef unsigned long ( * ssh_thread_id_callback ) ( void )
 const ssh_thread_id_callback = Ptr{Cvoid}
 
-struct ssh_threads_callbacks_struct
+mutable struct ssh_threads_callbacks_struct
     type::Ptr{Cchar}
     mutex_init::ssh_thread_callback
     mutex_destroy::ssh_thread_callback

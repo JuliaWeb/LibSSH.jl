@@ -7,5 +7,17 @@ export_symbol_prefixes = ["SSH_LOG_", "SSH_OPTIONS_", "SSH_BIND_OPTIONS_", "SSH_
 prologue_file_path = "./prologue.jl"
 epilogue_file_path = "./epilogue.jl"
 
+# These structs *must* be mutable so that we can safely pass pointers to them to
+# libssh. Otherwise the compiler might optimize things in a way that's
+# incompatible with C.
+auto_mutability = true
+auto_mutability_with_new = false
+auto_mutability_includelist = ["ssh_server_callbacks_struct",
+                               "ssh_channel_callbacks_struct",
+                               "ssh_bind_callbacks_struct",
+                               "ssh_socket_callbacks_struct",
+                               "ssh_packet_callbacks_struct",
+                               "ssh_threads_callbacks_struct"]
+
 [codegen.macro]
 functionlike_macro_includelist = ["SSH_VERSION", "SSH_VERSION_INT", "SSH_VERSION_DOT", "ssh_callbacks_init"]
