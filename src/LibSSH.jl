@@ -6,7 +6,7 @@ import FileWatching
 
 using DocStringExtensions
 
-include("libssh.jl")
+include("bindings.jl")
 using .lib
 import .lib: ssh_options_get, ssh_options_set, SSH_OK, SSH_ERROR, SSH_AGAIN
 
