@@ -56,6 +56,13 @@ username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
 
     # And a channel was created
     @test !isnothing(test_server.sshchan)
+
+    # Make sure that it can handle errors too
+    test_server = sshtest.TestServer(2222; password="bar") do
+        cmd = `sshpass -p bar ssh -o NoHostAuthenticationForLocalhost=yes -p 2222 foo@localhost exit 42`
+        cmd_result = run(pipeline(ignorestatus(cmd)))
+        @test cmd_result.exitcode == 42
+    end
 end
 
 @testset "Session" begin
@@ -96,16 +103,69 @@ end
     end
 end
 
+# Helper function to start a TestServer and create a session connected to
+# it. Also supports timeouts.
+function test_server_with_session(f::Function, port, args...;
+                                  timeout=10,
+                                  kill_grace_period=3,
+                                  password="foo",
+                                  log_verbosity=lib.SSH_LOG_NOLOG,
+                                  kwargs...)
+    test_server = sshtest.TestServer(port, args...; password, kwargs...) do
+        # Create a session
+        session = ssh.Session("127.0.0.1", port; log_verbosity)
+        ssh.connect(session)
+        @test ssh.isconnected(session)
+        @test ssh.userauth_password(session, password) == ssh.AuthStatus_Success
+
+        # Create a timer and start the function
+        timer = Timer(timeout)
+        still_running = true
+        t = Threads.@spawn try
+            f(session)
+        finally
+            still_running = false
+            close(timer)
+        end
+
+        # Wait for a timeout or the function to finish
+        try
+            wait(timer)
+        catch
+            # An exception means that the function finished in time and closed
+            # the timer early.
+        end
+
+        ssh.disconnect(session)
+        close(session)
+
+        # If the function is still running, we attempt to kill it explicitly
+        kill_failed = nothing
+        if still_running
+            @async Base.throwto(t, InterruptException())
+            result = timedwait(() -> istaskdone(t), kill_grace_period)
+            kill_failed = result == :timed_out
+        end
+
+        # If there was a timeout we throw an exception, otherwise we wait() on
+        # the task, which will cause any exeption thrown by f() to bubble up.
+        if !isnothing(kill_failed)
+            kill_failed_msg = kill_failed ? " (failed to kill function, it's still running)" : ""
+            error("TestServer function timed out after $(timeout)s" * kill_failed_msg)
+        else
+            wait(t)
+        end
+    end
+
+    return test_server
+end
+
 @testset "SshChannel" begin
     session = ssh.Session("localhost")
     @test_throws ArgumentError ssh.SshChannel(session)
 
-    test_server = sshtest.TestServer(2222; password="foo") do
-        session = ssh.Session("127.0.0.1", 2222; log_verbosity=lib.SSH_LOG_NOLOG)
-        ssh.connect(session)
-        @test ssh.isconnected(session)
-        @test ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
-
+    # Test creating and closing channels
+    test_server_with_session(2222) do session
         # Create a channel
         sshchan = ssh.SshChannel(session)
 
@@ -113,10 +173,30 @@ end
         non_owning_sshchan = ssh.SshChannel(sshchan.ptr; own=false)
         @test_throws ArgumentError close(non_owning_sshchan)
 
+        # Set the session pointer to nothing to mock being closed
+        session_ptr = sshchan.session.ptr
+        sshchan.session.ptr = nothing
+        # Test that closing a channel before its session throws an exception
+        @test_throws ErrorException close(sshchan)
+        # Restore the session pointer
+        sshchan.session.ptr = session_ptr
+
         close(sshchan)
         @test isnothing(sshchan.ptr)
+    end
 
-        ssh.disconnect(session)
+    # Test executing commands
+    test_server_with_session(2222) do session
+        ret, output = ssh.execute(session, "whoami")
+        @test ret == 0
+        @test strip(output) == username()
+    end
+
+    # Check that we read stderr as well as stdout
+    test_server_with_session(2222) do session
+        ret, output = ssh.execute(session, "thisdoesntexist")
+        @test ret == 127
+        @test !isempty(output)
     end
 end
 

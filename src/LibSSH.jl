@@ -8,7 +8,7 @@ using DocStringExtensions
 
 include("bindings.jl")
 using .lib
-import .lib: ssh_options_get, ssh_options_set, SSH_OK, SSH_ERROR, SSH_AGAIN
+import .lib: ssh_options_get, ssh_options_set, SSH_OK, SSH_ERROR, SSH_AGAIN, SSH_EOF
 
 
 struct LibSSHException <: Exception

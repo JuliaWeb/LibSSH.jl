@@ -46,7 +46,12 @@ function _callback_wrapper(key::Symbol, args...)
 
     # Call user handler
     try
-        jl_result = callbacks.functions[key](converted_args..., callbacks.userdata)
+        result = callbacks.functions[key](converted_args..., callbacks.userdata)
+
+        # Only bother assigning the result if the return type is non-Nothing
+        if jl_type != Nothing
+            jl_result = result
+        end
     catch ex
         @error "Exception in $(key) callback!" exception=(ex, catch_backtrace())
     end

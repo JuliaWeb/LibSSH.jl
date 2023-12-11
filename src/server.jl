@@ -343,43 +343,13 @@ function set_auth_methods(session::Session, auth_methods::Vector{AuthMethod})
 end
 
 """
-Helper function to aid with calling non-blocking functions. It will try calling
-`f()` as long as `f()` returns `SSH_AGAIN`.
-"""
-function _trywait(f::Function, session::Session)
-    ret = SSH_ERROR
-
-    while true
-        ret = f()
-
-        if ret != SSH_AGAIN
-            break
-        else
-            try
-                wait(session)
-            catch ex
-                if ex isa Base.IOError
-                    # An IOError will sometimes (!) occur if the socket was
-                    # closed in the middle of waiting.
-                    break
-                else
-                    rethrow(ex)
-                end
-            end
-        end
-    end
-
-    return ret
-end
-
-"""
 $(TYPEDSIGNATURES)
 
 Non-blocking wrapper around `LibSSH.lib.ssh_handle_key_exchange()`. Returns
 `true` or `false` depending on whether the exchange succeeded.
 """
 function handle_key_exchange(session::Session)::Bool
-    ret = _trywait(session) do
+    ret = _session_trywait(session) do
         lib.ssh_handle_key_exchange(session.ptr)
     end
 
@@ -409,7 +379,7 @@ channel locks passed in `sshchan_locks` will be locked while
 Returns either `SSH_OK` or `SSH_ERROR`.
 """
 function event_dopoll(event::SshEvent, session::Session, sshchan_locks...)
-    ret = _trywait(session) do
+    ret = _session_trywait(session) do
         lock.(sshchan_locks)
         ret = lib.ssh_event_dopoll(event.ptr, 0)
         unlock.(sshchan_locks)
@@ -438,7 +408,7 @@ function exec_command(command, sshchan)
     cmd_stdout = IOBuffer()
     cmd_stderr = IOBuffer()
 
-    result = run(pipeline(`sh -c $command`; stdout=cmd_stdout, stderr=cmd_stderr))
+    result = run(pipeline(ignorestatus(`sh -c $command`); stdout=cmd_stdout, stderr=cmd_stderr))
     write(sshchan, String(take!(cmd_stdout)))
     write(sshchan, String(take!(cmd_stderr)); stderr=true)
     ssh.channel_request_send_exit_status(sshchan, result.exitcode)
@@ -635,7 +605,7 @@ function _add_log_event!(ts::TestServer, callback_name::Symbol, event)
         push!(ts.log_timeline, (callback_name, lastindex(log_vector), time()))
 
         if ts.verbose
-            @info "$callback_name $event"
+            @info "TestServer: $callback_name $event"
             flush(stdout)
         end
     end

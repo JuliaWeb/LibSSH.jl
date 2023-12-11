@@ -77,7 +77,7 @@ Get the last error set by libssh.
 """
 function get_error(session::Session)
     if isnothing(session.ptr)
-        throw(ArgumentError("Session data has been free'd, cannot get its error"))
+        throw(ArgumentError("Session has been free'd, cannot get its error"))
     end
 
     ret = lib.ssh_get_error(Ptr{Cvoid}(session.ptr))
@@ -298,4 +298,34 @@ function userauth_password(session::Session, password::String)
             return ret
         end
     end
+end
+
+"""
+Helper function to aid with calling non-blocking functions. It will try calling
+`f()` as long as `f()` returns `SSH_AGAIN`.
+"""
+function _session_trywait(f::Function, session::Session)
+    ret = SSH_ERROR
+
+    while true
+        ret = f()
+
+        if ret != SSH_AGAIN
+            break
+        else
+            try
+                wait(session)
+            catch ex
+                if ex isa Base.IOError
+                    # An IOError will sometimes (!) occur if the socket was
+                    # closed in the middle of waiting.
+                    break
+                else
+                    rethrow(ex)
+                end
+            end
+        end
+    end
+
+    return ret
 end
