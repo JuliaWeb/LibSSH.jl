@@ -13,7 +13,7 @@ mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
     log_verbosity::Int
 
-    function Session(ptr::lib.ssh_session; log_verbosity=SSH_LOG_WARNING, own=true)
+    function Session(ptr::lib.ssh_session; log_verbosity=SSH_LOG_NOLOG, own=true)
         # Set to non-blocking mode
         lib.ssh_set_blocking(ptr, 0)
 
