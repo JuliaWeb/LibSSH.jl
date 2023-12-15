@@ -33,6 +33,42 @@ end
     AuthStatus_Again = Int(SSH_AUTH_AGAIN)
 end
 
+@enum RequestType begin
+    RequestType_Auth = Int(lib.SSH_REQUEST_AUTH)
+    RequestType_ChannelOpen = Int(lib.SSH_REQUEST_CHANNEL_OPEN)
+    RequestType_Channel = Int(lib.SSH_REQUEST_CHANNEL)
+    RequestType_Service = Int(lib.SSH_REQUEST_SERVICE)
+    RequestType_Global = Int(lib.SSH_REQUEST_GLOBAL)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the type of a message. Wrapper around `LibSSH.lib.ssh_message_type()`.
+"""
+function message_type(message::lib.ssh_message)
+    ret = lib.ssh_message_type(message)
+    if ret == SSH_ERROR
+        throw(LibSSHException("Error when retrieving message type from message"))
+    end
+
+    return RequestType(ret)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the subtype of a message. Wrapper around `LibSSH.lib.ssh_message_subtype()`.
+"""
+function message_subtype(message::lib.ssh_message)
+    ret = lib.ssh_message_subtype(message)
+    if ret == SSH_ERROR
+        throw(LibSSHException("Error when retrieving message subtype from message"))
+    end
+
+    return ret
+end
+
 include("pki.jl")
 include("session.jl")
 include("channel.jl")

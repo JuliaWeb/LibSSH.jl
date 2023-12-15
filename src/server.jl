@@ -83,11 +83,17 @@ mutable struct Server
     _listener_started::Bool
     _lock::ReentrantLock
 
+    # Settings for message callbacks
+    _message_callback::Union{Function, Nothing}
+    _message_callback_userdata::Any
+
     function Server(port, addr="0.0.0.0";
                     hostkey=nothing,
                     key=nothing,
                     log_verbosity=SSH_LOG_NOLOG,
-                    auth_methods=[AuthMethod_Password])
+                    auth_methods=[AuthMethod_Password],
+                    message_callback::Union{Function, Nothing}=nothing,
+                    message_callback_userdata=nothing)
         if isnothing(hostkey) && isnothing(key)
             throw(ArgumentError("Server requires either `hostkey` or `key` to be set"))
         elseif !isnothing(hostkey) && !isnothing(key)
@@ -98,7 +104,8 @@ mutable struct Server
         lib.ssh_bind_set_blocking(bind_ptr, 0)
 
         server = new(bind_ptr, addr, port, hostkey, key, auth_methods, log_verbosity,
-                     Base.Event(), false, ReentrantLock())
+                     Base.Event(), false, ReentrantLock(),
+                     nothing, nothing)
         server.addr = addr
         server.port = port
         if !isnothing(hostkey)
@@ -109,6 +116,10 @@ mutable struct Server
         end
         server.auth_methods = auth_methods
         server.log_verbosity = log_verbosity
+
+        if !isnothing(message_callback)
+            set_message_callback(message_callback, server, message_callback_userdata)
+        end
 
         finalizer(server) do server
             close(server)
@@ -238,6 +249,21 @@ function Base.setproperty!(server::Server, name::Symbol, value)
     end
 end
 
+# Wrapper around the user-defined message callback
+function _message_callback_wrapper(session_ptr::lib.ssh_session, message::lib.ssh_message, server_ptr::Ptr{Cvoid})::Cint
+    server::Server = unsafe_pointer_to_objref(server_ptr)
+    session = Session(session_ptr; own=false)
+
+    jl_result::Bool = true
+    try
+        jl_result = server._message_callback(session, message, server._message_callback_userdata)
+    catch ex
+        @error "Exception in message_callback!" exception=(ex, catch_backtrace())
+    end
+
+    return Cint(jl_result)
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -257,9 +283,15 @@ function listen(handler::Function, server::Server; poll_timeout=0.1)
     end
 
     ret = lib.ssh_bind_listen(server.bind_ptr)
-    if ret != 0
-        throw(LibSSHException("Error on LibSSH.lib.ssh_bind_listen(): $(ret)"))
+    if ret != SSH_OK
+        # If binding fails, we wake up any waiting tasks and throw an exception
+        notify(server._listener_event)
+        throw(LibSSHException("Error on LibSSH.lib.ssh_bind_listen(): $(get_error(server))"))
     end
+
+    message_callback_cfunc = @cfunction(_message_callback_wrapper,
+                                        Cint,
+                                        (lib.ssh_session, lib.ssh_message, Ptr{Cvoid}))
 
     fd = RawFD(lib.ssh_bind_get_fd(server.bind_ptr))
     while isopen(server)
@@ -310,6 +342,11 @@ function listen(handler::Function, server::Server; poll_timeout=0.1)
 
         # Set the auth methods supported by the server
         set_auth_methods(session, server.auth_methods)
+
+        # Set the message callback, if there is one
+        if !isnothing(server._message_callback)
+            lib.ssh_set_message_callback(session_ptr, message_callback_cfunc, pointer_from_objref(server))
+        end
 
         # Pass off to the handler
         Threads.@spawn :interactive try
@@ -371,6 +408,18 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Set message callbacks for the sessions accepted by a Server. This must be set
+before `listen()` is called to take effect. `listen()` will automatically set
+the callback before passing the session to the user handler.
+"""
+function set_message_callback(f::Function, server::Server, userdata)
+    server._message_callback = f
+    server._message_callback_userdata = userdata
+end
+
+"""
+$(TYPEDSIGNATURES)
+
 Non-blocking wrapper around `LibSSH.lib.ssh_event_dopoll()`, only to be used for
 events that have a single session added to them (i.e. a `SshEvent`). All of the
 channel locks passed in `sshchan_locks` will be locked while
@@ -394,14 +443,16 @@ end
 module Test
 
 import Printf: @printf
+import Sockets
+import Sockets: getaddrinfo, IPv4
 
 using DocStringExtensions
 
 import ...LibSSH as ssh
+import ...LibSSH.lib
 import ...LibSSH.PKI as pki
 import ..Server
-import ..Callbacks.ServerCallbacks
-import ..Callbacks.ChannelCallbacks
+import ..Callbacks: set_channel_callbacks, ServerCallbacks, ChannelCallbacks
 
 
 function exec_command(command, sshchan)
@@ -478,12 +529,92 @@ function on_channel_close(session, sshchan, test_server)::Nothing
     close(test_server.sshchan)
 end
 
+function on_channel_pty_request(session, sshchan, term, width, height, pxwidth, pxheight, test_server)::Bool
+    _add_log_event!(test_server, :channel_pty_request, (term, width, height, pxwidth, pxheight))
+    return false
+end
+
+function on_message(session, msg::lib.ssh_message, test_server)::Bool
+    msg_type = ssh.message_type(msg)
+    msg_subtype = ssh.message_subtype(msg)
+    _add_log_event!(test_server, :message_request, (msg_type, msg_subtype))
+
+    # Handle direct port forwarding requests
+    if msg_type == ssh.RequestType_ChannelOpen && msg_subtype == lib.SSH_CHANNEL_DIRECT_TCPIP
+        hostname = unsafe_string(lib.ssh_message_channel_request_open_destination(msg))
+        port = lib.ssh_message_channel_request_open_destination_port(msg)
+
+        # Set up the listener socket. Restrict ourselves to IPv4 for simplicity
+        # since the test HTTP servers bind to the IPv4 loopback interface (and
+        # you're not using this in production, right?).
+        test_server.fwd_socket = Sockets.connect(getaddrinfo(hostname, IPv4), port)
+
+        # Create a task to read data from the socket and write it to the SSH channel
+        test_server.fwd_socket_task = Threads.@spawn try
+            sock = test_server.fwd_socket
+
+            # Loop while the connection is open
+            while isopen(sock)
+                # Read some data
+                data = readavailable(sock)
+
+                if !isempty(data) && isopen(test_server.fwd_sshchan)
+                    # If we got something, write it to the channel
+                    _add_log_event!(test_server, :fwd_socket_data, length(data))
+                    write(test_server.fwd_sshchan, data)
+                elseif isempty(data) && eof(sock)
+                    # Otherwise it means the remote closed the connection and we
+                    # can shutdown the port forward.
+                    close(sock)
+                    ssh.channel_send_eof(test_server.fwd_sshchan)
+                    close(test_server.fwd_sshchan)
+                end
+            end
+        catch ex
+            @error "Error in port fowarding socket handler!" exception=(ex, catch_backtrace())
+        end
+
+        # Create a channel for the port forward
+        channel_ptr = lib.ssh_message_channel_request_open_reply_accept(msg)
+        sshchan = ssh.SshChannel(channel_ptr, session)
+        set_channel_callbacks(sshchan, test_server.fwd_channel_cb)
+        test_server.fwd_sshchan = sshchan
+
+        return false
+    end
+
+    return true
+end
+
+function on_fwd_channel_eof(session, sshchan, test_server)::Nothing
+    _add_log_event!(test_server, :fwd_channel_eof, true)
+end
+
+function on_fwd_channel_data(session, sshchan, data_ptr, n_bytes, is_stderr, test_server)::Int
+    _add_log_event!(test_server, :fwd_channel_data, n_bytes)
+
+    # When we receive data from the channel, write it to the forwarding socket
+    data = unsafe_wrap(Array, Ptr{UInt8}(data_ptr), n_bytes)
+    write(test_server.fwd_socket, data)
+
+    return n_bytes
+end
+
+function on_fwd_channel_close(session, sshchan, test_server)::Nothing
+    _add_log_event!(test_server, :fwd_channel_close, true)
+end
+
+function on_fwd_channel_exit_status(session, sshchan, exitcode, test_server)::Nothing
+    _add_log_event!(test_server, :fwd_channel_exit_status, exitcode)
+end
+
+function on_fwd_channel_write_wontblock(session, sshchan, n_bytes, test_server)::Int
+    _add_log_event!(test_server, :fwd_channel_write_wontblock, n_bytes)
+    return 0
+end
+
 function handle_session(session, ts)
     empty!(ts.callback_log)
-    for callback_sym in keys(merge(ts.server_callbacks.functions,
-                                   ts.channel_callbacks.functions))
-        ts.callback_log[callback_sym] = []
-    end
 
     ssh.set_server_callbacks(session, ts.server_callbacks)
     if !ssh.handle_key_exchange(session)
@@ -502,12 +633,20 @@ function handle_session(session, ts)
     end
 
     if !isnothing(ts.sshchan)
-        ssh.Callbacks.set_channel_callbacks(ts.sshchan, ts.channel_callbacks)
+        set_channel_callbacks(ts.sshchan, ts.channel_callbacks)
         while ssh.event_dopoll(event, session, ts.sshchan.close_lock) == ssh.SSH_OK
             continue
         end
 
         close(ts.sshchan)
+    end
+
+    if !isnothing(ts.fwd_sshchan)
+        close(ts.fwd_sshchan)
+        close(ts.fwd_socket)
+    end
+    if !isnothing(ts.fwd_socket_task)
+        wait(ts.fwd_socket_task)
     end
 
     try
@@ -530,6 +669,11 @@ end
     verbose::Bool = false
     password::Union{String, Nothing} = nothing
 
+    fwd_sshchan::Union{ssh.SshChannel, Nothing} = nothing
+    fwd_channel_cb::ChannelCallbacks = ChannelCallbacks()
+    fwd_socket::Sockets.TCPSocket = Sockets.TCPSocket()
+    fwd_socket_task::Union{Task, Nothing} = nothing
+
     callback_log::Dict{Symbol, Vector} = Dict{Symbol, Vector}()
     log_timeline::Vector = []
     log_lock::ReentrantLock = ReentrantLock()
@@ -540,16 +684,18 @@ end
 $(TYPEDSIGNATURES)
 """
 function TestServer(port::Int; verbose=false, password=nothing,
-                    auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_Password])
+                    auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_Password],
+                    log_verbosity=ssh.SSH_LOG_NOLOG)
     if ssh.AuthMethod_Password in auth_methods && isnothing(password)
         throw(ArgumentError("You must pass `password` to TestServer since password authentication is enabled"))
     end
 
     key = pki.generate(pki.KeyType_ed25519)
-    server = ssh.Server(port; auth_methods, key)
+    server = ssh.Server(port; auth_methods, key, log_verbosity)
 
     test_server = TestServer(; server, verbose, password)
 
+    ssh.set_message_callback(on_message, server, test_server)
     test_server.server_callbacks = ServerCallbacks(test_server;
                                                    auth_password_function=on_auth_password,
                                                    auth_none_function=on_auth_none,
@@ -558,9 +704,17 @@ function TestServer(port::Int; verbose=false, password=nothing,
     test_server.channel_callbacks = ChannelCallbacks(test_server;
                                                      channel_eof_function=on_channel_eof,
                                                      channel_close_function=on_channel_close,
+                                                     channel_pty_request_function=on_channel_pty_request,
                                                      channel_exec_request_function=on_channel_exec_request,
                                                      channel_env_request_function=on_channel_env_request,
                                                      channel_write_wontblock_function=on_channel_write_wontblock)
+
+    test_server.fwd_channel_cb = ChannelCallbacks(test_server;
+                                                  channel_eof_function=on_fwd_channel_eof,
+                                                  channel_close_function=on_fwd_channel_close,
+                                                  channel_data_function=on_fwd_channel_data,
+                                                  channel_exit_status_function=on_fwd_channel_exit_status,
+                                                  channel_write_wontblock_function=on_fwd_channel_write_wontblock)
 
     return test_server
 end
@@ -586,7 +740,11 @@ end
 
 function start(test_server::TestServer)
     handle_wrapper = session -> handle_session(session, test_server)
-    test_server.listener_task = Threads.@spawn ssh.listen(handle_wrapper, test_server.server)
+    test_server.listener_task = Threads.@spawn try
+        ssh.listen(handle_wrapper, test_server.server)
+    catch ex
+        @error "Error during listen()" exception=(ex, catch_backtrace())
+    end
     ssh.wait_for_listener(test_server.server)
 end
 
@@ -600,6 +758,10 @@ end
 
 function _add_log_event!(ts::TestServer, callback_name::Symbol, event)
     @lock ts.log_lock begin
+        if !haskey(ts.callback_log, callback_name)
+            ts.callback_log[callback_name] = []
+        end
+
         log_vector = ts.callback_log[callback_name]
         push!(log_vector, event)
         push!(ts.log_timeline, (callback_name, lastindex(log_vector), time()))

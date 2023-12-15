@@ -2,6 +2,8 @@ module LibSSHTests
 
 __revise_mode__ = :eval
 
+import Sockets
+
 import ReTest: @testset, @test, @test_throws
 
 import LibSSH as ssh
@@ -11,6 +13,42 @@ import LibSSH.Test as sshtest
 
 
 username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
+
+# Dummy HTTP server that only responds 200 to requests
+function http_server(f::Function, port)
+    start_event = Base.Event()
+    server = Sockets.listen(Sockets.IPv4(0), port)
+    t = errormonitor(@async while isopen(server)
+                         notify(start_event)
+                         local sock
+                         try
+                             sock = Sockets.accept(server)
+                         catch ex
+                             if ex isa Base.IOError
+                                 break
+                             else
+                                 rethrow()
+                             end
+                         end
+
+                         # Wait for any request, doesn't matter what
+                         data = readavailable(sock)
+                         if !isempty(data)
+                             write(sock, "HTTP/1.1 200 OK\r\n\r\n")
+                         end
+
+                         closewrite(sock)
+                         close(sock)
+                     end)
+
+    wait(start_event)
+    try
+        f()
+    finally
+        close(server)
+        wait(t)
+    end
+end
 
 @testset "Server" begin
     hostkey = joinpath(@__DIR__, "ed25519_test_key")
@@ -27,7 +65,7 @@ username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
     @test_throws ArgumentError server.port = nothing
 
     # Basic listener test
-    t = @async ssh.listen(_ -> nothing, server)
+    t = errormonitor(@async ssh.listen(_ -> nothing, server))
     ssh.wait_for_listener(server)
 
     @test istaskstarted(t)
@@ -38,11 +76,13 @@ username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
     finalize(server)
     @test server.bind_ptr == nothing
 
+    ssh_cmd(cmd::Cmd) = ignorestatus(`sshpass -p bar ssh -o NoHostAuthenticationForLocalhost=yes $cmd`)
+
     # More complicated test, where we run a command and check the output
     test_server = sshtest.TestServer(2222; password="bar") do
         cmd_out = IOBuffer()
-        cmd = `sshpass -p bar ssh -o NoHostAuthenticationForLocalhost=yes -p 2222 foo@localhost whoami`
-        cmd_result = run(pipeline(ignorestatus(cmd); stdout=cmd_out))
+        cmd = ssh_cmd(`-p 2222 foo@localhost whoami`)
+        cmd_result = run(pipeline(cmd; stdout=cmd_out))
 
         @test cmd_result.exitcode == 0
         @test strip(String(take!(cmd_out))) == username()
@@ -59,20 +99,56 @@ username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
 
     # Make sure that it can handle errors too
     test_server = sshtest.TestServer(2222; password="bar") do
-        cmd = `sshpass -p bar ssh -o NoHostAuthenticationForLocalhost=yes -p 2222 foo@localhost exit 42`
+        cmd = ssh_cmd(`-p 2222 foo@localhost exit 42`)
         cmd_result = run(pipeline(ignorestatus(cmd)))
         @test cmd_result.exitcode == 42
     end
+
+    # Test the dummy HTTP server we'll use later
+    http_server(9090) do
+        @test run(`curl localhost:9090`).exitcode == 0
+    end
+
+    # Test direct port forwarding. First we start a dummy server that returns a
+    # known value, then we start the test server and a curl client to make a
+    # request.
+    test_server = sshtest.TestServer(2222; password="bar", log_verbosity=ssh.SSH_LOG_NOLOG) do
+        mktempdir() do tmpdir
+            tmpfile = joinpath(tmpdir, "foo")
+
+            # Start a client and wait for it
+            cmd = ssh_cmd(`-p 2222 -L 8080:localhost:9090 foo@localhost "touch $tmpfile; while [ -f $tmpfile ]; do sleep 0.1; done"`)
+            ssh_process = run(cmd; wait=false)
+            if timedwait(() -> isfile(tmpfile), 5) == :timed_out
+                error("Timeout waiting for sentinel file $tmpfile to be created")
+            end
+
+            # At this point the client will be listening on port 8080, so we make a
+            # request to trigger a forward request to the server. Note that the
+            # client only requests a port forward when it accepts a connection
+            # on the listening port, so we only need the HTTP server running
+            # while we're making the request.
+            http_server(9090) do
+                curl_process = run(ignorestatus(`curl localhost:8080`))
+                @test curl_process.exitcode == 0
+            end
+
+            # Afterwards we kill the client and cleanup
+            kill(ssh_process, Base.SIGINT)
+        end
+    end
+
+    @test test_server.callback_log[:message_request] == [(ssh.RequestType_ChannelOpen, lib.SSH_CHANNEL_DIRECT_TCPIP)]
 end
 
 @testset "Session" begin
-    session = ssh.Session("localhost")
+    session = ssh.Session("localhost"; log_verbosity=lib.SSH_LOG_NOLOG)
 
     # Test initial settings
     @test session.user == username()
     @test session.port == 22
     @test session.host == "localhost"
-    @test session.log_verbosity == lib.SSH_LOG_WARNING
+    @test session.log_verbosity == lib.SSH_LOG_NOLOG
 
     # Test explicitly setting options with getproperty()/setproperty!()
     session.port = 10

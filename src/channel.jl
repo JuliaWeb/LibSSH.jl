@@ -26,6 +26,10 @@ mutable struct SshChannel
 
     function SshChannel(ptr::lib.ssh_channel, session=nothing; own=true)
         self = new(ptr, own, session, ReentrantLock())
+        if own && isnothing(session)
+            throw(ArgumentError("You must pass a session to an owning SshChannel"))
+        end
+
         if own
             finalizer(_finalizer, self)
         end
@@ -125,6 +129,10 @@ function Base.close(sshchan::SshChannel)
             end
 
             if isopen(sshchan)
+                if !eof(sshchan)
+                    channel_send_eof(sshchan)
+                end
+
                 ret = lib.ssh_channel_close(sshchan.ptr)
                 if ret != SSH_OK
                     throw(LibSSHException("Closing SshChannel failed: $(ret)"))
@@ -144,14 +152,21 @@ Write data to the channel and return the number of code units written. Wrapper
 around `LibSSH.lib.ssh_channel_write{_stderr}()`.
 """
 function Base.write(sshchan::SshChannel, data::AbstractString; stderr::Bool=false)
+    array = Vector{UInt8}(data)
+    return write(sshchan, array; stderr)
+end
+
+function Base.write(sshchan::SshChannel, data::Vector{UInt8}; stderr::Bool=false)
     if isnothing(sshchan) || !isopen(sshchan)
         throw(ArgumentError("SshChannel has been closed, is not writeable"))
     end
 
     writer = stderr ? lib.ssh_channel_write_stderr : lib.ssh_channel_write
 
-    ptr = Ptr{Cvoid}(pointer(data))
-    ret = writer(sshchan.ptr, ptr, ncodeunits(data))
+    GC.@preserve data begin
+        ptr = Ptr{Cvoid}(pointer(data))
+        ret = writer(sshchan.ptr, ptr, length(data))
+    end
     if ret == SSH_ERROR
         throw(LibSSHException("Error when writing to channel: $(ret)"))
     end
@@ -296,7 +311,7 @@ function execute(session::Session, command::AbstractString; verbose=false)
             # handled by the callbacks, which are called by ssh_channel_poll().
             ret = lib.ssh_channel_poll(sshchan.ptr, 0)
 
-            # Break if there was an error, or an EOF has been sent
+            # Break if there was an error, or if an EOF has been sent
             if ret == SSH_ERROR || ret == SSH_EOF
                 break
             end
