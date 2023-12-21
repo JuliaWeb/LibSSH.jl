@@ -21,21 +21,33 @@ constructor.
 mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
     log_verbosity::Int
+    channels::Vector{Any}
 
     function Session(ptr::lib.ssh_session; log_verbosity=nothing, own=true)
         # Set to non-blocking mode
         lib.ssh_set_blocking(ptr, 0)
 
-        session = new(ptr, -1)
+        session = new(ptr, -1, [])
         if !isnothing(log_verbosity)
             session.log_verbosity = log_verbosity
         end
 
         if own
-            finalizer(close, session)
+            finalizer(_finalizer, session)
         end
 
         return session
+    end
+end
+
+"""
+Non-throwing finalizer for Session objects.
+"""
+function _finalizer(session::Session)
+    try
+        close(session)
+    catch ex
+        Threads.@spawn @error "Error when finalizing Session" exception=(ex, catch_backtrace())
     end
 end
 
@@ -105,7 +117,7 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
 const SAVED_PROPERTIES = (:log_verbosity,)
 
 function Base.propertynames(::Session, private::Bool=false)
-    (:host, :port, :user, :log_verbosity, (private ? (:ptr,) : ())...)
+    (:host, :port, :user, :log_verbosity, (private ? (:ptr, :channels) : ())...)
 end
 
 function Base.getproperty(session::Session, name::Symbol)
@@ -114,7 +126,7 @@ function Base.getproperty(session::Session, name::Symbol)
     end
 
     # If it's a property that we save, then we return the saved value
-    if name == :ptr || name in SAVED_PROPERTIES
+    if name == :ptr || name == :channels || name in SAVED_PROPERTIES
         return getfield(session, name)
     end
 
@@ -226,9 +238,23 @@ end
 $(TYPEDSIGNATURES)
 
 Wrapper around `LibSSH.lib.ssh_disconnect()`.
+
+!!! warning
+    This will close all channels created from the session.
 """
 function disconnect(session::Session)
     if isconnected(session)
+        # We close all the channels in reverse order because close(::SshChannel)
+        # deletes each channel from the vector and we don't want to invalidate
+        # any indices while deleting. The channels need to be closed here
+        # because lib.ssh_disconnect() will free all of them.
+        for i in reverse(eachindex(session.channels))
+            # Note that only owning channels are added to session.channels, which
+            # means that this should never throw because the channel is non-owning
+            # (of course it may still throw for other reasons).
+            close(session.channels[i])
+        end
+
         lib.ssh_disconnect(session.ptr)
     end
 end

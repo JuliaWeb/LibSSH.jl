@@ -103,15 +103,12 @@ end
         cmd_result = run(pipeline(ignorestatus(cmd)))
         @test cmd_result.exitcode == 42
     end
-
     # Test the dummy HTTP server we'll use later
     http_server(9090) do
         @test run(`curl localhost:9090`).exitcode == 0
     end
 
-    # Test direct port forwarding. First we start a dummy server that returns a
-    # known value, then we start the test server and a curl client to make a
-    # request.
+    # Test direct port forwarding
     test_server = sshtest.TestServer(2222; password="bar", log_verbosity=ssh.SSH_LOG_NOLOG) do
         mktempdir() do tmpdir
             tmpfile = joinpath(tmpdir, "foo")
@@ -133,8 +130,9 @@ end
                 @test curl_process.exitcode == 0
             end
 
-            # Afterwards we kill the client and cleanup
-            kill(ssh_process, Base.SIGINT)
+            # Afterwards we close the client and cleanup
+            rm(tmpfile)
+            wait(ssh_process)
         end
     end
 
@@ -249,16 +247,9 @@ end
         non_owning_sshchan = ssh.SshChannel(sshchan.ptr; own=false)
         @test_throws ArgumentError close(non_owning_sshchan)
 
-        # Set the session pointer to nothing to mock being closed
-        session_ptr = sshchan.session.ptr
-        sshchan.session.ptr = nothing
-        # Test that closing a channel before its session throws an exception
-        @test_throws ErrorException close(sshchan)
-        # Restore the session pointer
-        sshchan.session.ptr = session_ptr
-
         close(sshchan)
         @test isnothing(sshchan.ptr)
+        @test isempty(session.channels)
     end
 
     # Test executing commands
@@ -273,6 +264,27 @@ end
         ret, output = ssh.execute(session, "thisdoesntexist")
         @test ret == 127
         @test !isempty(output)
+    end
+
+    # Test port forwarding
+    test_server_with_session(2222) do session
+        forwarder = ssh.Forwarder(session, 8080, "localhost", 9090)
+        close(forwarder)
+    end
+
+    test_server_with_session(2222) do session
+        ssh.Forwarder(session, 8080, "localhost", 9090) do forwarder
+            http_server(9090) do
+                curl_proc = run(ignorestatus(`curl localhost:8080`); wait=false)
+                try
+                    wait(curl_proc)
+                finally
+                    kill(curl_proc)
+                end
+
+                @test curl_proc.exitcode == 0
+            end
+        end
     end
 end
 

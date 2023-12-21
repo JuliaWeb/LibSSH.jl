@@ -67,8 +67,17 @@ function _callback_wrapper(key::Symbol, args...)
 end
 
 """
-Helper macro to either generate a cfunction for a callback, or return C_NULL if
-the user didn't pass a callback. Strictly only for internal use.
+Helper macro to either generate a cfunction for a callback. Strictly only
+for internal use. It must be called in a constructor with a `self` object
+referencing the callback struct.
+
+Depends on these fields being present in the containing struct:
+- functions
+- c_result_types
+- c_arg_types
+- jl_result_types
+- jl_result_defaults
+- jl_result_to_ctype
 """
 function _gencb(key, user_callback,
                 jl_return_type, jl_default, jl_result_to_ctype,
@@ -176,7 +185,7 @@ mutable struct ChannelCallbacks
                               channel_auth_agent_req_function=nothing, channel_x11_req_function=nothing,
                               channel_pty_window_change_function=nothing, channel_exec_request_function=nothing,
                               channel_env_request_function=nothing, channel_subsystem_request_function=nothing,
-                              channel_write_wontblock_function=nothing)
+                              channel_write_wontblock_function=Returns(0))
         self = new(nothing, userdata,
                    Dict{Symbol, Function}(),
                    Dict{Symbol, DataType}(),
@@ -248,19 +257,6 @@ mutable struct ChannelCallbacks
                                                           write_wontblock_cfunc)
 
         return self
-    end
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Wrapper around `LibSSH.lib.ssh_set_channel_callbacks()`. Will throw a
-`LibSSHException` if setting the callbacks failed.
-"""
-function set_channel_callbacks(sshchan::ssh.SshChannel, callbacks::ChannelCallbacks)
-    ret = lib.ssh_set_channel_callbacks(sshchan.ptr, Ref(callbacks.cb_struct))
-    if ret != ssh.SSH_OK
-        throw(LibSSHException("Error when setting channel callbacks: $(ret)"))
     end
 end
 

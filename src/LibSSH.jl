@@ -71,8 +71,8 @@ end
 
 include("pki.jl")
 include("session.jl")
-include("channel.jl")
 include("callbacks.jl")
+include("channel.jl")
 include("server.jl")
 
 end

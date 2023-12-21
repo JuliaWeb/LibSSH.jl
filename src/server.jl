@@ -442,6 +442,7 @@ end
 
 module Test
 
+import Dates
 import Printf: @printf
 import Sockets
 import Sockets: getaddrinfo, IPv4
@@ -452,18 +453,31 @@ import ...LibSSH as ssh
 import ...LibSSH.lib
 import ...LibSSH.PKI as pki
 import ..Server
-import ..Callbacks: set_channel_callbacks, ServerCallbacks, ChannelCallbacks
+import ..Callbacks: ServerCallbacks, ChannelCallbacks
 
 
-function exec_command(command, sshchan)
+function exec_command(command, test_server)
+    sshchan = test_server.sshchan
     cmd_stdout = IOBuffer()
     cmd_stderr = IOBuffer()
 
-    result = run(pipeline(ignorestatus(`sh -c $command`); stdout=cmd_stdout, stderr=cmd_stderr))
-    write(sshchan, String(take!(cmd_stdout)))
-    write(sshchan, String(take!(cmd_stderr)); stderr=true)
-    ssh.channel_request_send_exit_status(sshchan, result.exitcode)
-    ssh.channel_send_eof(sshchan)
+    # Start the process and wait for it
+    proc = run(pipeline(ignorestatus(`sh -c $command`); stdout=cmd_stdout, stderr=cmd_stderr)
+               ; wait=false)
+    test_server.exec_proc = proc
+    wait(proc)
+
+    # Write the output to the channel. We first check if the channel is open in
+    # case it's been killed suddenly in the meantime.
+    if isopen(sshchan)
+        write(sshchan, String(take!(cmd_stdout)))
+        write(sshchan, String(take!(cmd_stderr)); stderr=true)
+
+        # Clean up
+        ssh.channel_request_send_exit_status(sshchan, proc.exitcode)
+        ssh.channel_send_eof(sshchan)
+    end
+
     close(sshchan)
 end
 
@@ -515,7 +529,12 @@ function on_channel_exec_request(session, sshchan, command, test_server)::Bool
     # would cause a double-free later when we close
     # `test_server.sshchan`. That's why close()'ing non-owning SshChannels is
     # forbidden.
-    Threads.@spawn exec_command(command, test_server.sshchan)
+    test_server.exec_task = Threads.@spawn try
+        exec_command(command, test_server)
+    catch ex
+        @error "Error when running command" exception=(ex, catch_backtrace())
+    end
+
     return true
 end
 
@@ -564,10 +583,16 @@ function on_message(session, msg::lib.ssh_message, test_server)::Bool
                     write(test_server.fwd_sshchan, data)
                 elseif isempty(data) && eof(sock)
                     # Otherwise it means the remote closed the connection and we
-                    # can shutdown the port forward.
+                    # can shutdown the port forward if it's still open.
                     close(sock)
-                    ssh.channel_send_eof(test_server.fwd_sshchan)
-                    close(test_server.fwd_sshchan)
+                    if isopen(test_server.fwd_sshchan)
+                        ssh.channel_send_eof(test_server.fwd_sshchan)
+                        close(test_server.fwd_sshchan)
+                    end
+                elseif eof(test_server.fwd_sshchan)
+                    # Or if the client closed the connection we also shutdown
+                    # the port.
+                    close(sock)
                 end
             end
         catch ex
@@ -577,7 +602,7 @@ function on_message(session, msg::lib.ssh_message, test_server)::Bool
         # Create a channel for the port forward
         channel_ptr = lib.ssh_message_channel_request_open_reply_accept(msg)
         sshchan = ssh.SshChannel(channel_ptr, session)
-        set_channel_callbacks(sshchan, test_server.fwd_channel_cb)
+        ssh.set_channel_callbacks(sshchan, test_server.fwd_channel_cb)
         test_server.fwd_sshchan = sshchan
 
         return false
@@ -633,21 +658,28 @@ function handle_session(session, ts)
     end
 
     if !isnothing(ts.sshchan)
-        set_channel_callbacks(ts.sshchan, ts.channel_callbacks)
+        ssh.set_channel_callbacks(ts.sshchan, ts.channel_callbacks)
+        # Loop while the session is open
         while ssh.event_dopoll(event, session, ts.sshchan.close_lock) == ssh.SSH_OK
             continue
         end
 
+        # Wait for everything that might still be using the channel
+        if !isnothing(ts.exec_task)
+            wait(ts.exec_task)
+        end
+        if !isnothing(ts.fwd_sshchan)
+            close(ts.fwd_sshchan)
+            close(ts.fwd_socket)
+        end
+        if !isnothing(ts.fwd_socket_task)
+            wait(ts.fwd_socket_task)
+        end
+
+        # And then close it
         close(ts.sshchan)
     end
 
-    if !isnothing(ts.fwd_sshchan)
-        close(ts.fwd_sshchan)
-        close(ts.fwd_socket)
-    end
-    if !isnothing(ts.fwd_socket_task)
-        wait(ts.fwd_socket_task)
-    end
 
     try
         ssh.event_remove_session(event, session)
@@ -668,6 +700,9 @@ end
     sshchan::Union{ssh.SshChannel, Nothing} = nothing
     verbose::Bool = false
     password::Union{String, Nothing} = nothing
+
+    exec_task::Union{Task, Nothing} = nothing
+    exec_proc::Union{Base.Process, Nothing} = nothing
 
     fwd_sshchan::Union{ssh.SshChannel, Nothing} = nothing
     fwd_channel_cb::ChannelCallbacks = ChannelCallbacks()
@@ -749,6 +784,11 @@ function start(test_server::TestServer)
 end
 
 function stop(test_server::TestServer)
+    if !isnothing(test_server.exec_task)
+        kill(test_server.exec_proc)
+        wait(test_server.exec_task)
+    end
+
     if !isnothing(test_server.listener_task)
         close(test_server.server)
         wait(test_server.listener_task)
@@ -767,7 +807,8 @@ function _add_log_event!(ts::TestServer, callback_name::Symbol, event)
         push!(ts.log_timeline, (callback_name, lastindex(log_vector), time()))
 
         if ts.verbose
-            @info "TestServer: $callback_name $event"
+            timestamp = Dates.format(Dates.now(), Dates.ISOTimeFormat)
+            @info "$timestamp TestServer: $callback_name $event"
             flush(stdout)
         end
     end
