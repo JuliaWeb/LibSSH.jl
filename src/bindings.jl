@@ -228,7 +228,7 @@ end
     SSH_KEY_CMP_PRIVATE = 1
 end
 
-@cenum var"##Ctag#248"::UInt32 begin
+@cenum var"##Ctag#336"::UInt32 begin
     SSH_LOG_NOLOG = 0
     SSH_LOG_WARNING = 1
     SSH_LOG_PROTOCOL = 2
@@ -282,7 +282,7 @@ end
     SSH_OPTIONS_IDENTITY_AGENT = 42
 end
 
-@cenum var"##Ctag#249"::UInt32 begin
+@cenum var"##Ctag#337"::UInt32 begin
     SSH_SCP_WRITE = 0
     SSH_SCP_READ = 1
     SSH_SCP_RECURSIVE = 16
@@ -1485,10 +1485,6 @@ function Base.setproperty!(x::Ptr{__JL_sftp_request_queue_struct}, f::Symbol, v)
     setproperty!(Ptr{sftp_request_queue_struct}(x), f, v)
 end
 
-Base.unsafe_convert(::Type{Ptr{__JL_sftp_request_queue_struct}}, x::Ref) = Base.unsafe_convert(Ptr{__JL_sftp_request_queue_struct}, Base.unsafe_convert(Ptr{sftp_request_queue_struct}, x))
-
-Base.unsafe_convert(::Type{Ptr{__JL_sftp_request_queue_struct}}, x::Ptr) = Ptr{__JL_sftp_request_queue_struct}(x)
-
 const sftp_request_queue = Ptr{__JL_sftp_request_queue_struct}
 
 mutable struct sftp_ext_struct end
@@ -1509,10 +1505,6 @@ end
 function Base.setproperty!(x::Ptr{__JL_sftp_packet_struct}, f::Symbol, v)
     setproperty!(Ptr{sftp_packet_struct}(x), f, v)
 end
-
-Base.unsafe_convert(::Type{Ptr{__JL_sftp_packet_struct}}, x::Ref) = Base.unsafe_convert(Ptr{__JL_sftp_packet_struct}, Base.unsafe_convert(Ptr{sftp_packet_struct}, x))
-
-Base.unsafe_convert(::Type{Ptr{__JL_sftp_packet_struct}}, x::Ptr) = Ptr{__JL_sftp_packet_struct}(x)
 
 const sftp_packet = Ptr{__JL_sftp_packet_struct}
 
@@ -1615,11 +1607,19 @@ mutable struct sftp_packet_struct
     type::UInt8
     payload::ssh_buffer
 end
+Base.unsafe_convert(::Type{Ptr{__JL_sftp_packet_struct}}, x::Ref{sftp_packet_struct}) = Base.unsafe_convert(Ptr{__JL_sftp_packet_struct}, Base.unsafe_convert(Ptr{sftp_packet_struct}, x))
+
+Base.unsafe_convert(::Type{Ptr{__JL_sftp_packet_struct}}, x::Ptr{sftp_packet_struct}) = Ptr{__JL_sftp_packet_struct}(x)
+
 
 mutable struct sftp_request_queue_struct
     next::sftp_request_queue
     message::sftp_message
 end
+Base.unsafe_convert(::Type{Ptr{__JL_sftp_request_queue_struct}}, x::Ref{sftp_request_queue_struct}) = Base.unsafe_convert(Ptr{__JL_sftp_request_queue_struct}, Base.unsafe_convert(Ptr{sftp_request_queue_struct}, x))
+
+Base.unsafe_convert(::Type{Ptr{__JL_sftp_request_queue_struct}}, x::Ptr{sftp_request_queue_struct}) = Ptr{__JL_sftp_request_queue_struct}(x)
+
 
 function sftp_new(session)
     ccall((:sftp_new, libssh), sftp_session, (ssh_session,), session)

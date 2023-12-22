@@ -4,6 +4,7 @@ __revise_mode__ = :eval
 
 import Sockets
 
+import Aqua
 import ReTest: @testset, @test, @test_throws
 
 import LibSSH as ssh
@@ -295,6 +296,10 @@ end
     key2 = pki.generate(pki.KeyType_ed25519)
     @test !pki.key_cmp(key, key2, pki.KeyCmp_Public)
     @test pki.key_cmp(key, key, pki.KeyCmp_Private)
+end
+
+@testset "Aqua.jl" begin
+    Aqua.test_all(ssh)
 end
 
 end
