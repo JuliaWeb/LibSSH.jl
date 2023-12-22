@@ -38,7 +38,7 @@ mutable struct ssh_knownhosts_entry
 end
 
 function ssh_knownhosts_entry_free(entry)
-    ccall((:ssh_knownhosts_entry_free, libssh), Cvoid, (Ptr{ssh_knownhosts_entry},), entry)
+    @ccall libssh.ssh_knownhosts_entry_free(entry::Ptr{ssh_knownhosts_entry})::Cvoid
 end
 
 mutable struct ssh_message_struct end
@@ -46,11 +46,11 @@ mutable struct ssh_message_struct end
 const ssh_message = Ptr{ssh_message_struct}
 
 function ssh_message_free(msg)
-    ccall((:ssh_message_free, libssh), Cvoid, (ssh_message,), msg)
+    @ccall libssh.ssh_message_free(msg::ssh_message)::Cvoid
 end
 
 function ssh_key_free(key)
-    ccall((:ssh_key_free, libssh), Cvoid, (ssh_key,), key)
+    @ccall libssh.ssh_key_free(key::ssh_key)::Cvoid
 end
 
 mutable struct ssh_string_struct end
@@ -58,11 +58,11 @@ mutable struct ssh_string_struct end
 const ssh_string = Ptr{ssh_string_struct}
 
 function ssh_string_free(str)
-    ccall((:ssh_string_free, libssh), Cvoid, (ssh_string,), str)
+    @ccall libssh.ssh_string_free(str::ssh_string)::Cvoid
 end
 
 function ssh_string_free_char(s)
-    ccall((:ssh_string_free_char, libssh), Cvoid, (Ptr{Cchar},), s)
+    @ccall libssh.ssh_string_free_char(s::Ptr{Cchar})::Cvoid
 end
 
 mutable struct ssh_buffer_struct end
@@ -70,7 +70,7 @@ mutable struct ssh_buffer_struct end
 const ssh_buffer = Ptr{ssh_buffer_struct}
 
 function ssh_buffer_free(buffer)
-    ccall((:ssh_buffer_free, libssh), Cvoid, (ssh_buffer,), buffer)
+    @ccall libssh.ssh_buffer_free(buffer::ssh_buffer)::Cvoid
 end
 
 mutable struct ssh_counter_struct
@@ -228,7 +228,14 @@ end
     SSH_KEY_CMP_PRIVATE = 1
 end
 
-@cenum var"##Ctag#336"::UInt32 begin
+"""
+    __JL_Ctag_22
+
+` libssh_log`
+
+@{
+"""
+@cenum __JL_Ctag_22::UInt32 begin
     SSH_LOG_NOLOG = 0
     SSH_LOG_WARNING = 1
     SSH_LOG_PROTOCOL = 2
@@ -236,6 +243,11 @@ end
     SSH_LOG_FUNCTIONS = 4
 end
 
+"""
+    ssh_options_e
+
+@}
+"""
 @cenum ssh_options_e::UInt32 begin
     SSH_OPTIONS_HOST = 0
     SSH_OPTIONS_PORT = 1
@@ -282,7 +294,7 @@ end
     SSH_OPTIONS_IDENTITY_AGENT = 42
 end
 
-@cenum var"##Ctag#337"::UInt32 begin
+@cenum __JL_Ctag_23::UInt32 begin
     SSH_SCP_WRITE = 0
     SSH_SCP_READ = 1
     SSH_SCP_RECURSIVE = 16
@@ -304,259 +316,259 @@ end
 end
 
 function ssh_blocking_flush(session, timeout)
-    ccall((:ssh_blocking_flush, libssh), Cint, (ssh_session, Cint), session, timeout)
+    @ccall libssh.ssh_blocking_flush(session::ssh_session, timeout::Cint)::Cint
 end
 
 function ssh_channel_accept_x11(channel, timeout_ms)
-    ccall((:ssh_channel_accept_x11, libssh), ssh_channel, (ssh_channel, Cint), channel, timeout_ms)
+    @ccall libssh.ssh_channel_accept_x11(channel::ssh_channel, timeout_ms::Cint)::ssh_channel
 end
 
 function ssh_channel_change_pty_size(channel, cols, rows)
-    ccall((:ssh_channel_change_pty_size, libssh), Cint, (ssh_channel, Cint, Cint), channel, cols, rows)
+    @ccall libssh.ssh_channel_change_pty_size(channel::ssh_channel, cols::Cint, rows::Cint)::Cint
 end
 
 function ssh_channel_close(channel)
-    ccall((:ssh_channel_close, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_close(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_free(channel)
-    ccall((:ssh_channel_free, libssh), Cvoid, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_free(channel::ssh_channel)::Cvoid
 end
 
 function ssh_channel_get_exit_status(channel)
-    ccall((:ssh_channel_get_exit_status, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_get_exit_status(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_get_session(channel)
-    ccall((:ssh_channel_get_session, libssh), ssh_session, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_get_session(channel::ssh_channel)::ssh_session
 end
 
 function ssh_channel_is_closed(channel)
-    ccall((:ssh_channel_is_closed, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_is_closed(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_is_eof(channel)
-    ccall((:ssh_channel_is_eof, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_is_eof(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_is_open(channel)
-    ccall((:ssh_channel_is_open, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_is_open(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_new(session)
-    ccall((:ssh_channel_new, libssh), ssh_channel, (ssh_session,), session)
+    @ccall libssh.ssh_channel_new(session::ssh_session)::ssh_channel
 end
 
 function ssh_channel_open_auth_agent(channel)
-    ccall((:ssh_channel_open_auth_agent, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_open_auth_agent(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_open_forward(channel, remotehost, remoteport, sourcehost, localport)
-    ccall((:ssh_channel_open_forward, libssh), Cint, (ssh_channel, Ptr{Cchar}, Cint, Ptr{Cchar}, Cint), channel, remotehost, remoteport, sourcehost, localport)
+    @ccall libssh.ssh_channel_open_forward(channel::ssh_channel, remotehost::Ptr{Cchar}, remoteport::Cint, sourcehost::Ptr{Cchar}, localport::Cint)::Cint
 end
 
 function ssh_channel_open_forward_unix(channel, remotepath, sourcehost, localport)
-    ccall((:ssh_channel_open_forward_unix, libssh), Cint, (ssh_channel, Ptr{Cchar}, Ptr{Cchar}, Cint), channel, remotepath, sourcehost, localport)
+    @ccall libssh.ssh_channel_open_forward_unix(channel::ssh_channel, remotepath::Ptr{Cchar}, sourcehost::Ptr{Cchar}, localport::Cint)::Cint
 end
 
 function ssh_channel_open_session(channel)
-    ccall((:ssh_channel_open_session, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_open_session(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_open_x11(channel, orig_addr, orig_port)
-    ccall((:ssh_channel_open_x11, libssh), Cint, (ssh_channel, Ptr{Cchar}, Cint), channel, orig_addr, orig_port)
+    @ccall libssh.ssh_channel_open_x11(channel::ssh_channel, orig_addr::Ptr{Cchar}, orig_port::Cint)::Cint
 end
 
 function ssh_channel_poll(channel, is_stderr)
-    ccall((:ssh_channel_poll, libssh), Cint, (ssh_channel, Cint), channel, is_stderr)
+    @ccall libssh.ssh_channel_poll(channel::ssh_channel, is_stderr::Cint)::Cint
 end
 
 function ssh_channel_poll_timeout(channel, timeout, is_stderr)
-    ccall((:ssh_channel_poll_timeout, libssh), Cint, (ssh_channel, Cint, Cint), channel, timeout, is_stderr)
+    @ccall libssh.ssh_channel_poll_timeout(channel::ssh_channel, timeout::Cint, is_stderr::Cint)::Cint
 end
 
 function ssh_channel_read(channel, dest, count, is_stderr)
-    ccall((:ssh_channel_read, libssh), Cint, (ssh_channel, Ptr{Cvoid}, UInt32, Cint), channel, dest, count, is_stderr)
+    @ccall libssh.ssh_channel_read(channel::ssh_channel, dest::Ptr{Cvoid}, count::UInt32, is_stderr::Cint)::Cint
 end
 
 function ssh_channel_read_timeout(channel, dest, count, is_stderr, timeout_ms)
-    ccall((:ssh_channel_read_timeout, libssh), Cint, (ssh_channel, Ptr{Cvoid}, UInt32, Cint, Cint), channel, dest, count, is_stderr, timeout_ms)
+    @ccall libssh.ssh_channel_read_timeout(channel::ssh_channel, dest::Ptr{Cvoid}, count::UInt32, is_stderr::Cint, timeout_ms::Cint)::Cint
 end
 
 function ssh_channel_read_nonblocking(channel, dest, count, is_stderr)
-    ccall((:ssh_channel_read_nonblocking, libssh), Cint, (ssh_channel, Ptr{Cvoid}, UInt32, Cint), channel, dest, count, is_stderr)
+    @ccall libssh.ssh_channel_read_nonblocking(channel::ssh_channel, dest::Ptr{Cvoid}, count::UInt32, is_stderr::Cint)::Cint
 end
 
 function ssh_channel_request_env(channel, name, value)
-    ccall((:ssh_channel_request_env, libssh), Cint, (ssh_channel, Ptr{Cchar}, Ptr{Cchar}), channel, name, value)
+    @ccall libssh.ssh_channel_request_env(channel::ssh_channel, name::Ptr{Cchar}, value::Ptr{Cchar})::Cint
 end
 
 function ssh_channel_request_exec(channel, cmd)
-    ccall((:ssh_channel_request_exec, libssh), Cint, (ssh_channel, Ptr{Cchar}), channel, cmd)
+    @ccall libssh.ssh_channel_request_exec(channel::ssh_channel, cmd::Ptr{Cchar})::Cint
 end
 
 function ssh_channel_request_pty(channel)
-    ccall((:ssh_channel_request_pty, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_request_pty(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_request_pty_size(channel, term, cols, rows)
-    ccall((:ssh_channel_request_pty_size, libssh), Cint, (ssh_channel, Ptr{Cchar}, Cint, Cint), channel, term, cols, rows)
+    @ccall libssh.ssh_channel_request_pty_size(channel::ssh_channel, term::Ptr{Cchar}, cols::Cint, rows::Cint)::Cint
 end
 
 function ssh_channel_request_shell(channel)
-    ccall((:ssh_channel_request_shell, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_request_shell(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_request_send_signal(channel, signum)
-    ccall((:ssh_channel_request_send_signal, libssh), Cint, (ssh_channel, Ptr{Cchar}), channel, signum)
+    @ccall libssh.ssh_channel_request_send_signal(channel::ssh_channel, signum::Ptr{Cchar})::Cint
 end
 
 function ssh_channel_request_send_break(channel, length)
-    ccall((:ssh_channel_request_send_break, libssh), Cint, (ssh_channel, UInt32), channel, length)
+    @ccall libssh.ssh_channel_request_send_break(channel::ssh_channel, length::UInt32)::Cint
 end
 
 function ssh_channel_request_sftp(channel)
-    ccall((:ssh_channel_request_sftp, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_request_sftp(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_request_subsystem(channel, subsystem)
-    ccall((:ssh_channel_request_subsystem, libssh), Cint, (ssh_channel, Ptr{Cchar}), channel, subsystem)
+    @ccall libssh.ssh_channel_request_subsystem(channel::ssh_channel, subsystem::Ptr{Cchar})::Cint
 end
 
 function ssh_channel_request_x11(channel, single_connection, protocol, cookie, screen_number)
-    ccall((:ssh_channel_request_x11, libssh), Cint, (ssh_channel, Cint, Ptr{Cchar}, Ptr{Cchar}, Cint), channel, single_connection, protocol, cookie, screen_number)
+    @ccall libssh.ssh_channel_request_x11(channel::ssh_channel, single_connection::Cint, protocol::Ptr{Cchar}, cookie::Ptr{Cchar}, screen_number::Cint)::Cint
 end
 
 function ssh_channel_request_auth_agent(channel)
-    ccall((:ssh_channel_request_auth_agent, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_request_auth_agent(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_send_eof(channel)
-    ccall((:ssh_channel_send_eof, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_send_eof(channel::ssh_channel)::Cint
 end
 
 function ssh_channel_set_blocking(channel, blocking)
-    ccall((:ssh_channel_set_blocking, libssh), Cvoid, (ssh_channel, Cint), channel, blocking)
+    @ccall libssh.ssh_channel_set_blocking(channel::ssh_channel, blocking::Cint)::Cvoid
 end
 
 function ssh_channel_set_counter(channel, counter)
-    ccall((:ssh_channel_set_counter, libssh), Cvoid, (ssh_channel, ssh_counter), channel, counter)
+    @ccall libssh.ssh_channel_set_counter(channel::ssh_channel, counter::ssh_counter)::Cvoid
 end
 
 function ssh_channel_write(channel, data, len)
-    ccall((:ssh_channel_write, libssh), Cint, (ssh_channel, Ptr{Cvoid}, UInt32), channel, data, len)
+    @ccall libssh.ssh_channel_write(channel::ssh_channel, data::Ptr{Cvoid}, len::UInt32)::Cint
 end
 
 function ssh_channel_write_stderr(channel, data, len)
-    ccall((:ssh_channel_write_stderr, libssh), Cint, (ssh_channel, Ptr{Cvoid}, UInt32), channel, data, len)
+    @ccall libssh.ssh_channel_write_stderr(channel::ssh_channel, data::Ptr{Cvoid}, len::UInt32)::Cint
 end
 
 function ssh_channel_window_size(channel)
-    ccall((:ssh_channel_window_size, libssh), UInt32, (ssh_channel,), channel)
+    @ccall libssh.ssh_channel_window_size(channel::ssh_channel)::UInt32
 end
 
 function ssh_basename(path)
-    ccall((:ssh_basename, libssh), Ptr{Cchar}, (Ptr{Cchar},), path)
+    @ccall libssh.ssh_basename(path::Ptr{Cchar})::Ptr{Cchar}
 end
 
 function ssh_clean_pubkey_hash(hash)
-    ccall((:ssh_clean_pubkey_hash, libssh), Cvoid, (Ptr{Ptr{Cuchar}},), hash)
+    @ccall libssh.ssh_clean_pubkey_hash(hash::Ptr{Ptr{Cuchar}})::Cvoid
 end
 
 function ssh_connect(session)
-    ccall((:ssh_connect, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_connect(session::ssh_session)::Cint
 end
 
 function ssh_connector_new(session)
-    ccall((:ssh_connector_new, libssh), ssh_connector, (ssh_session,), session)
+    @ccall libssh.ssh_connector_new(session::ssh_session)::ssh_connector
 end
 
 function ssh_connector_free(connector)
-    ccall((:ssh_connector_free, libssh), Cvoid, (ssh_connector,), connector)
+    @ccall libssh.ssh_connector_free(connector::ssh_connector)::Cvoid
 end
 
 function ssh_connector_set_in_channel(connector, channel, flags)
-    ccall((:ssh_connector_set_in_channel, libssh), Cint, (ssh_connector, ssh_channel, ssh_connector_flags_e), connector, channel, flags)
+    @ccall libssh.ssh_connector_set_in_channel(connector::ssh_connector, channel::ssh_channel, flags::ssh_connector_flags_e)::Cint
 end
 
 function ssh_connector_set_out_channel(connector, channel, flags)
-    ccall((:ssh_connector_set_out_channel, libssh), Cint, (ssh_connector, ssh_channel, ssh_connector_flags_e), connector, channel, flags)
+    @ccall libssh.ssh_connector_set_out_channel(connector::ssh_connector, channel::ssh_channel, flags::ssh_connector_flags_e)::Cint
 end
 
 function ssh_connector_set_in_fd(connector, fd)
-    ccall((:ssh_connector_set_in_fd, libssh), Cvoid, (ssh_connector, socket_t), connector, fd)
+    @ccall libssh.ssh_connector_set_in_fd(connector::ssh_connector, fd::socket_t)::Cvoid
 end
 
 function ssh_connector_set_out_fd(connector, fd)
-    ccall((:ssh_connector_set_out_fd, libssh), Cvoid, (ssh_connector, socket_t), connector, fd)
+    @ccall libssh.ssh_connector_set_out_fd(connector::ssh_connector, fd::socket_t)::Cvoid
 end
 
 function ssh_copyright()
-    ccall((:ssh_copyright, libssh), Ptr{Cchar}, ())
+    @ccall libssh.ssh_copyright()::Ptr{Cchar}
 end
 
 function ssh_disconnect(session)
-    ccall((:ssh_disconnect, libssh), Cvoid, (ssh_session,), session)
+    @ccall libssh.ssh_disconnect(session::ssh_session)::Cvoid
 end
 
 function ssh_dirname(path)
-    ccall((:ssh_dirname, libssh), Ptr{Cchar}, (Ptr{Cchar},), path)
+    @ccall libssh.ssh_dirname(path::Ptr{Cchar})::Ptr{Cchar}
 end
 
 function ssh_finalize()
-    ccall((:ssh_finalize, libssh), Cint, ())
+    @ccall libssh.ssh_finalize()::Cint
 end
 
 function ssh_channel_open_forward_port(session, timeout_ms, destination_port, originator, originator_port)
-    ccall((:ssh_channel_open_forward_port, libssh), ssh_channel, (ssh_session, Cint, Ptr{Cint}, Ptr{Ptr{Cchar}}, Ptr{Cint}), session, timeout_ms, destination_port, originator, originator_port)
+    @ccall libssh.ssh_channel_open_forward_port(session::ssh_session, timeout_ms::Cint, destination_port::Ptr{Cint}, originator::Ptr{Ptr{Cchar}}, originator_port::Ptr{Cint})::ssh_channel
 end
 
 function ssh_channel_accept_forward(session, timeout_ms, destination_port)
-    ccall((:ssh_channel_accept_forward, libssh), ssh_channel, (ssh_session, Cint, Ptr{Cint}), session, timeout_ms, destination_port)
+    @ccall libssh.ssh_channel_accept_forward(session::ssh_session, timeout_ms::Cint, destination_port::Ptr{Cint})::ssh_channel
 end
 
 function ssh_channel_cancel_forward(session, address, port)
-    ccall((:ssh_channel_cancel_forward, libssh), Cint, (ssh_session, Ptr{Cchar}, Cint), session, address, port)
+    @ccall libssh.ssh_channel_cancel_forward(session::ssh_session, address::Ptr{Cchar}, port::Cint)::Cint
 end
 
 function ssh_channel_listen_forward(session, address, port, bound_port)
-    ccall((:ssh_channel_listen_forward, libssh), Cint, (ssh_session, Ptr{Cchar}, Cint, Ptr{Cint}), session, address, port, bound_port)
+    @ccall libssh.ssh_channel_listen_forward(session::ssh_session, address::Ptr{Cchar}, port::Cint, bound_port::Ptr{Cint})::Cint
 end
 
 function ssh_free(session)
-    ccall((:ssh_free, libssh), Cvoid, (ssh_session,), session)
+    @ccall libssh.ssh_free(session::ssh_session)::Cvoid
 end
 
 function ssh_get_disconnect_message(session)
-    ccall((:ssh_get_disconnect_message, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_get_disconnect_message(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_get_error(error)
-    ccall((:ssh_get_error, libssh), Ptr{Cchar}, (Ptr{Cvoid},), error)
+    @ccall libssh.ssh_get_error(error::Ptr{Cvoid})::Ptr{Cchar}
 end
 
 function ssh_get_error_code(error)
-    ccall((:ssh_get_error_code, libssh), Cint, (Ptr{Cvoid},), error)
+    @ccall libssh.ssh_get_error_code(error::Ptr{Cvoid})::Cint
 end
 
 function ssh_get_fd(session)
-    ccall((:ssh_get_fd, libssh), socket_t, (ssh_session,), session)
+    @ccall libssh.ssh_get_fd(session::ssh_session)::socket_t
 end
 
 function ssh_get_hexa(what, len)
-    ccall((:ssh_get_hexa, libssh), Ptr{Cchar}, (Ptr{Cuchar}, Csize_t), what, len)
+    @ccall libssh.ssh_get_hexa(what::Ptr{Cuchar}, len::Csize_t)::Ptr{Cchar}
 end
 
 function ssh_get_issue_banner(session)
-    ccall((:ssh_get_issue_banner, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_get_issue_banner(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_get_openssh_version(session)
-    ccall((:ssh_get_openssh_version, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_get_openssh_version(session::ssh_session)::Cint
 end
 
 function ssh_get_server_publickey(session, key)
-    ccall((:ssh_get_server_publickey, libssh), Cint, (ssh_session, Ptr{ssh_key}), session, key)
+    @ccall libssh.ssh_get_server_publickey(session::ssh_session, key::Ptr{ssh_key})::Cint
 end
 
 @cenum ssh_publickey_hash_type::UInt32 begin
@@ -566,621 +578,639 @@ end
 end
 
 function ssh_get_publickey_hash(key, type, hash, hlen)
-    ccall((:ssh_get_publickey_hash, libssh), Cint, (ssh_key, ssh_publickey_hash_type, Ptr{Ptr{Cuchar}}, Ptr{Csize_t}), key, type, hash, hlen)
+    @ccall libssh.ssh_get_publickey_hash(key::ssh_key, type::ssh_publickey_hash_type, hash::Ptr{Ptr{Cuchar}}, hlen::Ptr{Csize_t})::Cint
 end
 
 function ssh_get_pubkey_hash(session, hash)
-    ccall((:ssh_get_pubkey_hash, libssh), Cint, (ssh_session, Ptr{Ptr{Cuchar}}), session, hash)
+    @ccall libssh.ssh_get_pubkey_hash(session::ssh_session, hash::Ptr{Ptr{Cuchar}})::Cint
 end
 
 function ssh_forward_accept(session, timeout_ms)
-    ccall((:ssh_forward_accept, libssh), ssh_channel, (ssh_session, Cint), session, timeout_ms)
+    @ccall libssh.ssh_forward_accept(session::ssh_session, timeout_ms::Cint)::ssh_channel
 end
 
 function ssh_forward_cancel(session, address, port)
-    ccall((:ssh_forward_cancel, libssh), Cint, (ssh_session, Ptr{Cchar}, Cint), session, address, port)
+    @ccall libssh.ssh_forward_cancel(session::ssh_session, address::Ptr{Cchar}, port::Cint)::Cint
 end
 
 function ssh_forward_listen(session, address, port, bound_port)
-    ccall((:ssh_forward_listen, libssh), Cint, (ssh_session, Ptr{Cchar}, Cint, Ptr{Cint}), session, address, port, bound_port)
+    @ccall libssh.ssh_forward_listen(session::ssh_session, address::Ptr{Cchar}, port::Cint, bound_port::Ptr{Cint})::Cint
 end
 
 function ssh_get_publickey(session, key)
-    ccall((:ssh_get_publickey, libssh), Cint, (ssh_session, Ptr{ssh_key}), session, key)
+    @ccall libssh.ssh_get_publickey(session::ssh_session, key::Ptr{ssh_key})::Cint
 end
 
 function ssh_write_knownhost(session)
-    ccall((:ssh_write_knownhost, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_write_knownhost(session::ssh_session)::Cint
 end
 
 function ssh_dump_knownhost(session)
-    ccall((:ssh_dump_knownhost, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_dump_knownhost(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_is_server_known(session)
-    ccall((:ssh_is_server_known, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_is_server_known(session::ssh_session)::Cint
 end
 
 function ssh_print_hexa(descr, what, len)
-    ccall((:ssh_print_hexa, libssh), Cvoid, (Ptr{Cchar}, Ptr{Cuchar}, Csize_t), descr, what, len)
+    @ccall libssh.ssh_print_hexa(descr::Ptr{Cchar}, what::Ptr{Cuchar}, len::Csize_t)::Cvoid
 end
 
 function ssh_channel_select(readchans, writechans, exceptchans, timeout)
-    ccall((:ssh_channel_select, libssh), Cint, (Ptr{ssh_channel}, Ptr{ssh_channel}, Ptr{ssh_channel}, Ptr{Cvoid}), readchans, writechans, exceptchans, timeout)
+    @ccall libssh.ssh_channel_select(readchans::Ptr{ssh_channel}, writechans::Ptr{ssh_channel}, exceptchans::Ptr{ssh_channel}, timeout::Ptr{Cvoid})::Cint
 end
 
 function ssh_scp_accept_request(scp)
-    ccall((:ssh_scp_accept_request, libssh), Cint, (ssh_scp,), scp)
+    @ccall libssh.ssh_scp_accept_request(scp::ssh_scp)::Cint
 end
 
 function ssh_scp_close(scp)
-    ccall((:ssh_scp_close, libssh), Cint, (ssh_scp,), scp)
+    @ccall libssh.ssh_scp_close(scp::ssh_scp)::Cint
 end
 
 function ssh_scp_deny_request(scp, reason)
-    ccall((:ssh_scp_deny_request, libssh), Cint, (ssh_scp, Ptr{Cchar}), scp, reason)
+    @ccall libssh.ssh_scp_deny_request(scp::ssh_scp, reason::Ptr{Cchar})::Cint
 end
 
 function ssh_scp_free(scp)
-    ccall((:ssh_scp_free, libssh), Cvoid, (ssh_scp,), scp)
+    @ccall libssh.ssh_scp_free(scp::ssh_scp)::Cvoid
 end
 
 function ssh_scp_init(scp)
-    ccall((:ssh_scp_init, libssh), Cint, (ssh_scp,), scp)
+    @ccall libssh.ssh_scp_init(scp::ssh_scp)::Cint
 end
 
 function ssh_scp_leave_directory(scp)
-    ccall((:ssh_scp_leave_directory, libssh), Cint, (ssh_scp,), scp)
+    @ccall libssh.ssh_scp_leave_directory(scp::ssh_scp)::Cint
 end
 
 function ssh_scp_new(session, mode, location)
-    ccall((:ssh_scp_new, libssh), ssh_scp, (ssh_session, Cint, Ptr{Cchar}), session, mode, location)
+    @ccall libssh.ssh_scp_new(session::ssh_session, mode::Cint, location::Ptr{Cchar})::ssh_scp
 end
 
 function ssh_scp_pull_request(scp)
-    ccall((:ssh_scp_pull_request, libssh), Cint, (ssh_scp,), scp)
+    @ccall libssh.ssh_scp_pull_request(scp::ssh_scp)::Cint
 end
 
 function ssh_scp_push_directory(scp, dirname, mode)
-    ccall((:ssh_scp_push_directory, libssh), Cint, (ssh_scp, Ptr{Cchar}, Cint), scp, dirname, mode)
+    @ccall libssh.ssh_scp_push_directory(scp::ssh_scp, dirname::Ptr{Cchar}, mode::Cint)::Cint
 end
 
 function ssh_scp_push_file(scp, filename, size, perms)
-    ccall((:ssh_scp_push_file, libssh), Cint, (ssh_scp, Ptr{Cchar}, Csize_t, Cint), scp, filename, size, perms)
+    @ccall libssh.ssh_scp_push_file(scp::ssh_scp, filename::Ptr{Cchar}, size::Csize_t, perms::Cint)::Cint
 end
 
 function ssh_scp_push_file64(scp, filename, size, perms)
-    ccall((:ssh_scp_push_file64, libssh), Cint, (ssh_scp, Ptr{Cchar}, UInt64, Cint), scp, filename, size, perms)
+    @ccall libssh.ssh_scp_push_file64(scp::ssh_scp, filename::Ptr{Cchar}, size::UInt64, perms::Cint)::Cint
 end
 
 function ssh_scp_read(scp, buffer, size)
-    ccall((:ssh_scp_read, libssh), Cint, (ssh_scp, Ptr{Cvoid}, Csize_t), scp, buffer, size)
+    @ccall libssh.ssh_scp_read(scp::ssh_scp, buffer::Ptr{Cvoid}, size::Csize_t)::Cint
 end
 
 function ssh_scp_request_get_filename(scp)
-    ccall((:ssh_scp_request_get_filename, libssh), Ptr{Cchar}, (ssh_scp,), scp)
+    @ccall libssh.ssh_scp_request_get_filename(scp::ssh_scp)::Ptr{Cchar}
 end
 
 function ssh_scp_request_get_permissions(scp)
-    ccall((:ssh_scp_request_get_permissions, libssh), Cint, (ssh_scp,), scp)
+    @ccall libssh.ssh_scp_request_get_permissions(scp::ssh_scp)::Cint
 end
 
 function ssh_scp_request_get_size(scp)
-    ccall((:ssh_scp_request_get_size, libssh), Csize_t, (ssh_scp,), scp)
+    @ccall libssh.ssh_scp_request_get_size(scp::ssh_scp)::Csize_t
 end
 
 function ssh_scp_request_get_size64(scp)
-    ccall((:ssh_scp_request_get_size64, libssh), UInt64, (ssh_scp,), scp)
+    @ccall libssh.ssh_scp_request_get_size64(scp::ssh_scp)::UInt64
 end
 
 function ssh_scp_request_get_warning(scp)
-    ccall((:ssh_scp_request_get_warning, libssh), Ptr{Cchar}, (ssh_scp,), scp)
+    @ccall libssh.ssh_scp_request_get_warning(scp::ssh_scp)::Ptr{Cchar}
 end
 
 function ssh_scp_write(scp, buffer, len)
-    ccall((:ssh_scp_write, libssh), Cint, (ssh_scp, Ptr{Cvoid}, Csize_t), scp, buffer, len)
+    @ccall libssh.ssh_scp_write(scp::ssh_scp, buffer::Ptr{Cvoid}, len::Csize_t)::Cint
 end
 
 function ssh_get_random(where, len, strong)
-    ccall((:ssh_get_random, libssh), Cint, (Ptr{Cvoid}, Cint, Cint), where, len, strong)
+    @ccall libssh.ssh_get_random(where::Ptr{Cvoid}, len::Cint, strong::Cint)::Cint
 end
 
 function ssh_get_version(session)
-    ccall((:ssh_get_version, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_get_version(session::ssh_session)::Cint
 end
 
 function ssh_get_status(session)
-    ccall((:ssh_get_status, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_get_status(session::ssh_session)::Cint
 end
 
 function ssh_get_poll_flags(session)
-    ccall((:ssh_get_poll_flags, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_get_poll_flags(session::ssh_session)::Cint
 end
 
 function ssh_init()
-    ccall((:ssh_init, libssh), Cint, ())
+    @ccall libssh.ssh_init()::Cint
 end
 
 function ssh_is_blocking(session)
-    ccall((:ssh_is_blocking, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_is_blocking(session::ssh_session)::Cint
 end
 
 function ssh_is_connected(session)
-    ccall((:ssh_is_connected, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_is_connected(session::ssh_session)::Cint
 end
 
 function ssh_known_hosts_parse_line(host, line, entry)
-    ccall((:ssh_known_hosts_parse_line, libssh), Cint, (Ptr{Cchar}, Ptr{Cchar}, Ptr{Ptr{ssh_knownhosts_entry}}), host, line, entry)
+    @ccall libssh.ssh_known_hosts_parse_line(host::Ptr{Cchar}, line::Ptr{Cchar}, entry::Ptr{Ptr{ssh_knownhosts_entry}})::Cint
 end
 
 function ssh_session_has_known_hosts_entry(session)
-    ccall((:ssh_session_has_known_hosts_entry, libssh), ssh_known_hosts_e, (ssh_session,), session)
+    @ccall libssh.ssh_session_has_known_hosts_entry(session::ssh_session)::ssh_known_hosts_e
 end
 
 function ssh_session_export_known_hosts_entry(session, pentry_string)
-    ccall((:ssh_session_export_known_hosts_entry, libssh), Cint, (ssh_session, Ptr{Ptr{Cchar}}), session, pentry_string)
+    @ccall libssh.ssh_session_export_known_hosts_entry(session::ssh_session, pentry_string::Ptr{Ptr{Cchar}})::Cint
 end
 
 function ssh_session_update_known_hosts(session)
-    ccall((:ssh_session_update_known_hosts, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_session_update_known_hosts(session::ssh_session)::Cint
 end
 
 function ssh_session_get_known_hosts_entry(session, pentry)
-    ccall((:ssh_session_get_known_hosts_entry, libssh), ssh_known_hosts_e, (ssh_session, Ptr{Ptr{ssh_knownhosts_entry}}), session, pentry)
+    @ccall libssh.ssh_session_get_known_hosts_entry(session::ssh_session, pentry::Ptr{Ptr{ssh_knownhosts_entry}})::ssh_known_hosts_e
 end
 
 function ssh_session_is_known_server(session)
-    ccall((:ssh_session_is_known_server, libssh), ssh_known_hosts_e, (ssh_session,), session)
+    @ccall libssh.ssh_session_is_known_server(session::ssh_session)::ssh_known_hosts_e
 end
 
 function ssh_set_log_level(level)
-    ccall((:ssh_set_log_level, libssh), Cint, (Cint,), level)
+    @ccall libssh.ssh_set_log_level(level::Cint)::Cint
 end
 
 function ssh_get_log_level()
-    ccall((:ssh_get_log_level, libssh), Cint, ())
+    @ccall libssh.ssh_get_log_level()::Cint
 end
 
 function ssh_get_log_userdata()
-    ccall((:ssh_get_log_userdata, libssh), Ptr{Cvoid}, ())
+    @ccall libssh.ssh_get_log_userdata()::Ptr{Cvoid}
 end
 
 function ssh_set_log_userdata(data)
-    ccall((:ssh_set_log_userdata, libssh), Cint, (Ptr{Cvoid},), data)
+    @ccall libssh.ssh_set_log_userdata(data::Ptr{Cvoid})::Cint
 end
 
 function ssh_message_channel_request_open_reply_accept(msg)
-    ccall((:ssh_message_channel_request_open_reply_accept, libssh), ssh_channel, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_open_reply_accept(msg::ssh_message)::ssh_channel
 end
 
 function ssh_message_channel_request_open_reply_accept_channel(msg, chan)
-    ccall((:ssh_message_channel_request_open_reply_accept_channel, libssh), Cint, (ssh_message, ssh_channel), msg, chan)
+    @ccall libssh.ssh_message_channel_request_open_reply_accept_channel(msg::ssh_message, chan::ssh_channel)::Cint
 end
 
 function ssh_message_channel_request_reply_success(msg)
-    ccall((:ssh_message_channel_request_reply_success, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_reply_success(msg::ssh_message)::Cint
 end
 
 function ssh_message_get(session)
-    ccall((:ssh_message_get, libssh), ssh_message, (ssh_session,), session)
+    @ccall libssh.ssh_message_get(session::ssh_session)::ssh_message
 end
 
 function ssh_message_subtype(msg)
-    ccall((:ssh_message_subtype, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_subtype(msg::ssh_message)::Cint
 end
 
 function ssh_message_type(msg)
-    ccall((:ssh_message_type, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_type(msg::ssh_message)::Cint
 end
 
 function ssh_mkdir(pathname, mode)
-    ccall((:ssh_mkdir, libssh), Cint, (Ptr{Cchar}, mode_t), pathname, mode)
+    @ccall libssh.ssh_mkdir(pathname::Ptr{Cchar}, mode::mode_t)::Cint
 end
 
 function ssh_new()
-    ccall((:ssh_new, libssh), ssh_session, ())
+    @ccall libssh.ssh_new()::ssh_session
 end
 
 function ssh_options_copy(src, dest)
-    ccall((:ssh_options_copy, libssh), Cint, (ssh_session, Ptr{ssh_session}), src, dest)
+    @ccall libssh.ssh_options_copy(src::ssh_session, dest::Ptr{ssh_session})::Cint
 end
 
 function ssh_options_getopt(session, argcptr, argv)
-    ccall((:ssh_options_getopt, libssh), Cint, (ssh_session, Ptr{Cint}, Ptr{Ptr{Cchar}}), session, argcptr, argv)
+    @ccall libssh.ssh_options_getopt(session::ssh_session, argcptr::Ptr{Cint}, argv::Ptr{Ptr{Cchar}})::Cint
 end
 
 function ssh_options_parse_config(session, filename)
-    ccall((:ssh_options_parse_config, libssh), Cint, (ssh_session, Ptr{Cchar}), session, filename)
+    @ccall libssh.ssh_options_parse_config(session::ssh_session, filename::Ptr{Cchar})::Cint
 end
 
 function ssh_options_set(session, type, value)
-    ccall((:ssh_options_set, libssh), Cint, (ssh_session, ssh_options_e, Ptr{Cvoid}), session, type, value)
+    @ccall libssh.ssh_options_set(session::ssh_session, type::ssh_options_e, value::Ptr{Cvoid})::Cint
 end
 
 function ssh_options_get(session, type, value)
-    ccall((:ssh_options_get, libssh), Cint, (ssh_session, ssh_options_e, Ptr{Ptr{Cchar}}), session, type, value)
+    @ccall libssh.ssh_options_get(session::ssh_session, type::ssh_options_e, value::Ptr{Ptr{Cchar}})::Cint
 end
 
 function ssh_options_get_port(session, port_target)
-    ccall((:ssh_options_get_port, libssh), Cint, (ssh_session, Ptr{Cuint}), session, port_target)
+    @ccall libssh.ssh_options_get_port(session::ssh_session, port_target::Ptr{Cuint})::Cint
 end
 
 function ssh_pcap_file_close(pcap)
-    ccall((:ssh_pcap_file_close, libssh), Cint, (ssh_pcap_file,), pcap)
+    @ccall libssh.ssh_pcap_file_close(pcap::ssh_pcap_file)::Cint
 end
 
 function ssh_pcap_file_free(pcap)
-    ccall((:ssh_pcap_file_free, libssh), Cvoid, (ssh_pcap_file,), pcap)
+    @ccall libssh.ssh_pcap_file_free(pcap::ssh_pcap_file)::Cvoid
 end
 
 function ssh_pcap_file_new()
-    ccall((:ssh_pcap_file_new, libssh), ssh_pcap_file, ())
+    @ccall libssh.ssh_pcap_file_new()::ssh_pcap_file
 end
 
 function ssh_pcap_file_open(pcap, filename)
-    ccall((:ssh_pcap_file_open, libssh), Cint, (ssh_pcap_file, Ptr{Cchar}), pcap, filename)
+    @ccall libssh.ssh_pcap_file_open(pcap::ssh_pcap_file, filename::Ptr{Cchar})::Cint
 end
 
 # typedef int ( * ssh_auth_callback ) ( const char * prompt , char * buf , size_t len , int echo , int verify , void * userdata )
+"""
+SSH authentication callback for password and publickey auth.
+
+### Parameters
+* `prompt`: Prompt to be displayed.
+* `buf`: Buffer to save the password. You should null-terminate it.
+* `len`: Length of the buffer.
+* `echo`: Enable or disable the echo of what you type.
+* `verify`: Should the password be verified?
+* `userdata`: Userdata to be passed to the callback function. Useful for GUI applications.
+### Returns
+0 on success, < 0 on error.
+"""
 const ssh_auth_callback = Ptr{Cvoid}
 
+"""
+    ssh_key_new()
+
+@}
+"""
 function ssh_key_new()
-    ccall((:ssh_key_new, libssh), ssh_key, ())
+    @ccall libssh.ssh_key_new()::ssh_key
 end
 
 function ssh_key_type(key)
-    ccall((:ssh_key_type, libssh), ssh_keytypes_e, (ssh_key,), key)
+    @ccall libssh.ssh_key_type(key::ssh_key)::ssh_keytypes_e
 end
 
 function ssh_key_type_to_char(type)
-    ccall((:ssh_key_type_to_char, libssh), Ptr{Cchar}, (ssh_keytypes_e,), type)
+    @ccall libssh.ssh_key_type_to_char(type::ssh_keytypes_e)::Ptr{Cchar}
 end
 
 function ssh_key_type_from_name(name)
-    ccall((:ssh_key_type_from_name, libssh), ssh_keytypes_e, (Ptr{Cchar},), name)
+    @ccall libssh.ssh_key_type_from_name(name::Ptr{Cchar})::ssh_keytypes_e
 end
 
 function ssh_key_is_public(k)
-    ccall((:ssh_key_is_public, libssh), Cint, (ssh_key,), k)
+    @ccall libssh.ssh_key_is_public(k::ssh_key)::Cint
 end
 
 function ssh_key_is_private(k)
-    ccall((:ssh_key_is_private, libssh), Cint, (ssh_key,), k)
+    @ccall libssh.ssh_key_is_private(k::ssh_key)::Cint
 end
 
 function ssh_key_cmp(k1, k2, what)
-    ccall((:ssh_key_cmp, libssh), Cint, (ssh_key, ssh_key, ssh_keycmp_e), k1, k2, what)
+    @ccall libssh.ssh_key_cmp(k1::ssh_key, k2::ssh_key, what::ssh_keycmp_e)::Cint
 end
 
 function ssh_key_dup(key)
-    ccall((:ssh_key_dup, libssh), ssh_key, (ssh_key,), key)
+    @ccall libssh.ssh_key_dup(key::ssh_key)::ssh_key
 end
 
 function ssh_pki_generate(type, parameter, pkey)
-    ccall((:ssh_pki_generate, libssh), Cint, (ssh_keytypes_e, Cint, Ptr{ssh_key}), type, parameter, pkey)
+    @ccall libssh.ssh_pki_generate(type::ssh_keytypes_e, parameter::Cint, pkey::Ptr{ssh_key})::Cint
 end
 
 function ssh_pki_import_privkey_base64(b64_key, passphrase, auth_fn, auth_data, pkey)
-    ccall((:ssh_pki_import_privkey_base64, libssh), Cint, (Ptr{Cchar}, Ptr{Cchar}, ssh_auth_callback, Ptr{Cvoid}, Ptr{ssh_key}), b64_key, passphrase, auth_fn, auth_data, pkey)
+    @ccall libssh.ssh_pki_import_privkey_base64(b64_key::Ptr{Cchar}, passphrase::Ptr{Cchar}, auth_fn::ssh_auth_callback, auth_data::Ptr{Cvoid}, pkey::Ptr{ssh_key})::Cint
 end
 
 function ssh_pki_export_privkey_base64(privkey, passphrase, auth_fn, auth_data, b64_key)
-    ccall((:ssh_pki_export_privkey_base64, libssh), Cint, (ssh_key, Ptr{Cchar}, ssh_auth_callback, Ptr{Cvoid}, Ptr{Ptr{Cchar}}), privkey, passphrase, auth_fn, auth_data, b64_key)
+    @ccall libssh.ssh_pki_export_privkey_base64(privkey::ssh_key, passphrase::Ptr{Cchar}, auth_fn::ssh_auth_callback, auth_data::Ptr{Cvoid}, b64_key::Ptr{Ptr{Cchar}})::Cint
 end
 
 function ssh_pki_import_privkey_file(filename, passphrase, auth_fn, auth_data, pkey)
-    ccall((:ssh_pki_import_privkey_file, libssh), Cint, (Ptr{Cchar}, Ptr{Cchar}, ssh_auth_callback, Ptr{Cvoid}, Ptr{ssh_key}), filename, passphrase, auth_fn, auth_data, pkey)
+    @ccall libssh.ssh_pki_import_privkey_file(filename::Ptr{Cchar}, passphrase::Ptr{Cchar}, auth_fn::ssh_auth_callback, auth_data::Ptr{Cvoid}, pkey::Ptr{ssh_key})::Cint
 end
 
 function ssh_pki_export_privkey_file(privkey, passphrase, auth_fn, auth_data, filename)
-    ccall((:ssh_pki_export_privkey_file, libssh), Cint, (ssh_key, Ptr{Cchar}, ssh_auth_callback, Ptr{Cvoid}, Ptr{Cchar}), privkey, passphrase, auth_fn, auth_data, filename)
+    @ccall libssh.ssh_pki_export_privkey_file(privkey::ssh_key, passphrase::Ptr{Cchar}, auth_fn::ssh_auth_callback, auth_data::Ptr{Cvoid}, filename::Ptr{Cchar})::Cint
 end
 
 function ssh_pki_copy_cert_to_privkey(cert_key, privkey)
-    ccall((:ssh_pki_copy_cert_to_privkey, libssh), Cint, (ssh_key, ssh_key), cert_key, privkey)
+    @ccall libssh.ssh_pki_copy_cert_to_privkey(cert_key::ssh_key, privkey::ssh_key)::Cint
 end
 
 function ssh_pki_import_pubkey_base64(b64_key, type, pkey)
-    ccall((:ssh_pki_import_pubkey_base64, libssh), Cint, (Ptr{Cchar}, ssh_keytypes_e, Ptr{ssh_key}), b64_key, type, pkey)
+    @ccall libssh.ssh_pki_import_pubkey_base64(b64_key::Ptr{Cchar}, type::ssh_keytypes_e, pkey::Ptr{ssh_key})::Cint
 end
 
 function ssh_pki_import_pubkey_file(filename, pkey)
-    ccall((:ssh_pki_import_pubkey_file, libssh), Cint, (Ptr{Cchar}, Ptr{ssh_key}), filename, pkey)
+    @ccall libssh.ssh_pki_import_pubkey_file(filename::Ptr{Cchar}, pkey::Ptr{ssh_key})::Cint
 end
 
 function ssh_pki_import_cert_base64(b64_cert, type, pkey)
-    ccall((:ssh_pki_import_cert_base64, libssh), Cint, (Ptr{Cchar}, ssh_keytypes_e, Ptr{ssh_key}), b64_cert, type, pkey)
+    @ccall libssh.ssh_pki_import_cert_base64(b64_cert::Ptr{Cchar}, type::ssh_keytypes_e, pkey::Ptr{ssh_key})::Cint
 end
 
 function ssh_pki_import_cert_file(filename, pkey)
-    ccall((:ssh_pki_import_cert_file, libssh), Cint, (Ptr{Cchar}, Ptr{ssh_key}), filename, pkey)
+    @ccall libssh.ssh_pki_import_cert_file(filename::Ptr{Cchar}, pkey::Ptr{ssh_key})::Cint
 end
 
 function ssh_pki_export_privkey_to_pubkey(privkey, pkey)
-    ccall((:ssh_pki_export_privkey_to_pubkey, libssh), Cint, (ssh_key, Ptr{ssh_key}), privkey, pkey)
+    @ccall libssh.ssh_pki_export_privkey_to_pubkey(privkey::ssh_key, pkey::Ptr{ssh_key})::Cint
 end
 
 function ssh_pki_export_pubkey_base64(key, b64_key)
-    ccall((:ssh_pki_export_pubkey_base64, libssh), Cint, (ssh_key, Ptr{Ptr{Cchar}}), key, b64_key)
+    @ccall libssh.ssh_pki_export_pubkey_base64(key::ssh_key, b64_key::Ptr{Ptr{Cchar}})::Cint
 end
 
 function ssh_pki_export_pubkey_file(key, filename)
-    ccall((:ssh_pki_export_pubkey_file, libssh), Cint, (ssh_key, Ptr{Cchar}), key, filename)
+    @ccall libssh.ssh_pki_export_pubkey_file(key::ssh_key, filename::Ptr{Cchar})::Cint
 end
 
 function ssh_pki_key_ecdsa_name(key)
-    ccall((:ssh_pki_key_ecdsa_name, libssh), Ptr{Cchar}, (ssh_key,), key)
+    @ccall libssh.ssh_pki_key_ecdsa_name(key::ssh_key)::Ptr{Cchar}
 end
 
 function ssh_get_fingerprint_hash(type, hash, len)
-    ccall((:ssh_get_fingerprint_hash, libssh), Ptr{Cchar}, (ssh_publickey_hash_type, Ptr{Cuchar}, Csize_t), type, hash, len)
+    @ccall libssh.ssh_get_fingerprint_hash(type::ssh_publickey_hash_type, hash::Ptr{Cuchar}, len::Csize_t)::Ptr{Cchar}
 end
 
 function ssh_print_hash(type, hash, len)
-    ccall((:ssh_print_hash, libssh), Cvoid, (ssh_publickey_hash_type, Ptr{Cuchar}, Csize_t), type, hash, len)
+    @ccall libssh.ssh_print_hash(type::ssh_publickey_hash_type, hash::Ptr{Cuchar}, len::Csize_t)::Cvoid
 end
 
 function ssh_send_ignore(session, data)
-    ccall((:ssh_send_ignore, libssh), Cint, (ssh_session, Ptr{Cchar}), session, data)
+    @ccall libssh.ssh_send_ignore(session::ssh_session, data::Ptr{Cchar})::Cint
 end
 
 function ssh_send_debug(session, message, always_display)
-    ccall((:ssh_send_debug, libssh), Cint, (ssh_session, Ptr{Cchar}, Cint), session, message, always_display)
+    @ccall libssh.ssh_send_debug(session::ssh_session, message::Ptr{Cchar}, always_display::Cint)::Cint
 end
 
 function ssh_gssapi_set_creds(session, creds)
-    ccall((:ssh_gssapi_set_creds, libssh), Cvoid, (ssh_session, ssh_gssapi_creds), session, creds)
+    @ccall libssh.ssh_gssapi_set_creds(session::ssh_session, creds::ssh_gssapi_creds)::Cvoid
 end
 
 function ssh_select(channels, outchannels, maxfd, readfds, timeout)
-    ccall((:ssh_select, libssh), Cint, (Ptr{ssh_channel}, Ptr{ssh_channel}, socket_t, Ptr{fd_set}, Ptr{Cvoid}), channels, outchannels, maxfd, readfds, timeout)
+    @ccall libssh.ssh_select(channels::Ptr{ssh_channel}, outchannels::Ptr{ssh_channel}, maxfd::socket_t, readfds::Ptr{fd_set}, timeout::Ptr{Cvoid})::Cint
 end
 
 function ssh_service_request(session, service)
-    ccall((:ssh_service_request, libssh), Cint, (ssh_session, Ptr{Cchar}), session, service)
+    @ccall libssh.ssh_service_request(session::ssh_session, service::Ptr{Cchar})::Cint
 end
 
 function ssh_set_agent_channel(session, channel)
-    ccall((:ssh_set_agent_channel, libssh), Cint, (ssh_session, ssh_channel), session, channel)
+    @ccall libssh.ssh_set_agent_channel(session::ssh_session, channel::ssh_channel)::Cint
 end
 
 function ssh_set_agent_socket(session, fd)
-    ccall((:ssh_set_agent_socket, libssh), Cint, (ssh_session, socket_t), session, fd)
+    @ccall libssh.ssh_set_agent_socket(session::ssh_session, fd::socket_t)::Cint
 end
 
 function ssh_set_blocking(session, blocking)
-    ccall((:ssh_set_blocking, libssh), Cvoid, (ssh_session, Cint), session, blocking)
+    @ccall libssh.ssh_set_blocking(session::ssh_session, blocking::Cint)::Cvoid
 end
 
 function ssh_set_counters(session, scounter, rcounter)
-    ccall((:ssh_set_counters, libssh), Cvoid, (ssh_session, ssh_counter, ssh_counter), session, scounter, rcounter)
+    @ccall libssh.ssh_set_counters(session::ssh_session, scounter::ssh_counter, rcounter::ssh_counter)::Cvoid
 end
 
 function ssh_set_fd_except(session)
-    ccall((:ssh_set_fd_except, libssh), Cvoid, (ssh_session,), session)
+    @ccall libssh.ssh_set_fd_except(session::ssh_session)::Cvoid
 end
 
 function ssh_set_fd_toread(session)
-    ccall((:ssh_set_fd_toread, libssh), Cvoid, (ssh_session,), session)
+    @ccall libssh.ssh_set_fd_toread(session::ssh_session)::Cvoid
 end
 
 function ssh_set_fd_towrite(session)
-    ccall((:ssh_set_fd_towrite, libssh), Cvoid, (ssh_session,), session)
+    @ccall libssh.ssh_set_fd_towrite(session::ssh_session)::Cvoid
 end
 
 function ssh_silent_disconnect(session)
-    ccall((:ssh_silent_disconnect, libssh), Cvoid, (ssh_session,), session)
+    @ccall libssh.ssh_silent_disconnect(session::ssh_session)::Cvoid
 end
 
 function ssh_set_pcap_file(session, pcapfile)
-    ccall((:ssh_set_pcap_file, libssh), Cint, (ssh_session, ssh_pcap_file), session, pcapfile)
+    @ccall libssh.ssh_set_pcap_file(session::ssh_session, pcapfile::ssh_pcap_file)::Cint
 end
 
 function ssh_userauth_none(session, username)
-    ccall((:ssh_userauth_none, libssh), Cint, (ssh_session, Ptr{Cchar}), session, username)
+    @ccall libssh.ssh_userauth_none(session::ssh_session, username::Ptr{Cchar})::Cint
 end
 
 function ssh_userauth_list(session, username)
-    ccall((:ssh_userauth_list, libssh), Cint, (ssh_session, Ptr{Cchar}), session, username)
+    @ccall libssh.ssh_userauth_list(session::ssh_session, username::Ptr{Cchar})::Cint
 end
 
 function ssh_userauth_try_publickey(session, username, pubkey)
-    ccall((:ssh_userauth_try_publickey, libssh), Cint, (ssh_session, Ptr{Cchar}, ssh_key), session, username, pubkey)
+    @ccall libssh.ssh_userauth_try_publickey(session::ssh_session, username::Ptr{Cchar}, pubkey::ssh_key)::Cint
 end
 
 function ssh_userauth_publickey(session, username, privkey)
-    ccall((:ssh_userauth_publickey, libssh), Cint, (ssh_session, Ptr{Cchar}, ssh_key), session, username, privkey)
+    @ccall libssh.ssh_userauth_publickey(session::ssh_session, username::Ptr{Cchar}, privkey::ssh_key)::Cint
 end
 
 function ssh_userauth_agent(session, username)
-    ccall((:ssh_userauth_agent, libssh), Cint, (ssh_session, Ptr{Cchar}), session, username)
+    @ccall libssh.ssh_userauth_agent(session::ssh_session, username::Ptr{Cchar})::Cint
 end
 
 function ssh_userauth_publickey_auto_get_current_identity(session, value)
-    ccall((:ssh_userauth_publickey_auto_get_current_identity, libssh), Cint, (ssh_session, Ptr{Ptr{Cchar}}), session, value)
+    @ccall libssh.ssh_userauth_publickey_auto_get_current_identity(session::ssh_session, value::Ptr{Ptr{Cchar}})::Cint
 end
 
 function ssh_userauth_publickey_auto(session, username, passphrase)
-    ccall((:ssh_userauth_publickey_auto, libssh), Cint, (ssh_session, Ptr{Cchar}, Ptr{Cchar}), session, username, passphrase)
+    @ccall libssh.ssh_userauth_publickey_auto(session::ssh_session, username::Ptr{Cchar}, passphrase::Ptr{Cchar})::Cint
 end
 
 function ssh_userauth_password(session, username, password)
-    ccall((:ssh_userauth_password, libssh), Cint, (ssh_session, Ptr{Cchar}, Ptr{Cchar}), session, username, password)
+    @ccall libssh.ssh_userauth_password(session::ssh_session, username::Ptr{Cchar}, password::Ptr{Cchar})::Cint
 end
 
 function ssh_userauth_kbdint(session, user, submethods)
-    ccall((:ssh_userauth_kbdint, libssh), Cint, (ssh_session, Ptr{Cchar}, Ptr{Cchar}), session, user, submethods)
+    @ccall libssh.ssh_userauth_kbdint(session::ssh_session, user::Ptr{Cchar}, submethods::Ptr{Cchar})::Cint
 end
 
 function ssh_userauth_kbdint_getinstruction(session)
-    ccall((:ssh_userauth_kbdint_getinstruction, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_userauth_kbdint_getinstruction(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_userauth_kbdint_getname(session)
-    ccall((:ssh_userauth_kbdint_getname, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_userauth_kbdint_getname(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_userauth_kbdint_getnprompts(session)
-    ccall((:ssh_userauth_kbdint_getnprompts, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_userauth_kbdint_getnprompts(session::ssh_session)::Cint
 end
 
 function ssh_userauth_kbdint_getprompt(session, i, echo)
-    ccall((:ssh_userauth_kbdint_getprompt, libssh), Ptr{Cchar}, (ssh_session, Cuint, Ptr{Cchar}), session, i, echo)
+    @ccall libssh.ssh_userauth_kbdint_getprompt(session::ssh_session, i::Cuint, echo::Ptr{Cchar})::Ptr{Cchar}
 end
 
 function ssh_userauth_kbdint_getnanswers(session)
-    ccall((:ssh_userauth_kbdint_getnanswers, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_userauth_kbdint_getnanswers(session::ssh_session)::Cint
 end
 
 function ssh_userauth_kbdint_getanswer(session, i)
-    ccall((:ssh_userauth_kbdint_getanswer, libssh), Ptr{Cchar}, (ssh_session, Cuint), session, i)
+    @ccall libssh.ssh_userauth_kbdint_getanswer(session::ssh_session, i::Cuint)::Ptr{Cchar}
 end
 
 function ssh_userauth_kbdint_setanswer(session, i, answer)
-    ccall((:ssh_userauth_kbdint_setanswer, libssh), Cint, (ssh_session, Cuint, Ptr{Cchar}), session, i, answer)
+    @ccall libssh.ssh_userauth_kbdint_setanswer(session::ssh_session, i::Cuint, answer::Ptr{Cchar})::Cint
 end
 
 function ssh_userauth_gssapi(session)
-    ccall((:ssh_userauth_gssapi, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_userauth_gssapi(session::ssh_session)::Cint
 end
 
 function ssh_version(req_version)
-    ccall((:ssh_version, libssh), Ptr{Cchar}, (Cint,), req_version)
+    @ccall libssh.ssh_version(req_version::Cint)::Ptr{Cchar}
 end
 
 function ssh_string_burn(str)
-    ccall((:ssh_string_burn, libssh), Cvoid, (ssh_string,), str)
+    @ccall libssh.ssh_string_burn(str::ssh_string)::Cvoid
 end
 
 function ssh_string_copy(str)
-    ccall((:ssh_string_copy, libssh), ssh_string, (ssh_string,), str)
+    @ccall libssh.ssh_string_copy(str::ssh_string)::ssh_string
 end
 
 function ssh_string_data(str)
-    ccall((:ssh_string_data, libssh), Ptr{Cvoid}, (ssh_string,), str)
+    @ccall libssh.ssh_string_data(str::ssh_string)::Ptr{Cvoid}
 end
 
 function ssh_string_fill(str, data, len)
-    ccall((:ssh_string_fill, libssh), Cint, (ssh_string, Ptr{Cvoid}, Csize_t), str, data, len)
+    @ccall libssh.ssh_string_fill(str::ssh_string, data::Ptr{Cvoid}, len::Csize_t)::Cint
 end
 
 function ssh_string_from_char(what)
-    ccall((:ssh_string_from_char, libssh), ssh_string, (Ptr{Cchar},), what)
+    @ccall libssh.ssh_string_from_char(what::Ptr{Cchar})::ssh_string
 end
 
 function ssh_string_len(str)
-    ccall((:ssh_string_len, libssh), Csize_t, (ssh_string,), str)
+    @ccall libssh.ssh_string_len(str::ssh_string)::Csize_t
 end
 
 function ssh_string_new(size)
-    ccall((:ssh_string_new, libssh), ssh_string, (Csize_t,), size)
+    @ccall libssh.ssh_string_new(size::Csize_t)::ssh_string
 end
 
 function ssh_string_get_char(str)
-    ccall((:ssh_string_get_char, libssh), Ptr{Cchar}, (ssh_string,), str)
+    @ccall libssh.ssh_string_get_char(str::ssh_string)::Ptr{Cchar}
 end
 
 function ssh_string_to_char(str)
-    ccall((:ssh_string_to_char, libssh), Ptr{Cchar}, (ssh_string,), str)
+    @ccall libssh.ssh_string_to_char(str::ssh_string)::Ptr{Cchar}
 end
 
 function ssh_getpass(prompt, buf, len, echo, verify)
-    ccall((:ssh_getpass, libssh), Cint, (Ptr{Cchar}, Ptr{Cchar}, Csize_t, Cint, Cint), prompt, buf, len, echo, verify)
+    @ccall libssh.ssh_getpass(prompt::Ptr{Cchar}, buf::Ptr{Cchar}, len::Csize_t, echo::Cint, verify::Cint)::Cint
 end
 
 # typedef int ( * ssh_event_callback ) ( socket_t fd , int revents , void * userdata )
 const ssh_event_callback = Ptr{Cvoid}
 
 function ssh_event_new()
-    ccall((:ssh_event_new, libssh), ssh_event, ())
+    @ccall libssh.ssh_event_new()::ssh_event
 end
 
 function ssh_event_add_fd(event, fd, events, cb, userdata)
-    ccall((:ssh_event_add_fd, libssh), Cint, (ssh_event, socket_t, Cshort, ssh_event_callback, Ptr{Cvoid}), event, fd, events, cb, userdata)
+    @ccall libssh.ssh_event_add_fd(event::ssh_event, fd::socket_t, events::Cshort, cb::ssh_event_callback, userdata::Ptr{Cvoid})::Cint
 end
 
 function ssh_event_add_session(event, session)
-    ccall((:ssh_event_add_session, libssh), Cint, (ssh_event, ssh_session), event, session)
+    @ccall libssh.ssh_event_add_session(event::ssh_event, session::ssh_session)::Cint
 end
 
 function ssh_event_add_connector(event, connector)
-    ccall((:ssh_event_add_connector, libssh), Cint, (ssh_event, ssh_connector), event, connector)
+    @ccall libssh.ssh_event_add_connector(event::ssh_event, connector::ssh_connector)::Cint
 end
 
 function ssh_event_dopoll(event, timeout)
-    ccall((:ssh_event_dopoll, libssh), Cint, (ssh_event, Cint), event, timeout)
+    @ccall libssh.ssh_event_dopoll(event::ssh_event, timeout::Cint)::Cint
 end
 
 function ssh_event_remove_fd(event, fd)
-    ccall((:ssh_event_remove_fd, libssh), Cint, (ssh_event, socket_t), event, fd)
+    @ccall libssh.ssh_event_remove_fd(event::ssh_event, fd::socket_t)::Cint
 end
 
 function ssh_event_remove_session(event, session)
-    ccall((:ssh_event_remove_session, libssh), Cint, (ssh_event, ssh_session), event, session)
+    @ccall libssh.ssh_event_remove_session(event::ssh_event, session::ssh_session)::Cint
 end
 
 function ssh_event_remove_connector(event, connector)
-    ccall((:ssh_event_remove_connector, libssh), Cint, (ssh_event, ssh_connector), event, connector)
+    @ccall libssh.ssh_event_remove_connector(event::ssh_event, connector::ssh_connector)::Cint
 end
 
 function ssh_event_free(event)
-    ccall((:ssh_event_free, libssh), Cvoid, (ssh_event,), event)
+    @ccall libssh.ssh_event_free(event::ssh_event)::Cvoid
 end
 
 function ssh_get_clientbanner(session)
-    ccall((:ssh_get_clientbanner, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_get_clientbanner(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_get_serverbanner(session)
-    ccall((:ssh_get_serverbanner, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_get_serverbanner(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_get_kex_algo(session)
-    ccall((:ssh_get_kex_algo, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_get_kex_algo(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_get_cipher_in(session)
-    ccall((:ssh_get_cipher_in, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_get_cipher_in(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_get_cipher_out(session)
-    ccall((:ssh_get_cipher_out, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_get_cipher_out(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_get_hmac_in(session)
-    ccall((:ssh_get_hmac_in, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_get_hmac_in(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_get_hmac_out(session)
-    ccall((:ssh_get_hmac_out, libssh), Ptr{Cchar}, (ssh_session,), session)
+    @ccall libssh.ssh_get_hmac_out(session::ssh_session)::Ptr{Cchar}
 end
 
 function ssh_buffer_new()
-    ccall((:ssh_buffer_new, libssh), ssh_buffer, ())
+    @ccall libssh.ssh_buffer_new()::ssh_buffer
 end
 
 function ssh_buffer_reinit(buffer)
-    ccall((:ssh_buffer_reinit, libssh), Cint, (ssh_buffer,), buffer)
+    @ccall libssh.ssh_buffer_reinit(buffer::ssh_buffer)::Cint
 end
 
 function ssh_buffer_add_data(buffer, data, len)
-    ccall((:ssh_buffer_add_data, libssh), Cint, (ssh_buffer, Ptr{Cvoid}, UInt32), buffer, data, len)
+    @ccall libssh.ssh_buffer_add_data(buffer::ssh_buffer, data::Ptr{Cvoid}, len::UInt32)::Cint
 end
 
 function ssh_buffer_get_data(buffer, data, requestedlen)
-    ccall((:ssh_buffer_get_data, libssh), UInt32, (ssh_buffer, Ptr{Cvoid}, UInt32), buffer, data, requestedlen)
+    @ccall libssh.ssh_buffer_get_data(buffer::ssh_buffer, data::Ptr{Cvoid}, requestedlen::UInt32)::UInt32
 end
 
 function ssh_buffer_get(buffer)
-    ccall((:ssh_buffer_get, libssh), Ptr{Cvoid}, (ssh_buffer,), buffer)
+    @ccall libssh.ssh_buffer_get(buffer::ssh_buffer)::Ptr{Cvoid}
 end
 
 function ssh_buffer_get_len(buffer)
-    ccall((:ssh_buffer_get_len, libssh), UInt32, (ssh_buffer,), buffer)
+    @ccall libssh.ssh_buffer_get_len(buffer::ssh_buffer)::UInt32
 end
 
 function ssh_session_set_disconnect_message(session, message)
-    ccall((:ssh_session_set_disconnect_message, libssh), Cint, (ssh_session, Ptr{Cchar}), session, message)
+    @ccall libssh.ssh_session_set_disconnect_message(session::ssh_session, message::Ptr{Cchar})::Cint
 end
 
 mutable struct ssh_private_key_struct end
@@ -1192,255 +1222,255 @@ mutable struct ssh_public_key_struct end
 const ssh_public_key = Ptr{ssh_public_key_struct}
 
 function ssh_auth_list(session)
-    ccall((:ssh_auth_list, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_auth_list(session::ssh_session)::Cint
 end
 
 function ssh_userauth_offer_pubkey(session, username, type, publickey)
-    ccall((:ssh_userauth_offer_pubkey, libssh), Cint, (ssh_session, Ptr{Cchar}, Cint, ssh_string), session, username, type, publickey)
+    @ccall libssh.ssh_userauth_offer_pubkey(session::ssh_session, username::Ptr{Cchar}, type::Cint, publickey::ssh_string)::Cint
 end
 
 function ssh_userauth_pubkey(session, username, publickey, privatekey)
-    ccall((:ssh_userauth_pubkey, libssh), Cint, (ssh_session, Ptr{Cchar}, ssh_string, ssh_private_key), session, username, publickey, privatekey)
+    @ccall libssh.ssh_userauth_pubkey(session::ssh_session, username::Ptr{Cchar}, publickey::ssh_string, privatekey::ssh_private_key)::Cint
 end
 
 function ssh_userauth_agent_pubkey(session, username, publickey)
-    ccall((:ssh_userauth_agent_pubkey, libssh), Cint, (ssh_session, Ptr{Cchar}, ssh_public_key), session, username, publickey)
+    @ccall libssh.ssh_userauth_agent_pubkey(session::ssh_session, username::Ptr{Cchar}, publickey::ssh_public_key)::Cint
 end
 
 function ssh_userauth_autopubkey(session, passphrase)
-    ccall((:ssh_userauth_autopubkey, libssh), Cint, (ssh_session, Ptr{Cchar}), session, passphrase)
+    @ccall libssh.ssh_userauth_autopubkey(session::ssh_session, passphrase::Ptr{Cchar})::Cint
 end
 
 function ssh_userauth_privatekey_file(session, username, filename, passphrase)
-    ccall((:ssh_userauth_privatekey_file, libssh), Cint, (ssh_session, Ptr{Cchar}, Ptr{Cchar}, Ptr{Cchar}), session, username, filename, passphrase)
+    @ccall libssh.ssh_userauth_privatekey_file(session::ssh_session, username::Ptr{Cchar}, filename::Ptr{Cchar}, passphrase::Ptr{Cchar})::Cint
 end
 
 function buffer_free(buffer)
-    ccall((:buffer_free, libssh), Cvoid, (ssh_buffer,), buffer)
+    @ccall libssh.buffer_free(buffer::ssh_buffer)::Cvoid
 end
 
 function buffer_get(buffer)
-    ccall((:buffer_get, libssh), Ptr{Cvoid}, (ssh_buffer,), buffer)
+    @ccall libssh.buffer_get(buffer::ssh_buffer)::Ptr{Cvoid}
 end
 
 function buffer_get_len(buffer)
-    ccall((:buffer_get_len, libssh), UInt32, (ssh_buffer,), buffer)
+    @ccall libssh.buffer_get_len(buffer::ssh_buffer)::UInt32
 end
 
 function buffer_new()
-    ccall((:buffer_new, libssh), ssh_buffer, ())
+    @ccall libssh.buffer_new()::ssh_buffer
 end
 
 function channel_accept_x11(channel, timeout_ms)
-    ccall((:channel_accept_x11, libssh), ssh_channel, (ssh_channel, Cint), channel, timeout_ms)
+    @ccall libssh.channel_accept_x11(channel::ssh_channel, timeout_ms::Cint)::ssh_channel
 end
 
 function channel_change_pty_size(channel, cols, rows)
-    ccall((:channel_change_pty_size, libssh), Cint, (ssh_channel, Cint, Cint), channel, cols, rows)
+    @ccall libssh.channel_change_pty_size(channel::ssh_channel, cols::Cint, rows::Cint)::Cint
 end
 
 function channel_forward_accept(session, timeout_ms)
-    ccall((:channel_forward_accept, libssh), ssh_channel, (ssh_session, Cint), session, timeout_ms)
+    @ccall libssh.channel_forward_accept(session::ssh_session, timeout_ms::Cint)::ssh_channel
 end
 
 function channel_close(channel)
-    ccall((:channel_close, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.channel_close(channel::ssh_channel)::Cint
 end
 
 function channel_forward_cancel(session, address, port)
-    ccall((:channel_forward_cancel, libssh), Cint, (ssh_session, Ptr{Cchar}, Cint), session, address, port)
+    @ccall libssh.channel_forward_cancel(session::ssh_session, address::Ptr{Cchar}, port::Cint)::Cint
 end
 
 function channel_forward_listen(session, address, port, bound_port)
-    ccall((:channel_forward_listen, libssh), Cint, (ssh_session, Ptr{Cchar}, Cint, Ptr{Cint}), session, address, port, bound_port)
+    @ccall libssh.channel_forward_listen(session::ssh_session, address::Ptr{Cchar}, port::Cint, bound_port::Ptr{Cint})::Cint
 end
 
 function channel_free(channel)
-    ccall((:channel_free, libssh), Cvoid, (ssh_channel,), channel)
+    @ccall libssh.channel_free(channel::ssh_channel)::Cvoid
 end
 
 function channel_get_exit_status(channel)
-    ccall((:channel_get_exit_status, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.channel_get_exit_status(channel::ssh_channel)::Cint
 end
 
 function channel_get_session(channel)
-    ccall((:channel_get_session, libssh), ssh_session, (ssh_channel,), channel)
+    @ccall libssh.channel_get_session(channel::ssh_channel)::ssh_session
 end
 
 function channel_is_closed(channel)
-    ccall((:channel_is_closed, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.channel_is_closed(channel::ssh_channel)::Cint
 end
 
 function channel_is_eof(channel)
-    ccall((:channel_is_eof, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.channel_is_eof(channel::ssh_channel)::Cint
 end
 
 function channel_is_open(channel)
-    ccall((:channel_is_open, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.channel_is_open(channel::ssh_channel)::Cint
 end
 
 function channel_new(session)
-    ccall((:channel_new, libssh), ssh_channel, (ssh_session,), session)
+    @ccall libssh.channel_new(session::ssh_session)::ssh_channel
 end
 
 function channel_open_forward(channel, remotehost, remoteport, sourcehost, localport)
-    ccall((:channel_open_forward, libssh), Cint, (ssh_channel, Ptr{Cchar}, Cint, Ptr{Cchar}, Cint), channel, remotehost, remoteport, sourcehost, localport)
+    @ccall libssh.channel_open_forward(channel::ssh_channel, remotehost::Ptr{Cchar}, remoteport::Cint, sourcehost::Ptr{Cchar}, localport::Cint)::Cint
 end
 
 function channel_open_session(channel)
-    ccall((:channel_open_session, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.channel_open_session(channel::ssh_channel)::Cint
 end
 
 function channel_poll(channel, is_stderr)
-    ccall((:channel_poll, libssh), Cint, (ssh_channel, Cint), channel, is_stderr)
+    @ccall libssh.channel_poll(channel::ssh_channel, is_stderr::Cint)::Cint
 end
 
 function channel_read(channel, dest, count, is_stderr)
-    ccall((:channel_read, libssh), Cint, (ssh_channel, Ptr{Cvoid}, UInt32, Cint), channel, dest, count, is_stderr)
+    @ccall libssh.channel_read(channel::ssh_channel, dest::Ptr{Cvoid}, count::UInt32, is_stderr::Cint)::Cint
 end
 
 function channel_read_buffer(channel, buffer, count, is_stderr)
-    ccall((:channel_read_buffer, libssh), Cint, (ssh_channel, ssh_buffer, UInt32, Cint), channel, buffer, count, is_stderr)
+    @ccall libssh.channel_read_buffer(channel::ssh_channel, buffer::ssh_buffer, count::UInt32, is_stderr::Cint)::Cint
 end
 
 function channel_read_nonblocking(channel, dest, count, is_stderr)
-    ccall((:channel_read_nonblocking, libssh), Cint, (ssh_channel, Ptr{Cvoid}, UInt32, Cint), channel, dest, count, is_stderr)
+    @ccall libssh.channel_read_nonblocking(channel::ssh_channel, dest::Ptr{Cvoid}, count::UInt32, is_stderr::Cint)::Cint
 end
 
 function channel_request_env(channel, name, value)
-    ccall((:channel_request_env, libssh), Cint, (ssh_channel, Ptr{Cchar}, Ptr{Cchar}), channel, name, value)
+    @ccall libssh.channel_request_env(channel::ssh_channel, name::Ptr{Cchar}, value::Ptr{Cchar})::Cint
 end
 
 function channel_request_exec(channel, cmd)
-    ccall((:channel_request_exec, libssh), Cint, (ssh_channel, Ptr{Cchar}), channel, cmd)
+    @ccall libssh.channel_request_exec(channel::ssh_channel, cmd::Ptr{Cchar})::Cint
 end
 
 function channel_request_pty(channel)
-    ccall((:channel_request_pty, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.channel_request_pty(channel::ssh_channel)::Cint
 end
 
 function channel_request_pty_size(channel, term, cols, rows)
-    ccall((:channel_request_pty_size, libssh), Cint, (ssh_channel, Ptr{Cchar}, Cint, Cint), channel, term, cols, rows)
+    @ccall libssh.channel_request_pty_size(channel::ssh_channel, term::Ptr{Cchar}, cols::Cint, rows::Cint)::Cint
 end
 
 function channel_request_shell(channel)
-    ccall((:channel_request_shell, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.channel_request_shell(channel::ssh_channel)::Cint
 end
 
 function channel_request_send_signal(channel, signum)
-    ccall((:channel_request_send_signal, libssh), Cint, (ssh_channel, Ptr{Cchar}), channel, signum)
+    @ccall libssh.channel_request_send_signal(channel::ssh_channel, signum::Ptr{Cchar})::Cint
 end
 
 function channel_request_sftp(channel)
-    ccall((:channel_request_sftp, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.channel_request_sftp(channel::ssh_channel)::Cint
 end
 
 function channel_request_subsystem(channel, subsystem)
-    ccall((:channel_request_subsystem, libssh), Cint, (ssh_channel, Ptr{Cchar}), channel, subsystem)
+    @ccall libssh.channel_request_subsystem(channel::ssh_channel, subsystem::Ptr{Cchar})::Cint
 end
 
 function channel_request_x11(channel, single_connection, protocol, cookie, screen_number)
-    ccall((:channel_request_x11, libssh), Cint, (ssh_channel, Cint, Ptr{Cchar}, Ptr{Cchar}, Cint), channel, single_connection, protocol, cookie, screen_number)
+    @ccall libssh.channel_request_x11(channel::ssh_channel, single_connection::Cint, protocol::Ptr{Cchar}, cookie::Ptr{Cchar}, screen_number::Cint)::Cint
 end
 
 function channel_send_eof(channel)
-    ccall((:channel_send_eof, libssh), Cint, (ssh_channel,), channel)
+    @ccall libssh.channel_send_eof(channel::ssh_channel)::Cint
 end
 
 function channel_select(readchans, writechans, exceptchans, timeout)
-    ccall((:channel_select, libssh), Cint, (Ptr{ssh_channel}, Ptr{ssh_channel}, Ptr{ssh_channel}, Ptr{Cvoid}), readchans, writechans, exceptchans, timeout)
+    @ccall libssh.channel_select(readchans::Ptr{ssh_channel}, writechans::Ptr{ssh_channel}, exceptchans::Ptr{ssh_channel}, timeout::Ptr{Cvoid})::Cint
 end
 
 function channel_set_blocking(channel, blocking)
-    ccall((:channel_set_blocking, libssh), Cvoid, (ssh_channel, Cint), channel, blocking)
+    @ccall libssh.channel_set_blocking(channel::ssh_channel, blocking::Cint)::Cvoid
 end
 
 function channel_write(channel, data, len)
-    ccall((:channel_write, libssh), Cint, (ssh_channel, Ptr{Cvoid}, UInt32), channel, data, len)
+    @ccall libssh.channel_write(channel::ssh_channel, data::Ptr{Cvoid}, len::UInt32)::Cint
 end
 
 function privatekey_free(prv)
-    ccall((:privatekey_free, libssh), Cvoid, (ssh_private_key,), prv)
+    @ccall libssh.privatekey_free(prv::ssh_private_key)::Cvoid
 end
 
 function privatekey_from_file(session, filename, type, passphrase)
-    ccall((:privatekey_from_file, libssh), ssh_private_key, (ssh_session, Ptr{Cchar}, Cint, Ptr{Cchar}), session, filename, type, passphrase)
+    @ccall libssh.privatekey_from_file(session::ssh_session, filename::Ptr{Cchar}, type::Cint, passphrase::Ptr{Cchar})::ssh_private_key
 end
 
 function publickey_free(key)
-    ccall((:publickey_free, libssh), Cvoid, (ssh_public_key,), key)
+    @ccall libssh.publickey_free(key::ssh_public_key)::Cvoid
 end
 
 function ssh_publickey_to_file(session, file, pubkey, type)
-    ccall((:ssh_publickey_to_file, libssh), Cint, (ssh_session, Ptr{Cchar}, ssh_string, Cint), session, file, pubkey, type)
+    @ccall libssh.ssh_publickey_to_file(session::ssh_session, file::Ptr{Cchar}, pubkey::ssh_string, type::Cint)::Cint
 end
 
 function publickey_from_file(session, filename, type)
-    ccall((:publickey_from_file, libssh), ssh_string, (ssh_session, Ptr{Cchar}, Ptr{Cint}), session, filename, type)
+    @ccall libssh.publickey_from_file(session::ssh_session, filename::Ptr{Cchar}, type::Ptr{Cint})::ssh_string
 end
 
 function publickey_from_privatekey(prv)
-    ccall((:publickey_from_privatekey, libssh), ssh_public_key, (ssh_private_key,), prv)
+    @ccall libssh.publickey_from_privatekey(prv::ssh_private_key)::ssh_public_key
 end
 
 function publickey_to_string(key)
-    ccall((:publickey_to_string, libssh), ssh_string, (ssh_public_key,), key)
+    @ccall libssh.publickey_to_string(key::ssh_public_key)::ssh_string
 end
 
 function ssh_try_publickey_from_file(session, keyfile, publickey, type)
-    ccall((:ssh_try_publickey_from_file, libssh), Cint, (ssh_session, Ptr{Cchar}, Ptr{ssh_string}, Ptr{Cint}), session, keyfile, publickey, type)
+    @ccall libssh.ssh_try_publickey_from_file(session::ssh_session, keyfile::Ptr{Cchar}, publickey::Ptr{ssh_string}, type::Ptr{Cint})::Cint
 end
 
 function ssh_privatekey_type(privatekey)
-    ccall((:ssh_privatekey_type, libssh), ssh_keytypes_e, (ssh_private_key,), privatekey)
+    @ccall libssh.ssh_privatekey_type(privatekey::ssh_private_key)::ssh_keytypes_e
 end
 
 function ssh_get_pubkey(session)
-    ccall((:ssh_get_pubkey, libssh), ssh_string, (ssh_session,), session)
+    @ccall libssh.ssh_get_pubkey(session::ssh_session)::ssh_string
 end
 
 function ssh_message_retrieve(session, packettype)
-    ccall((:ssh_message_retrieve, libssh), ssh_message, (ssh_session, UInt32), session, packettype)
+    @ccall libssh.ssh_message_retrieve(session::ssh_session, packettype::UInt32)::ssh_message
 end
 
 function ssh_message_auth_publickey(msg)
-    ccall((:ssh_message_auth_publickey, libssh), ssh_public_key, (ssh_message,), msg)
+    @ccall libssh.ssh_message_auth_publickey(msg::ssh_message)::ssh_public_key
 end
 
 function string_burn(str)
-    ccall((:string_burn, libssh), Cvoid, (ssh_string,), str)
+    @ccall libssh.string_burn(str::ssh_string)::Cvoid
 end
 
 function string_copy(str)
-    ccall((:string_copy, libssh), ssh_string, (ssh_string,), str)
+    @ccall libssh.string_copy(str::ssh_string)::ssh_string
 end
 
 function string_data(str)
-    ccall((:string_data, libssh), Ptr{Cvoid}, (ssh_string,), str)
+    @ccall libssh.string_data(str::ssh_string)::Ptr{Cvoid}
 end
 
 function string_fill(str, data, len)
-    ccall((:string_fill, libssh), Cint, (ssh_string, Ptr{Cvoid}, Csize_t), str, data, len)
+    @ccall libssh.string_fill(str::ssh_string, data::Ptr{Cvoid}, len::Csize_t)::Cint
 end
 
 function string_free(str)
-    ccall((:string_free, libssh), Cvoid, (ssh_string,), str)
+    @ccall libssh.string_free(str::ssh_string)::Cvoid
 end
 
 function string_from_char(what)
-    ccall((:string_from_char, libssh), ssh_string, (Ptr{Cchar},), what)
+    @ccall libssh.string_from_char(what::Ptr{Cchar})::ssh_string
 end
 
 function string_len(str)
-    ccall((:string_len, libssh), Csize_t, (ssh_string,), str)
+    @ccall libssh.string_len(str::ssh_string)::Csize_t
 end
 
 function string_new(size)
-    ccall((:string_new, libssh), ssh_string, (Csize_t,), size)
+    @ccall libssh.string_new(size::Csize_t)::ssh_string
 end
 
 function string_to_char(str)
-    ccall((:string_to_char, libssh), Ptr{Cchar}, (ssh_string,), str)
+    @ccall libssh.string_to_char(str::ssh_string)::Ptr{Cchar}
 end
 
 struct sftp_attributes_struct
@@ -1586,6 +1616,11 @@ end
 
 const sftp_status_message = Ptr{sftp_status_message_struct}
 
+"""
+    sftp_statvfs_struct
+
+SFTP statvfs structure.
+"""
 mutable struct sftp_statvfs_struct
     f_bsize::UInt64
     f_frsize::UInt64
@@ -1621,264 +1656,852 @@ Base.unsafe_convert(::Type{Ptr{__JL_sftp_request_queue_struct}}, x::Ref{sftp_req
 Base.unsafe_convert(::Type{Ptr{__JL_sftp_request_queue_struct}}, x::Ptr{sftp_request_queue_struct}) = Ptr{__JL_sftp_request_queue_struct}(x)
 
 
+"""
+    sftp_new(session)
+
+Creates a new sftp session.
+
+This function creates a new sftp session and allocates a new sftp channel with the server inside of the provided ssh session. This function call is usually followed by the [`sftp_init`](@ref)(), which initializes SFTP protocol itself.
+
+### Parameters
+* `session`: The ssh session to use.
+### Returns
+A new sftp session or NULL on error.
+### See also
+[`sftp_free`](@ref)(), [`sftp_init`](@ref)()
+"""
 function sftp_new(session)
-    ccall((:sftp_new, libssh), sftp_session, (ssh_session,), session)
+    @ccall libssh.sftp_new(session::ssh_session)::sftp_session
 end
 
+"""
+    sftp_new_channel(session, channel)
+
+Start a new sftp session with an existing channel.
+
+### Parameters
+* `session`: The ssh session to use.
+* `channel`:	An open session channel with subsystem already allocated
+### Returns
+A new sftp session or NULL on error.
+### See also
+[`sftp_free`](@ref)()
+"""
 function sftp_new_channel(session, channel)
-    ccall((:sftp_new_channel, libssh), sftp_session, (ssh_session, ssh_channel), session, channel)
+    @ccall libssh.sftp_new_channel(session::ssh_session, channel::ssh_channel)::sftp_session
 end
 
+"""
+    sftp_free(sftp)
+
+Close and deallocate a sftp session.
+
+### Parameters
+* `sftp`: The sftp session handle to free.
+"""
 function sftp_free(sftp)
-    ccall((:sftp_free, libssh), Cvoid, (sftp_session,), sftp)
+    @ccall libssh.sftp_free(sftp::sftp_session)::Cvoid
 end
 
+"""
+    sftp_init(sftp)
+
+Initialize the sftp protocol with the server.
+
+This function involves the SFTP protocol initialization (as described in the SFTP specification), including the version and extensions negotiation.
+
+### Parameters
+* `sftp`: The sftp session to initialize.
+### Returns
+0 on success, < 0 on error with ssh error set.
+### See also
+[`sftp_new`](@ref)()
+"""
 function sftp_init(sftp)
-    ccall((:sftp_init, libssh), Cint, (sftp_session,), sftp)
+    @ccall libssh.sftp_init(sftp::sftp_session)::Cint
 end
 
+"""
+    sftp_get_error(sftp)
+
+Get the last sftp error.
+
+Use this function to get the latest error set by a posix like sftp function.
+
+### Parameters
+* `sftp`: The sftp session where the error is saved.
+### Returns
+The saved error (see server responses), < 0 if an error in the function occurred.
+### See also
+Server responses
+"""
 function sftp_get_error(sftp)
-    ccall((:sftp_get_error, libssh), Cint, (sftp_session,), sftp)
+    @ccall libssh.sftp_get_error(sftp::sftp_session)::Cint
 end
 
+"""
+    sftp_extensions_get_count(sftp)
+
+Get the count of extensions provided by the server.
+
+### Parameters
+* `sftp`: The sftp session to use.
+### Returns
+The count of extensions provided by the server, 0 on error or not available.
+"""
 function sftp_extensions_get_count(sftp)
-    ccall((:sftp_extensions_get_count, libssh), Cuint, (sftp_session,), sftp)
+    @ccall libssh.sftp_extensions_get_count(sftp::sftp_session)::Cuint
 end
 
+"""
+    sftp_extensions_get_name(sftp, indexn)
+
+Get the name of the extension provided by the server.
+
+### Parameters
+* `sftp`: The sftp session to use.
+* `indexn`: The index number of the extension name you want.
+### Returns
+The name of the extension.
+"""
 function sftp_extensions_get_name(sftp, indexn)
-    ccall((:sftp_extensions_get_name, libssh), Ptr{Cchar}, (sftp_session, Cuint), sftp, indexn)
+    @ccall libssh.sftp_extensions_get_name(sftp::sftp_session, indexn::Cuint)::Ptr{Cchar}
 end
 
+"""
+    sftp_extensions_get_data(sftp, indexn)
+
+Get the data of the extension provided by the server.
+
+This is normally the version number of the extension.
+
+### Parameters
+* `sftp`: The sftp session to use.
+* `indexn`: The index number of the extension data you want.
+### Returns
+The data of the extension.
+"""
 function sftp_extensions_get_data(sftp, indexn)
-    ccall((:sftp_extensions_get_data, libssh), Ptr{Cchar}, (sftp_session, Cuint), sftp, indexn)
+    @ccall libssh.sftp_extensions_get_data(sftp::sftp_session, indexn::Cuint)::Ptr{Cchar}
 end
 
+"""
+    sftp_extension_supported(sftp, name, data)
+
+Check if the given extension is supported.
+
+Example:
+
+```c++
+ sftp_extension_supported(sftp, "statvfs@openssh.com", "2");
+```
+
+### Parameters
+* `sftp`: The sftp session to use.
+* `name`: The name of the extension.
+* `data`: The data of the extension.
+### Returns
+1 if supported, 0 if not.
+"""
 function sftp_extension_supported(sftp, name, data)
-    ccall((:sftp_extension_supported, libssh), Cint, (sftp_session, Ptr{Cchar}, Ptr{Cchar}), sftp, name, data)
+    @ccall libssh.sftp_extension_supported(sftp::sftp_session, name::Ptr{Cchar}, data::Ptr{Cchar})::Cint
 end
 
+"""
+    sftp_opendir(session, path)
+
+Open a directory used to obtain directory entries.
+
+### Parameters
+* `session`: The sftp session handle to open the directory.
+* `path`: The path of the directory to open.
+### Returns
+A sftp directory handle or NULL on error with ssh and sftp error set.
+### See also
+[`sftp_readdir`](@ref), [`sftp_closedir`](@ref)
+"""
 function sftp_opendir(session, path)
-    ccall((:sftp_opendir, libssh), sftp_dir, (sftp_session, Ptr{Cchar}), session, path)
+    @ccall libssh.sftp_opendir(session::sftp_session, path::Ptr{Cchar})::sftp_dir
 end
 
+"""
+    sftp_readdir(session, dir)
+
+Get a single file attributes structure of a directory.
+
+### Parameters
+* `session`: The sftp session handle to read the directory entry.
+* `dir`: The opened sftp directory handle to read from.
+### Returns
+A file attribute structure or NULL at the end of the directory.
+### See also
+[`sftp_opendir`](@ref)(), sftp\\_attribute\\_free(), [`sftp_closedir`](@ref)()
+"""
 function sftp_readdir(session, dir)
-    ccall((:sftp_readdir, libssh), sftp_attributes, (sftp_session, sftp_dir), session, dir)
+    @ccall libssh.sftp_readdir(session::sftp_session, dir::sftp_dir)::sftp_attributes
 end
 
+"""
+    sftp_dir_eof(dir)
+
+Tell if the directory has reached EOF (End Of File).
+
+### Parameters
+* `dir`: The sftp directory handle.
+### Returns
+1 if the directory is EOF, 0 if not.
+### See also
+[`sftp_readdir`](@ref)()
+"""
 function sftp_dir_eof(dir)
-    ccall((:sftp_dir_eof, libssh), Cint, (sftp_dir,), dir)
+    @ccall libssh.sftp_dir_eof(dir::sftp_dir)::Cint
 end
 
+"""
+    sftp_stat(session, path)
+
+Get information about a file or directory.
+
+### Parameters
+* `session`: The sftp session handle.
+* `path`: The path to the file or directory to obtain the information.
+### Returns
+The sftp attributes structure of the file or directory, NULL on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_stat(session, path)
-    ccall((:sftp_stat, libssh), sftp_attributes, (sftp_session, Ptr{Cchar}), session, path)
+    @ccall libssh.sftp_stat(session::sftp_session, path::Ptr{Cchar})::sftp_attributes
 end
 
+"""
+    sftp_lstat(session, path)
+
+Get information about a file or directory.
+
+Identical to [`sftp_stat`](@ref), but if the file or directory is a symbolic link, then the link itself is stated, not the file that it refers to.
+
+### Parameters
+* `session`: The sftp session handle.
+* `path`: The path to the file or directory to obtain the information.
+### Returns
+The sftp attributes structure of the file or directory, NULL on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_lstat(session, path)
-    ccall((:sftp_lstat, libssh), sftp_attributes, (sftp_session, Ptr{Cchar}), session, path)
+    @ccall libssh.sftp_lstat(session::sftp_session, path::Ptr{Cchar})::sftp_attributes
 end
 
+"""
+    sftp_fstat(file)
+
+Get information about a file or directory from a file handle.
+
+### Parameters
+* `file`: The sftp file handle to get the stat information.
+### Returns
+The sftp attributes structure of the file or directory, NULL on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_fstat(file)
-    ccall((:sftp_fstat, libssh), sftp_attributes, (sftp_file,), file)
+    @ccall libssh.sftp_fstat(file::sftp_file)::sftp_attributes
 end
 
+"""
+    sftp_attributes_free(file)
+
+Free a sftp attribute structure.
+
+### Parameters
+* `file`: The sftp attribute structure to free.
+"""
 function sftp_attributes_free(file)
-    ccall((:sftp_attributes_free, libssh), Cvoid, (sftp_attributes,), file)
+    @ccall libssh.sftp_attributes_free(file::sftp_attributes)::Cvoid
 end
 
+"""
+    sftp_closedir(dir)
+
+Close a directory handle opened by [`sftp_opendir`](@ref)().
+
+### Parameters
+* `dir`: The sftp directory handle to close.
+### Returns
+Returns SSH\\_NO\\_ERROR or [`SSH_ERROR`](@ref) if an error occurred.
+"""
 function sftp_closedir(dir)
-    ccall((:sftp_closedir, libssh), Cint, (sftp_dir,), dir)
+    @ccall libssh.sftp_closedir(dir::sftp_dir)::Cint
 end
 
+"""
+    sftp_close(file)
+
+Close an open file handle.
+
+### Parameters
+* `file`: The open sftp file handle to close.
+### Returns
+Returns SSH\\_NO\\_ERROR or [`SSH_ERROR`](@ref) if an error occurred.
+### See also
+[`sftp_open`](@ref)()
+"""
 function sftp_close(file)
-    ccall((:sftp_close, libssh), Cint, (sftp_file,), file)
+    @ccall libssh.sftp_close(file::sftp_file)::Cint
 end
 
+"""
+    sftp_open(session, file, accesstype, mode)
+
+Open a file on the server.
+
+### Parameters
+* `session`: The sftp session handle.
+* `file`: The file to be opened.
+* `accesstype`: Is one of O\\_RDONLY, O\\_WRONLY or O\\_RDWR which request opening the file read-only,write-only or read/write. Acesss may also be bitwise-or'd with one or more of the following: O\\_CREAT - If the file does not exist it will be created. O\\_EXCL - When used with O\\_CREAT, if the file already exists it is an error and the open will fail. O\\_TRUNC - If the file already exists it will be truncated.
+* `mode`: Mode specifies the permissions to use if a new file is created. It is modified by the process's umask in the usual way: The permissions of the created file are (mode & ~umask)
+### Returns
+A sftp file handle, NULL on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_open(session, file, accesstype, mode)
-    ccall((:sftp_open, libssh), sftp_file, (sftp_session, Ptr{Cchar}, Cint, mode_t), session, file, accesstype, mode)
+    @ccall libssh.sftp_open(session::sftp_session, file::Ptr{Cchar}, accesstype::Cint, mode::mode_t)::sftp_file
 end
 
+"""
+    sftp_file_set_nonblocking(handle)
+
+Make the sftp communication for this file handle non blocking.
+
+### Parameters
+* `handle`:\\[in\\] The file handle to set non blocking.
+"""
 function sftp_file_set_nonblocking(handle)
-    ccall((:sftp_file_set_nonblocking, libssh), Cvoid, (sftp_file,), handle)
+    @ccall libssh.sftp_file_set_nonblocking(handle::sftp_file)::Cvoid
 end
 
+"""
+    sftp_file_set_blocking(handle)
+
+Make the sftp communication for this file handle blocking.
+
+### Parameters
+* `handle`:\\[in\\] The file handle to set blocking.
+"""
 function sftp_file_set_blocking(handle)
-    ccall((:sftp_file_set_blocking, libssh), Cvoid, (sftp_file,), handle)
+    @ccall libssh.sftp_file_set_blocking(handle::sftp_file)::Cvoid
 end
 
+"""
+    sftp_read(file, buf, count)
+
+Read from a file using an opened sftp file handle.
+
+### Parameters
+* `file`: The opened sftp file handle to be read from.
+* `buf`: Pointer to buffer to receive read data.
+* `count`: Size of the buffer in bytes.
+### Returns
+Number of bytes written, < 0 on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_read(file, buf, count)
-    ccall((:sftp_read, libssh), Cssize_t, (sftp_file, Ptr{Cvoid}, Csize_t), file, buf, count)
+    @ccall libssh.sftp_read(file::sftp_file, buf::Ptr{Cvoid}, count::Csize_t)::Cssize_t
 end
 
+"""
+    sftp_async_read_begin(file, len)
+
+Start an asynchronous read from a file using an opened sftp file handle.
+
+Its goal is to avoid the slowdowns related to the request/response pattern of a synchronous read. To do so, you must call 2 functions:
+
+[`sftp_async_read_begin`](@ref)() and [`sftp_async_read`](@ref)().
+
+The first step is to call [`sftp_async_read_begin`](@ref)(). This function returns a request identifier. The second step is to call [`sftp_async_read`](@ref)() using the returned identifier.
+
+!!! warning
+
+    When calling this function, the internal offset is updated corresponding to the len parameter.
+
+!!! warning
+
+    A call to [`sftp_async_read_begin`](@ref)() sends a request to the server. When the server answers, libssh allocates memory to store it until [`sftp_async_read`](@ref)() is called. Not calling [`sftp_async_read`](@ref)() will lead to memory leaks.
+
+### Parameters
+* `file`: The opened sftp file handle to be read from.
+* `len`: Size to read in bytes.
+### Returns
+An identifier corresponding to the sent request, < 0 on error.
+### See also
+[`sftp_async_read`](@ref)(), [`sftp_open`](@ref)()
+"""
 function sftp_async_read_begin(file, len)
-    ccall((:sftp_async_read_begin, libssh), Cint, (sftp_file, UInt32), file, len)
+    @ccall libssh.sftp_async_read_begin(file::sftp_file, len::UInt32)::Cint
 end
 
+"""
+    sftp_async_read(file, data, len, id)
+
+Wait for an asynchronous read to complete and save the data.
+
+!!! warning
+
+    A call to this function with an invalid identifier will never return.
+
+### Parameters
+* `file`: The opened sftp file handle to be read from.
+* `data`: Pointer to buffer to receive read data.
+* `len`: Size of the buffer in bytes. It should be bigger or equal to the length parameter of the [`sftp_async_read_begin`](@ref)() call.
+* `id`: The identifier returned by the [`sftp_async_read_begin`](@ref)() function.
+### Returns
+Number of bytes read, 0 on EOF, [`SSH_ERROR`](@ref) if an error occurred, [`SSH_AGAIN`](@ref) if the file is opened in nonblocking mode and the request hasn't been executed yet.
+### See also
+[`sftp_async_read_begin`](@ref)()
+"""
 function sftp_async_read(file, data, len, id)
-    ccall((:sftp_async_read, libssh), Cint, (sftp_file, Ptr{Cvoid}, UInt32, UInt32), file, data, len, id)
+    @ccall libssh.sftp_async_read(file::sftp_file, data::Ptr{Cvoid}, len::UInt32, id::UInt32)::Cint
 end
 
+"""
+    sftp_write(file, buf, count)
+
+Write to a file using an opened sftp file handle.
+
+### Parameters
+* `file`: Open sftp file handle to write to.
+* `buf`: Pointer to buffer to write data.
+* `count`: Size of buffer in bytes.
+### Returns
+Number of bytes written, < 0 on error with ssh and sftp error set.
+### See also
+[`sftp_open`](@ref)(), [`sftp_read`](@ref)(), [`sftp_close`](@ref)()
+"""
 function sftp_write(file, buf, count)
-    ccall((:sftp_write, libssh), Cssize_t, (sftp_file, Ptr{Cvoid}, Csize_t), file, buf, count)
+    @ccall libssh.sftp_write(file::sftp_file, buf::Ptr{Cvoid}, count::Csize_t)::Cssize_t
 end
 
+"""
+    sftp_seek(file, new_offset)
+
+Seek to a specific location in a file.
+
+### Parameters
+* `file`: Open sftp file handle to seek in.
+* `new_offset`: Offset in bytes to seek.
+### Returns
+0 on success, < 0 on error.
+"""
 function sftp_seek(file, new_offset)
-    ccall((:sftp_seek, libssh), Cint, (sftp_file, UInt32), file, new_offset)
+    @ccall libssh.sftp_seek(file::sftp_file, new_offset::UInt32)::Cint
 end
 
+"""
+    sftp_seek64(file, new_offset)
+
+Seek to a specific location in a file. This is the 64bit version.
+
+### Parameters
+* `file`: Open sftp file handle to seek in.
+* `new_offset`: Offset in bytes to seek.
+### Returns
+0 on success, < 0 on error.
+"""
 function sftp_seek64(file, new_offset)
-    ccall((:sftp_seek64, libssh), Cint, (sftp_file, UInt64), file, new_offset)
+    @ccall libssh.sftp_seek64(file::sftp_file, new_offset::UInt64)::Cint
 end
 
+"""
+    sftp_tell(file)
+
+Report current byte position in file.
+
+### Parameters
+* `file`: Open sftp file handle.
+### Returns
+The offset of the current byte relative to the beginning of the file associated with the file descriptor. < 0 on error.
+"""
 function sftp_tell(file)
-    ccall((:sftp_tell, libssh), Culong, (sftp_file,), file)
+    @ccall libssh.sftp_tell(file::sftp_file)::Culong
 end
 
+"""
+    sftp_tell64(file)
+
+Report current byte position in file.
+
+### Parameters
+* `file`: Open sftp file handle.
+### Returns
+The offset of the current byte relative to the beginning of the file associated with the file descriptor. < 0 on error.
+"""
 function sftp_tell64(file)
-    ccall((:sftp_tell64, libssh), UInt64, (sftp_file,), file)
+    @ccall libssh.sftp_tell64(file::sftp_file)::UInt64
 end
 
+"""
+    sftp_rewind(file)
+
+Rewinds the position of the file pointer to the beginning of the file.
+
+### Parameters
+* `file`: Open sftp file handle.
+"""
 function sftp_rewind(file)
-    ccall((:sftp_rewind, libssh), Cvoid, (sftp_file,), file)
+    @ccall libssh.sftp_rewind(file::sftp_file)::Cvoid
 end
 
+"""
+    sftp_unlink(sftp, file)
+
+Unlink (delete) a file.
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `file`: The file to unlink/delete.
+### Returns
+0 on success, < 0 on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_unlink(sftp, file)
-    ccall((:sftp_unlink, libssh), Cint, (sftp_session, Ptr{Cchar}), sftp, file)
+    @ccall libssh.sftp_unlink(sftp::sftp_session, file::Ptr{Cchar})::Cint
 end
 
+"""
+    sftp_rmdir(sftp, directory)
+
+Remove a directory.
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `directory`: The directory to remove.
+### Returns
+0 on success, < 0 on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_rmdir(sftp, directory)
-    ccall((:sftp_rmdir, libssh), Cint, (sftp_session, Ptr{Cchar}), sftp, directory)
+    @ccall libssh.sftp_rmdir(sftp::sftp_session, directory::Ptr{Cchar})::Cint
 end
 
+"""
+    sftp_mkdir(sftp, directory, mode)
+
+Create a directory.
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `directory`: The directory to create.
+* `mode`: Specifies the permissions to use. It is modified by the process's umask in the usual way: The permissions of the created file are (mode & ~umask)
+### Returns
+0 on success, < 0 on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_mkdir(sftp, directory, mode)
-    ccall((:sftp_mkdir, libssh), Cint, (sftp_session, Ptr{Cchar}, mode_t), sftp, directory, mode)
+    @ccall libssh.sftp_mkdir(sftp::sftp_session, directory::Ptr{Cchar}, mode::mode_t)::Cint
 end
 
+"""
+    sftp_rename(sftp, original, newname)
+
+Rename or move a file or directory.
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `original`: The original url (source url) of file or directory to be moved.
+* `newname`: The new url (destination url) of the file or directory after the move.
+### Returns
+0 on success, < 0 on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_rename(sftp, original, newname)
-    ccall((:sftp_rename, libssh), Cint, (sftp_session, Ptr{Cchar}, Ptr{Cchar}), sftp, original, newname)
+    @ccall libssh.sftp_rename(sftp::sftp_session, original::Ptr{Cchar}, newname::Ptr{Cchar})::Cint
 end
 
+"""
+    sftp_setstat(sftp, file, attr)
+
+Set file attributes on a file, directory or symbolic link.
+
+Note, that this function can only set time values using 32 bit values due to the restrictions in the SFTP protocol version 3 implemented by libssh. The support for 64 bit time values was introduced in SFTP version 5, which is not implemented by libssh nor any major SFTP servers.
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `file`: The file which attributes should be changed.
+* `attr`: The file attributes structure with the attributes set which should be changed.
+### Returns
+0 on success, < 0 on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_setstat(sftp, file, attr)
-    ccall((:sftp_setstat, libssh), Cint, (sftp_session, Ptr{Cchar}, sftp_attributes), sftp, file, attr)
+    @ccall libssh.sftp_setstat(sftp::sftp_session, file::Ptr{Cchar}, attr::sftp_attributes)::Cint
 end
 
+"""
+    sftp_chown(sftp, file, owner, group)
+
+Change the file owner and group
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `file`: The file which owner and group should be changed.
+* `owner`: The new owner which should be set.
+* `group`: The new group which should be set.
+### Returns
+0 on success, < 0 on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_chown(sftp, file, owner, group)
-    ccall((:sftp_chown, libssh), Cint, (sftp_session, Ptr{Cchar}, uid_t, gid_t), sftp, file, owner, group)
+    @ccall libssh.sftp_chown(sftp::sftp_session, file::Ptr{Cchar}, owner::uid_t, group::gid_t)::Cint
 end
 
+"""
+    sftp_chmod(sftp, file, mode)
+
+Change permissions of a file
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `file`: The file which owner and group should be changed.
+* `mode`: Specifies the permissions to use. It is modified by the process's umask in the usual way: The permissions of the created file are (mode & ~umask)
+### Returns
+0 on success, < 0 on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_chmod(sftp, file, mode)
-    ccall((:sftp_chmod, libssh), Cint, (sftp_session, Ptr{Cchar}, mode_t), sftp, file, mode)
+    @ccall libssh.sftp_chmod(sftp::sftp_session, file::Ptr{Cchar}, mode::mode_t)::Cint
 end
 
+"""
+    sftp_utimes(sftp, file, times)
+
+Change the last modification and access time of a file.
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `file`: The file which owner and group should be changed.
+* `times`: A timeval structure which contains the desired access and modification time.
+### Returns
+0 on success, < 0 on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_utimes(sftp, file, times)
-    ccall((:sftp_utimes, libssh), Cint, (sftp_session, Ptr{Cchar}, Ptr{Cvoid}), sftp, file, times)
+    @ccall libssh.sftp_utimes(sftp::sftp_session, file::Ptr{Cchar}, times::Ptr{Cvoid})::Cint
 end
 
+"""
+    sftp_symlink(sftp, target, dest)
+
+Create a symbolic link.
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `target`: Specifies the target of the symlink.
+* `dest`: Specifies the path name of the symlink to be created.
+### Returns
+0 on success, < 0 on error with ssh and sftp error set.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_symlink(sftp, target, dest)
-    ccall((:sftp_symlink, libssh), Cint, (sftp_session, Ptr{Cchar}, Ptr{Cchar}), sftp, target, dest)
+    @ccall libssh.sftp_symlink(sftp::sftp_session, target::Ptr{Cchar}, dest::Ptr{Cchar})::Cint
 end
 
+"""
+    sftp_readlink(sftp, path)
+
+Read the value of a symbolic link.
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `path`: Specifies the path name of the symlink to be read.
+### Returns
+The target of the link, NULL on error. The caller needs to free the memory using [`ssh_string_free_char`](@ref)().
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_readlink(sftp, path)
-    ccall((:sftp_readlink, libssh), Ptr{Cchar}, (sftp_session, Ptr{Cchar}), sftp, path)
+    @ccall libssh.sftp_readlink(sftp::sftp_session, path::Ptr{Cchar})::Ptr{Cchar}
 end
 
+"""
+    sftp_statvfs(sftp, path)
+
+Get information about a mounted file system.
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `path`: The pathname of any file within the mounted file system.
+### Returns
+A statvfs structure or NULL on error.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_statvfs(sftp, path)
-    ccall((:sftp_statvfs, libssh), sftp_statvfs_t, (sftp_session, Ptr{Cchar}), sftp, path)
+    @ccall libssh.sftp_statvfs(sftp::sftp_session, path::Ptr{Cchar})::sftp_statvfs_t
 end
 
+"""
+    sftp_fstatvfs(file)
+
+Get information about a mounted file system.
+
+### Parameters
+* `file`: An opened file.
+### Returns
+A statvfs structure or NULL on error.
+### See also
+[`sftp_get_error`](@ref)()
+"""
 function sftp_fstatvfs(file)
-    ccall((:sftp_fstatvfs, libssh), sftp_statvfs_t, (sftp_file,), file)
+    @ccall libssh.sftp_fstatvfs(file::sftp_file)::sftp_statvfs_t
 end
 
+"""
+    sftp_statvfs_free(statvfs_o)
+
+Free the memory of an allocated statvfs.
+
+### Parameters
+* `statvfs_o`: The statvfs to free.
+"""
 function sftp_statvfs_free(statvfs_o)
-    ccall((:sftp_statvfs_free, libssh), Cvoid, (sftp_statvfs_t,), statvfs_o)
+    @ccall libssh.sftp_statvfs_free(statvfs_o::sftp_statvfs_t)::Cvoid
 end
 
+"""
+    sftp_fsync(file)
+
+Synchronize a file's in-core state with storage device
+
+This calls the "fsync@openssh.com" extension. You should check if the extensions is supported using:
+
+```c++
+ int supported = sftp_extension_supported(sftp, "fsync@openssh.com", "1");
+```
+
+### Parameters
+* `file`: The opened sftp file handle to sync
+### Returns
+0 on success, < 0 on error with ssh and sftp error set.
+"""
 function sftp_fsync(file)
-    ccall((:sftp_fsync, libssh), Cint, (sftp_file,), file)
+    @ccall libssh.sftp_fsync(file::sftp_file)::Cint
 end
 
+"""
+    sftp_canonicalize_path(sftp, path)
+
+Canonicalize a sftp path.
+
+### Parameters
+* `sftp`: The sftp session handle.
+* `path`: The path to be canonicalized.
+### Returns
+A pointer to the newly allocated canonicalized path, NULL on error. The caller needs to free the memory using [`ssh_string_free_char`](@ref)().
+"""
 function sftp_canonicalize_path(sftp, path)
-    ccall((:sftp_canonicalize_path, libssh), Ptr{Cchar}, (sftp_session, Ptr{Cchar}), sftp, path)
+    @ccall libssh.sftp_canonicalize_path(sftp::sftp_session, path::Ptr{Cchar})::Ptr{Cchar}
 end
 
+"""
+    sftp_server_version(sftp)
+
+Get the version of the SFTP protocol supported by the server
+
+### Parameters
+* `sftp`: The sftp session handle.
+### Returns
+The server version.
+"""
 function sftp_server_version(sftp)
-    ccall((:sftp_server_version, libssh), Cint, (sftp_session,), sftp)
+    @ccall libssh.sftp_server_version(sftp::sftp_session)::Cint
 end
 
 function sftp_get_client_message(sftp)
-    ccall((:sftp_get_client_message, libssh), sftp_client_message, (sftp_session,), sftp)
+    @ccall libssh.sftp_get_client_message(sftp::sftp_session)::sftp_client_message
 end
 
 function sftp_client_message_free(msg)
-    ccall((:sftp_client_message_free, libssh), Cvoid, (sftp_client_message,), msg)
+    @ccall libssh.sftp_client_message_free(msg::sftp_client_message)::Cvoid
 end
 
 function sftp_client_message_get_type(msg)
-    ccall((:sftp_client_message_get_type, libssh), UInt8, (sftp_client_message,), msg)
+    @ccall libssh.sftp_client_message_get_type(msg::sftp_client_message)::UInt8
 end
 
 function sftp_client_message_get_filename(msg)
-    ccall((:sftp_client_message_get_filename, libssh), Ptr{Cchar}, (sftp_client_message,), msg)
+    @ccall libssh.sftp_client_message_get_filename(msg::sftp_client_message)::Ptr{Cchar}
 end
 
 function sftp_client_message_set_filename(msg, newname)
-    ccall((:sftp_client_message_set_filename, libssh), Cvoid, (sftp_client_message, Ptr{Cchar}), msg, newname)
+    @ccall libssh.sftp_client_message_set_filename(msg::sftp_client_message, newname::Ptr{Cchar})::Cvoid
 end
 
 function sftp_client_message_get_data(msg)
-    ccall((:sftp_client_message_get_data, libssh), Ptr{Cchar}, (sftp_client_message,), msg)
+    @ccall libssh.sftp_client_message_get_data(msg::sftp_client_message)::Ptr{Cchar}
 end
 
 function sftp_client_message_get_flags(msg)
-    ccall((:sftp_client_message_get_flags, libssh), UInt32, (sftp_client_message,), msg)
+    @ccall libssh.sftp_client_message_get_flags(msg::sftp_client_message)::UInt32
 end
 
 function sftp_client_message_get_submessage(msg)
-    ccall((:sftp_client_message_get_submessage, libssh), Ptr{Cchar}, (sftp_client_message,), msg)
+    @ccall libssh.sftp_client_message_get_submessage(msg::sftp_client_message)::Ptr{Cchar}
 end
 
 function sftp_send_client_message(sftp, msg)
-    ccall((:sftp_send_client_message, libssh), Cint, (sftp_session, sftp_client_message), sftp, msg)
+    @ccall libssh.sftp_send_client_message(sftp::sftp_session, msg::sftp_client_message)::Cint
 end
 
 function sftp_reply_name(msg, name, attr)
-    ccall((:sftp_reply_name, libssh), Cint, (sftp_client_message, Ptr{Cchar}, sftp_attributes), msg, name, attr)
+    @ccall libssh.sftp_reply_name(msg::sftp_client_message, name::Ptr{Cchar}, attr::sftp_attributes)::Cint
 end
 
 function sftp_reply_handle(msg, handle)
-    ccall((:sftp_reply_handle, libssh), Cint, (sftp_client_message, ssh_string), msg, handle)
+    @ccall libssh.sftp_reply_handle(msg::sftp_client_message, handle::ssh_string)::Cint
 end
 
 function sftp_handle_alloc(sftp, info)
-    ccall((:sftp_handle_alloc, libssh), ssh_string, (sftp_session, Ptr{Cvoid}), sftp, info)
+    @ccall libssh.sftp_handle_alloc(sftp::sftp_session, info::Ptr{Cvoid})::ssh_string
 end
 
 function sftp_reply_attr(msg, attr)
-    ccall((:sftp_reply_attr, libssh), Cint, (sftp_client_message, sftp_attributes), msg, attr)
+    @ccall libssh.sftp_reply_attr(msg::sftp_client_message, attr::sftp_attributes)::Cint
 end
 
 function sftp_handle(sftp, handle)
-    ccall((:sftp_handle, libssh), Ptr{Cvoid}, (sftp_session, ssh_string), sftp, handle)
+    @ccall libssh.sftp_handle(sftp::sftp_session, handle::ssh_string)::Ptr{Cvoid}
 end
 
 function sftp_reply_status(msg, status, message)
-    ccall((:sftp_reply_status, libssh), Cint, (sftp_client_message, UInt32, Ptr{Cchar}), msg, status, message)
+    @ccall libssh.sftp_reply_status(msg::sftp_client_message, status::UInt32, message::Ptr{Cchar})::Cint
 end
 
 function sftp_reply_names_add(msg, file, longname, attr)
-    ccall((:sftp_reply_names_add, libssh), Cint, (sftp_client_message, Ptr{Cchar}, Ptr{Cchar}, sftp_attributes), msg, file, longname, attr)
+    @ccall libssh.sftp_reply_names_add(msg::sftp_client_message, file::Ptr{Cchar}, longname::Ptr{Cchar}, attr::sftp_attributes)::Cint
 end
 
 function sftp_reply_names(msg)
-    ccall((:sftp_reply_names, libssh), Cint, (sftp_client_message,), msg)
+    @ccall libssh.sftp_reply_names(msg::sftp_client_message)::Cint
 end
 
 function sftp_reply_data(msg, data, len)
-    ccall((:sftp_reply_data, libssh), Cint, (sftp_client_message, Ptr{Cvoid}, Cint), msg, data, len)
+    @ccall libssh.sftp_reply_data(msg::sftp_client_message, data::Ptr{Cvoid}, len::Cint)::Cint
 end
 
 function sftp_handle_remove(sftp, handle)
-    ccall((:sftp_handle_remove, libssh), Cvoid, (sftp_session, Ptr{Cvoid}), sftp, handle)
+    @ccall libssh.sftp_handle_remove(sftp::sftp_session, handle::Ptr{Cvoid})::Cvoid
 end
 
 @cenum ssh_bind_options_e::UInt32 begin
@@ -1911,8 +2534,22 @@ mutable struct ssh_bind_struct end
 const ssh_bind = Ptr{ssh_bind_struct}
 
 # typedef void ( * ssh_bind_incoming_connection_callback ) ( ssh_bind sshbind , void * userdata )
+"""
+Incoming connection callback. This callback is called when a [`ssh_bind`](@ref) has a new incoming connection.
+
+### Parameters
+* `sshbind`: Current sshbind session handler
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_bind_incoming_connection_callback = Ptr{Cvoid}
 
+"""
+    ssh_bind_callbacks_struct
+
+These are the callbacks exported by the [`ssh_bind`](@ref) structure.
+
+They are called by the server module when events appear on the network.
+"""
 mutable struct ssh_bind_callbacks_struct
     size::Csize_t
     incoming_connection::ssh_bind_incoming_connection_callback
@@ -1920,246 +2557,491 @@ end
 
 const ssh_bind_callbacks = Ptr{ssh_bind_callbacks_struct}
 
+"""
+    ssh_bind_new()
+
+Creates a new SSH server bind.
+
+### Returns
+A newly allocated [`ssh_bind`](@ref) session pointer.
+"""
 function ssh_bind_new()
-    ccall((:ssh_bind_new, libssh), ssh_bind, ())
+    @ccall libssh.ssh_bind_new()::ssh_bind
 end
 
 function ssh_bind_options_set(sshbind, type, value)
-    ccall((:ssh_bind_options_set, libssh), Cint, (ssh_bind, ssh_bind_options_e, Ptr{Cvoid}), sshbind, type, value)
+    @ccall libssh.ssh_bind_options_set(sshbind::ssh_bind, type::ssh_bind_options_e, value::Ptr{Cvoid})::Cint
 end
 
 function ssh_bind_options_parse_config(sshbind, filename)
-    ccall((:ssh_bind_options_parse_config, libssh), Cint, (ssh_bind, Ptr{Cchar}), sshbind, filename)
+    @ccall libssh.ssh_bind_options_parse_config(sshbind::ssh_bind, filename::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_bind_listen(ssh_bind_o)
+
+Start listening to the socket.
+
+### Parameters
+* `ssh_bind_o`: The ssh server bind to use.
+### Returns
+0 on success, < 0 on error.
+"""
 function ssh_bind_listen(ssh_bind_o)
-    ccall((:ssh_bind_listen, libssh), Cint, (ssh_bind,), ssh_bind_o)
+    @ccall libssh.ssh_bind_listen(ssh_bind_o::ssh_bind)::Cint
 end
 
+"""
+    ssh_bind_set_callbacks(sshbind, callbacks, userdata)
+
+Set the callback for this bind.
+
+```c++
+     struct ssh_callbacks_struct cb = {
+         .userdata = data,
+         .auth_function = my_auth_function
+     };
+     ssh_callbacks_init(&cb);
+     ssh_bind_set_callbacks(session, &cb);
+```
+
+### Parameters
+* `sshbind`:\\[in\\] The bind to set the callback on.
+* `callbacks`:\\[in\\] An already set up [`ssh_bind_callbacks`](@ref) instance.
+* `userdata`:\\[in\\] A pointer to private data to pass to the callbacks.
+### Returns
+[`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) if an error occurred.
+"""
 function ssh_bind_set_callbacks(sshbind, callbacks, userdata)
-    ccall((:ssh_bind_set_callbacks, libssh), Cint, (ssh_bind, ssh_bind_callbacks, Ptr{Cvoid}), sshbind, callbacks, userdata)
+    @ccall libssh.ssh_bind_set_callbacks(sshbind::ssh_bind, callbacks::ssh_bind_callbacks, userdata::Ptr{Cvoid})::Cint
 end
 
+"""
+    ssh_bind_set_blocking(ssh_bind_o, blocking)
+
+Set the session to blocking/nonblocking mode.
+
+### Parameters
+* `ssh_bind_o`: The ssh server bind to use.
+* `blocking`: Zero for nonblocking mode.
+"""
 function ssh_bind_set_blocking(ssh_bind_o, blocking)
-    ccall((:ssh_bind_set_blocking, libssh), Cvoid, (ssh_bind, Cint), ssh_bind_o, blocking)
+    @ccall libssh.ssh_bind_set_blocking(ssh_bind_o::ssh_bind, blocking::Cint)::Cvoid
 end
 
+"""
+    ssh_bind_get_fd(ssh_bind_o)
+
+Recover the file descriptor from the session.
+
+### Parameters
+* `ssh_bind_o`: The ssh server bind to get the fd from.
+### Returns
+The file descriptor.
+"""
 function ssh_bind_get_fd(ssh_bind_o)
-    ccall((:ssh_bind_get_fd, libssh), socket_t, (ssh_bind,), ssh_bind_o)
+    @ccall libssh.ssh_bind_get_fd(ssh_bind_o::ssh_bind)::socket_t
 end
 
+"""
+    ssh_bind_set_fd(ssh_bind_o, fd)
+
+Set the file descriptor for a session.
+
+### Parameters
+* `ssh_bind_o`: The ssh server bind to set the fd.
+* `fd`: The file descriptssh\\_bind B
+"""
 function ssh_bind_set_fd(ssh_bind_o, fd)
-    ccall((:ssh_bind_set_fd, libssh), Cvoid, (ssh_bind, socket_t), ssh_bind_o, fd)
+    @ccall libssh.ssh_bind_set_fd(ssh_bind_o::ssh_bind, fd::socket_t)::Cvoid
 end
 
+"""
+    ssh_bind_fd_toaccept(ssh_bind_o)
+
+Allow the file descriptor to accept new sessions.
+
+### Parameters
+* `ssh_bind_o`: The ssh server bind to use.
+"""
 function ssh_bind_fd_toaccept(ssh_bind_o)
-    ccall((:ssh_bind_fd_toaccept, libssh), Cvoid, (ssh_bind,), ssh_bind_o)
+    @ccall libssh.ssh_bind_fd_toaccept(ssh_bind_o::ssh_bind)::Cvoid
 end
 
+"""
+    ssh_bind_accept(ssh_bind_o, session)
+
+Accept an incoming ssh connection and initialize the session.
+
+### Parameters
+* `ssh_bind_o`: The ssh server bind to accept a connection.
+* `session`:	A preallocated ssh session
+### Returns
+[`SSH_OK`](@ref) when a connection is established
+### See also
+[`ssh_new`](@ref)
+"""
 function ssh_bind_accept(ssh_bind_o, session)
-    ccall((:ssh_bind_accept, libssh), Cint, (ssh_bind, ssh_session), ssh_bind_o, session)
+    @ccall libssh.ssh_bind_accept(ssh_bind_o::ssh_bind, session::ssh_session)::Cint
 end
 
+"""
+    ssh_bind_accept_fd(ssh_bind_o, session, fd)
+
+Accept an incoming ssh connection on the given file descriptor and initialize the session.
+
+### Parameters
+* `ssh_bind_o`: The ssh server bind to accept a connection.
+* `session`: A preallocated ssh session
+* `fd`: A file descriptor of an already established TCP inbound connection
+### Returns
+[`SSH_OK`](@ref) when a connection is established
+### See also
+[`ssh_new`](@ref), [`ssh_bind_accept`](@ref)
+"""
 function ssh_bind_accept_fd(ssh_bind_o, session, fd)
-    ccall((:ssh_bind_accept_fd, libssh), Cint, (ssh_bind, ssh_session, socket_t), ssh_bind_o, session, fd)
+    @ccall libssh.ssh_bind_accept_fd(ssh_bind_o::ssh_bind, session::ssh_session, fd::socket_t)::Cint
 end
 
 function ssh_gssapi_get_creds(session)
-    ccall((:ssh_gssapi_get_creds, libssh), ssh_gssapi_creds, (ssh_session,), session)
+    @ccall libssh.ssh_gssapi_get_creds(session::ssh_session)::ssh_gssapi_creds
 end
 
+"""
+    ssh_handle_key_exchange(session)
+
+Handles the key exchange and set up encryption
+
+### Parameters
+* `session`:	A connected ssh session
+### Returns
+[`SSH_OK`](@ref) if the key exchange was successful
+### See also
+[`ssh_bind_accept`](@ref)
+"""
 function ssh_handle_key_exchange(session)
-    ccall((:ssh_handle_key_exchange, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_handle_key_exchange(session::ssh_session)::Cint
 end
 
+"""
+    ssh_server_init_kex(session)
+
+Initialize the set of key exchange, hostkey, ciphers, MACs, and compression algorithms for the given [`ssh_session`](@ref).
+
+The selection of algorithms and keys used are determined by the options that are currently set in the given [`ssh_session`](@ref) structure. May only be called before the initial key exchange has begun.
+
+### Parameters
+* `session`: The session structure to initialize.
+### Returns
+[`SSH_OK`](@ref) if initialization succeeds.
+### See also
+[`ssh_handle_key_exchange`](@ref), [`ssh_options_set`](@ref)
+"""
 function ssh_server_init_kex(session)
-    ccall((:ssh_server_init_kex, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_server_init_kex(session::ssh_session)::Cint
 end
 
+"""
+    ssh_bind_free(ssh_bind_o)
+
+Free a ssh servers bind.
+
+### Parameters
+* `ssh_bind_o`: The ssh server bind to free.
+"""
 function ssh_bind_free(ssh_bind_o)
-    ccall((:ssh_bind_free, libssh), Cvoid, (ssh_bind,), ssh_bind_o)
+    @ccall libssh.ssh_bind_free(ssh_bind_o::ssh_bind)::Cvoid
 end
 
+"""
+    ssh_set_auth_methods(session, auth_methods)
+
+Set the acceptable authentication methods to be sent to the client.
+
+Supported methods are:
+
+[`SSH_AUTH_METHOD_PASSWORD`](@ref) [`SSH_AUTH_METHOD_PUBLICKEY`](@ref) [`SSH_AUTH_METHOD_HOSTBASED`](@ref) [`SSH_AUTH_METHOD_INTERACTIVE`](@ref) [`SSH_AUTH_METHOD_GSSAPI_MIC`](@ref)
+
+### Parameters
+* `session`:\\[in\\] The server session
+* `auth_methods`:\\[in\\] The authentication methods we will support, which can be bitwise-or'd.
+"""
 function ssh_set_auth_methods(session, auth_methods)
-    ccall((:ssh_set_auth_methods, libssh), Cvoid, (ssh_session, Cint), session, auth_methods)
+    @ccall libssh.ssh_set_auth_methods(session::ssh_session, auth_methods::Cint)::Cvoid
 end
 
+"""
+    ssh_send_issue_banner(session, banner)
+
+Send the server's issue-banner to client.
+
+### Parameters
+* `session`:\\[in\\] The server session.
+* `banner`:\\[in\\] The server's banner.
+### Returns
+[`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
+"""
 function ssh_send_issue_banner(session, banner)
-    ccall((:ssh_send_issue_banner, libssh), Cint, (ssh_session, ssh_string), session, banner)
+    @ccall libssh.ssh_send_issue_banner(session::ssh_session, banner::ssh_string)::Cint
 end
 
+"""
+    ssh_message_reply_default(msg)
+
+Reply with a standard reject message.
+
+Use this function if you don't know what to respond or if you want to reject a request.
+
+### Parameters
+* `msg`:\\[in\\] The message to use for the reply.
+### Returns
+0 on success, -1 on error.
+### See also
+[`ssh_message_get`](@ref)()
+"""
 function ssh_message_reply_default(msg)
-    ccall((:ssh_message_reply_default, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_reply_default(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_auth_user(msg)
+
+Get the name of the authenticated user.
+
+### Parameters
+* `msg`:\\[in\\] The message to get the username from.
+### Returns
+The username or NULL if an error occurred.
+### See also
+[`ssh_message_get`](@ref)(), [`ssh_message_type`](@ref)()
+"""
 function ssh_message_auth_user(msg)
-    ccall((:ssh_message_auth_user, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_auth_user(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_auth_password(msg)
+
+Get the password of the authenticated user.
+
+\\deprecated This function should not be used anymore as there is a callback based server implementation now auth\\_password\\_function.
+
+### Parameters
+* `msg`:\\[in\\] The message to get the password from.
+### Returns
+The username or NULL if an error occurred.
+### See also
+[`ssh_message_get`](@ref)(), [`ssh_message_type`](@ref)()
+"""
 function ssh_message_auth_password(msg)
-    ccall((:ssh_message_auth_password, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_auth_password(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_auth_pubkey(msg)
+
+Get the publickey of the authenticated user.
+
+If you need the key for later user you should duplicate it.
+
+\\deprecated This function should not be used anymore as there is a callback based server implementation auth\\_pubkey\\_function.
+
+### Parameters
+* `msg`:\\[in\\] The message to get the public key from.
+### Returns
+The public key or NULL.
+### See also
+[`ssh_key_dup`](@ref)(), [`ssh_key_cmp`](@ref)(), [`ssh_message_get`](@ref)(), [`ssh_message_type`](@ref)()
+"""
 function ssh_message_auth_pubkey(msg)
-    ccall((:ssh_message_auth_pubkey, libssh), ssh_key, (ssh_message,), msg)
+    @ccall libssh.ssh_message_auth_pubkey(msg::ssh_message)::ssh_key
 end
 
 function ssh_message_auth_kbdint_is_response(msg)
-    ccall((:ssh_message_auth_kbdint_is_response, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_auth_kbdint_is_response(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_auth_publickey_state(msg)
+
+\\deprecated This function should not be used anymore as there is a callback based server implementation auth\\_pubkey\\_function
+
+### Parameters
+* `msg`:\\[in\\] The message to get the public key state from.
+"""
 function ssh_message_auth_publickey_state(msg)
-    ccall((:ssh_message_auth_publickey_state, libssh), ssh_publickey_state_e, (ssh_message,), msg)
+    @ccall libssh.ssh_message_auth_publickey_state(msg::ssh_message)::ssh_publickey_state_e
 end
 
 function ssh_message_auth_reply_success(msg, partial)
-    ccall((:ssh_message_auth_reply_success, libssh), Cint, (ssh_message, Cint), msg, partial)
+    @ccall libssh.ssh_message_auth_reply_success(msg::ssh_message, partial::Cint)::Cint
 end
 
 function ssh_message_auth_reply_pk_ok(msg, algo, pubkey)
-    ccall((:ssh_message_auth_reply_pk_ok, libssh), Cint, (ssh_message, ssh_string, ssh_string), msg, algo, pubkey)
+    @ccall libssh.ssh_message_auth_reply_pk_ok(msg::ssh_message, algo::ssh_string, pubkey::ssh_string)::Cint
 end
 
 function ssh_message_auth_reply_pk_ok_simple(msg)
-    ccall((:ssh_message_auth_reply_pk_ok_simple, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_auth_reply_pk_ok_simple(msg::ssh_message)::Cint
 end
 
 function ssh_message_auth_set_methods(msg, methods)
-    ccall((:ssh_message_auth_set_methods, libssh), Cint, (ssh_message, Cint), msg, methods)
+    @ccall libssh.ssh_message_auth_set_methods(msg::ssh_message, methods::Cint)::Cint
 end
 
 function ssh_message_auth_interactive_request(msg, name, instruction, num_prompts, prompts, echo)
-    ccall((:ssh_message_auth_interactive_request, libssh), Cint, (ssh_message, Ptr{Cchar}, Ptr{Cchar}, Cuint, Ptr{Ptr{Cchar}}, Ptr{Cchar}), msg, name, instruction, num_prompts, prompts, echo)
+    @ccall libssh.ssh_message_auth_interactive_request(msg::ssh_message, name::Ptr{Cchar}, instruction::Ptr{Cchar}, num_prompts::Cuint, prompts::Ptr{Ptr{Cchar}}, echo::Ptr{Cchar})::Cint
 end
 
 function ssh_message_service_reply_success(msg)
-    ccall((:ssh_message_service_reply_success, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_service_reply_success(msg::ssh_message)::Cint
 end
 
 function ssh_message_service_service(msg)
-    ccall((:ssh_message_service_service, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_service_service(msg::ssh_message)::Ptr{Cchar}
 end
 
 function ssh_message_global_request_reply_success(msg, bound_port)
-    ccall((:ssh_message_global_request_reply_success, libssh), Cint, (ssh_message, UInt16), msg, bound_port)
+    @ccall libssh.ssh_message_global_request_reply_success(msg::ssh_message, bound_port::UInt16)::Cint
 end
 
 function ssh_set_message_callback(session, ssh_bind_message_callback, data)
-    ccall((:ssh_set_message_callback, libssh), Cvoid, (ssh_session, Ptr{Cvoid}, Ptr{Cvoid}), session, ssh_bind_message_callback, data)
+    @ccall libssh.ssh_set_message_callback(session::ssh_session, ssh_bind_message_callback::Ptr{Cvoid}, data::Ptr{Cvoid})::Cvoid
 end
 
 function ssh_execute_message_callbacks(session)
-    ccall((:ssh_execute_message_callbacks, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_execute_message_callbacks(session::ssh_session)::Cint
 end
 
 function ssh_message_channel_request_open_originator(msg)
-    ccall((:ssh_message_channel_request_open_originator, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_open_originator(msg::ssh_message)::Ptr{Cchar}
 end
 
 function ssh_message_channel_request_open_originator_port(msg)
-    ccall((:ssh_message_channel_request_open_originator_port, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_open_originator_port(msg::ssh_message)::Cint
 end
 
 function ssh_message_channel_request_open_destination(msg)
-    ccall((:ssh_message_channel_request_open_destination, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_open_destination(msg::ssh_message)::Ptr{Cchar}
 end
 
 function ssh_message_channel_request_open_destination_port(msg)
-    ccall((:ssh_message_channel_request_open_destination_port, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_open_destination_port(msg::ssh_message)::Cint
 end
 
 function ssh_message_channel_request_channel(msg)
-    ccall((:ssh_message_channel_request_channel, libssh), ssh_channel, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_channel(msg::ssh_message)::ssh_channel
 end
 
 function ssh_message_channel_request_pty_term(msg)
-    ccall((:ssh_message_channel_request_pty_term, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_pty_term(msg::ssh_message)::Ptr{Cchar}
 end
 
 function ssh_message_channel_request_pty_width(msg)
-    ccall((:ssh_message_channel_request_pty_width, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_pty_width(msg::ssh_message)::Cint
 end
 
 function ssh_message_channel_request_pty_height(msg)
-    ccall((:ssh_message_channel_request_pty_height, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_pty_height(msg::ssh_message)::Cint
 end
 
 function ssh_message_channel_request_pty_pxwidth(msg)
-    ccall((:ssh_message_channel_request_pty_pxwidth, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_pty_pxwidth(msg::ssh_message)::Cint
 end
 
 function ssh_message_channel_request_pty_pxheight(msg)
-    ccall((:ssh_message_channel_request_pty_pxheight, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_pty_pxheight(msg::ssh_message)::Cint
 end
 
 function ssh_message_channel_request_env_name(msg)
-    ccall((:ssh_message_channel_request_env_name, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_env_name(msg::ssh_message)::Ptr{Cchar}
 end
 
 function ssh_message_channel_request_env_value(msg)
-    ccall((:ssh_message_channel_request_env_value, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_env_value(msg::ssh_message)::Ptr{Cchar}
 end
 
 function ssh_message_channel_request_command(msg)
-    ccall((:ssh_message_channel_request_command, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_command(msg::ssh_message)::Ptr{Cchar}
 end
 
 function ssh_message_channel_request_subsystem(msg)
-    ccall((:ssh_message_channel_request_subsystem, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_subsystem(msg::ssh_message)::Ptr{Cchar}
 end
 
 function ssh_message_channel_request_x11_single_connection(msg)
-    ccall((:ssh_message_channel_request_x11_single_connection, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_x11_single_connection(msg::ssh_message)::Cint
 end
 
 function ssh_message_channel_request_x11_auth_protocol(msg)
-    ccall((:ssh_message_channel_request_x11_auth_protocol, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_x11_auth_protocol(msg::ssh_message)::Ptr{Cchar}
 end
 
 function ssh_message_channel_request_x11_auth_cookie(msg)
-    ccall((:ssh_message_channel_request_x11_auth_cookie, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_x11_auth_cookie(msg::ssh_message)::Ptr{Cchar}
 end
 
 function ssh_message_channel_request_x11_screen_number(msg)
-    ccall((:ssh_message_channel_request_x11_screen_number, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_channel_request_x11_screen_number(msg::ssh_message)::Cint
 end
 
 function ssh_message_global_request_address(msg)
-    ccall((:ssh_message_global_request_address, libssh), Ptr{Cchar}, (ssh_message,), msg)
+    @ccall libssh.ssh_message_global_request_address(msg::ssh_message)::Ptr{Cchar}
 end
 
 function ssh_message_global_request_port(msg)
-    ccall((:ssh_message_global_request_port, libssh), Cint, (ssh_message,), msg)
+    @ccall libssh.ssh_message_global_request_port(msg::ssh_message)::Cint
 end
 
 function ssh_channel_open_reverse_forward(channel, remotehost, remoteport, sourcehost, localport)
-    ccall((:ssh_channel_open_reverse_forward, libssh), Cint, (ssh_channel, Ptr{Cchar}, Cint, Ptr{Cchar}, Cint), channel, remotehost, remoteport, sourcehost, localport)
+    @ccall libssh.ssh_channel_open_reverse_forward(channel::ssh_channel, remotehost::Ptr{Cchar}, remoteport::Cint, sourcehost::Ptr{Cchar}, localport::Cint)::Cint
 end
 
 function ssh_channel_request_send_exit_status(channel, exit_status)
-    ccall((:ssh_channel_request_send_exit_status, libssh), Cint, (ssh_channel, Cint), channel, exit_status)
+    @ccall libssh.ssh_channel_request_send_exit_status(channel::ssh_channel, exit_status::Cint)::Cint
 end
 
 function ssh_channel_request_send_exit_signal(channel, signum, core, errmsg, lang)
-    ccall((:ssh_channel_request_send_exit_signal, libssh), Cint, (ssh_channel, Ptr{Cchar}, Cint, Ptr{Cchar}, Ptr{Cchar}), channel, signum, core, errmsg, lang)
+    @ccall libssh.ssh_channel_request_send_exit_signal(channel::ssh_channel, signum::Ptr{Cchar}, core::Cint, errmsg::Ptr{Cchar}, lang::Ptr{Cchar})::Cint
 end
 
 function ssh_send_keepalive(session)
-    ccall((:ssh_send_keepalive, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_send_keepalive(session::ssh_session)::Cint
 end
 
 function ssh_accept(session)
-    ccall((:ssh_accept, libssh), Cint, (ssh_session,), session)
+    @ccall libssh.ssh_accept(session::ssh_session)::Cint
 end
 
 function channel_write_stderr(channel, data, len)
-    ccall((:channel_write_stderr, libssh), Cint, (ssh_channel, Ptr{Cvoid}, UInt32), channel, data, len)
+    @ccall libssh.channel_write_stderr(channel::ssh_channel, data::Ptr{Cvoid}, len::UInt32)::Cint
 end
 
 # typedef void ( * ssh_callback_int ) ( int code , void * user )
+"""
+```c++
+ @brief callback to process simple codes
+ @param code value to transmit
+ @param user Userdata to pass in callback
+ 
+
+```
+"""
 const ssh_callback_int = Ptr{Cvoid}
 
 # typedef size_t ( * ssh_callback_data ) ( const void * data , size_t len , void * user )
+"""
+```c++
+ @brief callback for data received messages.
+ @param data data retrieved from the socket or stream
+ @param len number of bytes available from this stream
+ @param user user-supplied pointer sent along with all callback messages
+ @returns number of bytes processed by the callee. The remaining bytes will
+ be sent in the next callback message, when more data is available.
+ 
+
+```
+"""
 const ssh_callback_data = Ptr{Cvoid}
 
 # typedef void ( * ssh_callback_int_int ) ( int code , int errno_code , void * user )
@@ -2175,23 +3057,92 @@ const ssh_channel_callback_int = Ptr{Cvoid}
 const ssh_channel_callback_data = Ptr{Cvoid}
 
 # typedef void ( * ssh_log_callback ) ( ssh_session session , int priority , const char * message , void * userdata )
+"""
+SSH log callback. All logging messages will go through this callback
+
+### Parameters
+* `session`: Current session handler
+* `priority`: Priority of the log, the smaller being the more important
+* `message`: the actual message
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_log_callback = Ptr{Cvoid}
 
 # typedef void ( * ssh_logging_callback ) ( int priority , const char * function , const char * buffer , void * userdata )
+"""
+SSH log callback.
+
+All logging messages will go through this callback.
+
+### Parameters
+* `priority`: Priority of the log, the smaller being the more important.
+* `function`: The function name calling the logging functions.
+* `buffer`: The actual message
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_logging_callback = Ptr{Cvoid}
 
 # typedef void ( * ssh_status_callback ) ( ssh_session session , float status , void * userdata )
+"""
+SSH Connection status callback.
+
+### Parameters
+* `session`: Current session handler
+* `status`: Percentage of connection status, going from 0.0 to 1.0 once connection is done.
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_status_callback = Ptr{Cvoid}
 
 # typedef void ( * ssh_global_request_callback ) ( ssh_session session , ssh_message message , void * userdata )
+"""
+SSH global request callback. All global request will go through this callback.
+
+### Parameters
+* `session`: Current session handler
+* `message`: the actual message
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_global_request_callback = Ptr{Cvoid}
 
 # typedef ssh_channel ( * ssh_channel_open_request_x11_callback ) ( ssh_session session , const char * originator_address , int originator_port , void * userdata )
+"""
+Handles an SSH new channel open X11 request. This happens when the server sends back an X11 connection attempt. This is a client-side API
+
+!!! warning
+
+    The channel pointer returned by this callback must be closed by the application.
+
+### Parameters
+* `session`: current session handler
+* `userdata`: Userdata to be passed to the callback function.
+* `originator_address`: IP address of the machine who sent the request
+* `originator_port`: port number of the machine who sent the request
+### Returns
+NULL if the request should not be allowed
+"""
 const ssh_channel_open_request_x11_callback = Ptr{Cvoid}
 
 # typedef ssh_channel ( * ssh_channel_open_request_auth_agent_callback ) ( ssh_session session , void * userdata )
+"""
+Handles an SSH new channel open "auth-agent" request. This happens when the server sends back an "auth-agent" connection attempt. This is a client-side API
+
+!!! warning
+
+    The channel pointer returned by this callback must be closed by the application.
+
+### Parameters
+* `session`: current session handler
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+NULL if the request should not be allowed
+"""
 const ssh_channel_open_request_auth_agent_callback = Ptr{Cvoid}
 
+"""
+    ssh_callbacks_struct
+
+The structure to replace libssh functions with appropriate callbacks.
+"""
 mutable struct ssh_callbacks_struct
     size::Csize_t
     userdata::Ptr{Cvoid}
@@ -2206,21 +3157,92 @@ end
 const ssh_callbacks = Ptr{ssh_callbacks_struct}
 
 # typedef int ( * ssh_auth_password_callback ) ( ssh_session session , const char * user , const char * password , void * userdata )
+"""
+SSH authentication callback.
+
+### Parameters
+* `session`: Current session handler
+* `user`: User that wants to authenticate
+* `password`: Password used for authentication
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+SSH\\_AUTH\\_DENIED Authentication failed.
+"""
 const ssh_auth_password_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_auth_none_callback ) ( ssh_session session , const char * user , void * userdata )
+"""
+SSH authentication callback. Tries to authenticates user with the "none" method which is anonymous or passwordless.
+
+### Parameters
+* `session`: Current session handler
+* `user`: User that wants to authenticate
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+SSH\\_AUTH\\_DENIED Authentication failed.
+"""
 const ssh_auth_none_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_auth_gssapi_mic_callback ) ( ssh_session session , const char * user , const char * principal , void * userdata )
+"""
+SSH authentication callback. Tries to authenticates user with the "gssapi-with-mic" method
+
+!!! warning
+
+    Implementations should verify that parameter user matches in some way the principal. user and principal can be different. Only the latter is guaranteed to be safe.
+
+### Parameters
+* `session`: Current session handler
+* `user`: Username of the user (can be spoofed)
+* `principal`: Authenticated principal of the user, including realm.
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+SSH\\_AUTH\\_DENIED Authentication failed.
+"""
 const ssh_auth_gssapi_mic_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_auth_pubkey_callback ) ( ssh_session session , const char * user , struct ssh_key_struct * pubkey , char signature_state , void * userdata )
+"""
+SSH authentication callback.
+
+### Parameters
+* `session`: Current session handler
+* `user`: User that wants to authenticate
+* `pubkey`: public key used for authentication
+* `signature_state`: SSH\\_PUBLICKEY\\_STATE\\_NONE if the key is not signed (simple public key probe),	SSH\\_PUBLICKEY\\_STATE\\_VALID if the signature is valid. Others values should be	replied with a SSH\\_AUTH\\_DENIED.
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+SSH\\_AUTH\\_DENIED Authentication failed.
+"""
 const ssh_auth_pubkey_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_service_request_callback ) ( ssh_session session , const char * service , void * userdata )
+"""
+Handles an SSH service request
+
+### Parameters
+* `session`: current session handler
+* `service`: name of the service (e.g. "ssh-userauth") requested
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+-1 if the request should not be allowed
+"""
 const ssh_service_request_callback = Ptr{Cvoid}
 
 # typedef ssh_channel ( * ssh_channel_open_request_session_callback ) ( ssh_session session , void * userdata )
+"""
+Handles an SSH new channel open session request
+
+!!! warning
+
+    The channel pointer returned by this callback must be closed by the application.
+
+### Parameters
+* `session`: current session handler
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+NULL if the request should not be allowed
+"""
 const ssh_channel_open_request_session_callback = Ptr{Cvoid}
 
 # typedef ssh_string ( * ssh_gssapi_select_oid_callback ) ( ssh_session session , const char * user , int n_oid , ssh_string * oids , void * userdata )
@@ -2232,6 +3254,11 @@ const ssh_gssapi_accept_sec_ctx_callback = Ptr{Cvoid}
 # typedef int ( * ssh_gssapi_verify_mic_callback ) ( ssh_session session , ssh_string mic , void * mic_buffer , size_t mic_buffer_size , void * userdata )
 const ssh_gssapi_verify_mic_callback = Ptr{Cvoid}
 
+"""
+    ssh_server_callbacks_struct
+
+This structure can be used to implement a libssh server, with appropriate callbacks.
+"""
 mutable struct ssh_server_callbacks_struct
     size::Csize_t
     userdata::Ptr{Cvoid}
@@ -2248,10 +3275,39 @@ end
 
 const ssh_server_callbacks = Ptr{ssh_server_callbacks_struct}
 
+"""
+    ssh_set_server_callbacks(session, cb)
+
+Set the session server callback functions.
+
+This functions sets the callback structure to use your own callback functions for user authentication, new channels and requests.
+
+Note, that the structure is not copied to the session structure so it needs to be valid for the whole session lifetime.
+
+```c++
+ struct ssh_server_callbacks_struct cb = {
+   .userdata = data,
+   .auth_password_function = my_auth_function
+ };
+ ssh_callbacks_init(&cb);
+ ssh_set_server_callbacks(session, &cb);
+```
+
+### Parameters
+* `session`: The session to set the callback structure.
+* `cb`: The callback structure itself.
+### Returns
+[`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
+"""
 function ssh_set_server_callbacks(session, cb)
-    ccall((:ssh_set_server_callbacks, libssh), Cint, (ssh_session, ssh_server_callbacks), session, cb)
+    @ccall libssh.ssh_set_server_callbacks(session::ssh_session, cb::ssh_server_callbacks)::Cint
 end
 
+"""
+    ssh_socket_callbacks_struct
+
+These are the callbacks exported by the socket structure They are called by the socket module when a socket event appears
+"""
 mutable struct ssh_socket_callbacks_struct
     userdata::Ptr{Cvoid}
     data::ssh_callback_data
@@ -2263,6 +3319,17 @@ end
 const ssh_socket_callbacks = Ptr{ssh_socket_callbacks_struct}
 
 # typedef int ( * ssh_packet_callback ) ( ssh_session session , uint8_t type , ssh_buffer packet , void * user )
+"""
+Prototype for a packet callback, to be called when a new packet arrives
+
+### Parameters
+* `session`: The current session of the packet
+* `type`: packet type (see ssh2.h)
+* `packet`: buffer containing the packet, excluding size, type and padding fields
+* `user`: user argument to the callback and are called each time a packet shows up
+### Returns
+[`SSH_PACKET_NOT_USED`](@ref) Packet was not used or understood, processing must continue
+"""
 const ssh_packet_callback = Ptr{Cvoid}
 
 mutable struct ssh_packet_callbacks_struct
@@ -2274,53 +3341,244 @@ end
 
 const ssh_packet_callbacks = Ptr{ssh_packet_callbacks_struct}
 
+"""
+    ssh_set_callbacks(session, cb)
+
+Set the session callback functions.
+
+This functions sets the callback structure to use your own callback functions for auth, logging and status.
+
+Note, that the callback structure is not copied into the session so it needs to be valid for the whole session lifetime.
+
+```c++
+ struct ssh_callbacks_struct cb = {
+   .userdata = data,
+   .auth_function = my_auth_function
+ };
+ ssh_callbacks_init(&cb);
+ ssh_set_callbacks(session, &cb);
+```
+
+### Parameters
+* `session`: The session to set the callback structure.
+* `cb`: The callback structure itself.
+### Returns
+[`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
+"""
 function ssh_set_callbacks(session, cb)
-    ccall((:ssh_set_callbacks, libssh), Cint, (ssh_session, ssh_callbacks), session, cb)
+    @ccall libssh.ssh_set_callbacks(session::ssh_session, cb::ssh_callbacks)::Cint
 end
 
 # typedef int ( * ssh_channel_data_callback ) ( ssh_session session , ssh_channel channel , void * data , uint32_t len , int is_stderr , void * userdata )
+"""
+SSH channel data callback. Called when data is available on a channel
+
+### Parameters
+* `session`: Current session handler
+* `channel`: the actual channel
+* `data`: the data that has been read on the channel
+* `len`: the length of the data
+* `is_stderr`: is 0 for stdout or 1 for stderr
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+number of bytes processed by the callee. The remaining bytes will be sent in the next callback message, when more data is available.
+"""
 const ssh_channel_data_callback = Ptr{Cvoid}
 
 # typedef void ( * ssh_channel_eof_callback ) ( ssh_session session , ssh_channel channel , void * userdata )
+"""
+SSH channel eof callback. Called when a channel receives EOF
+
+### Parameters
+* `session`: Current session handler
+* `channel`: the actual channel
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_channel_eof_callback = Ptr{Cvoid}
 
 # typedef void ( * ssh_channel_close_callback ) ( ssh_session session , ssh_channel channel , void * userdata )
+"""
+SSH channel close callback. Called when a channel is closed by remote peer
+
+### Parameters
+* `session`: Current session handler
+* `channel`: the actual channel
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_channel_close_callback = Ptr{Cvoid}
 
 # typedef void ( * ssh_channel_signal_callback ) ( ssh_session session , ssh_channel channel , const char * signal , void * userdata )
+"""
+SSH channel signal callback. Called when a channel has received a signal
+
+### Parameters
+* `session`: Current session handler
+* `channel`: the actual channel
+* `signal`: the signal name (without the SIG prefix)
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_channel_signal_callback = Ptr{Cvoid}
 
 # typedef void ( * ssh_channel_exit_status_callback ) ( ssh_session session , ssh_channel channel , int exit_status , void * userdata )
+"""
+SSH channel exit status callback. Called when a channel has received an exit status
+
+### Parameters
+* `session`: Current session handler
+* `channel`: the actual channel
+* `exit_status`: Exit status of the ran command
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_channel_exit_status_callback = Ptr{Cvoid}
 
 # typedef void ( * ssh_channel_exit_signal_callback ) ( ssh_session session , ssh_channel channel , const char * signal , int core , const char * errmsg , const char * lang , void * userdata )
+"""
+SSH channel exit signal callback. Called when a channel has received an exit signal
+
+### Parameters
+* `session`: Current session handler
+* `channel`: the actual channel
+* `signal`: the signal name (without the SIG prefix)
+* `core`: a boolean telling whether a core has been dumped or not
+* `errmsg`: the description of the exception
+* `lang`: the language of the description (format: RFC 3066)
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_channel_exit_signal_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_channel_pty_request_callback ) ( ssh_session session , ssh_channel channel , const char * term , int width , int height , int pxwidth , int pwheight , void * userdata )
+"""
+SSH channel PTY request from a client.
+
+### Parameters
+* `session`: the session
+* `channel`: the channel
+* `term`: The type of terminal emulation
+* `width`: width of the terminal, in characters
+* `height`: height of the terminal, in characters
+* `pxwidth`: width of the terminal, in pixels
+* `pwheight`: height of the terminal, in pixels
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+-1 if the request is denied
+"""
 const ssh_channel_pty_request_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_channel_shell_request_callback ) ( ssh_session session , ssh_channel channel , void * userdata )
+"""
+SSH channel Shell request from a client.
+
+### Parameters
+* `session`: the session
+* `channel`: the channel
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+1 if the request is denied
+"""
 const ssh_channel_shell_request_callback = Ptr{Cvoid}
 
 # typedef void ( * ssh_channel_auth_agent_req_callback ) ( ssh_session session , ssh_channel channel , void * userdata )
+"""
+SSH auth-agent-request from the client. This request is sent by a client when agent forwarding is available. Server is free to ignore this callback, no answer is expected.
+
+### Parameters
+* `session`: the session
+* `channel`: the channel
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_channel_auth_agent_req_callback = Ptr{Cvoid}
 
 # typedef void ( * ssh_channel_x11_req_callback ) ( ssh_session session , ssh_channel channel , int single_connection , const char * auth_protocol , const char * auth_cookie , uint32_t screen_number , void * userdata )
+"""
+SSH X11 request from the client. This request is sent by a client when X11 forwarding is requested(and available). Server is free to ignore this callback, no answer is expected.
+
+### Parameters
+* `session`: the session
+* `channel`: the channel
+* `single_connection`: If true, only one channel should be forwarded
+* `auth_protocol`: The X11 authentication method to be used
+* `auth_cookie`: Authentication cookie encoded hexadecimal
+* `screen_number`: Screen number
+* `userdata`: Userdata to be passed to the callback function.
+"""
 const ssh_channel_x11_req_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_channel_pty_window_change_callback ) ( ssh_session session , ssh_channel channel , int width , int height , int pxwidth , int pwheight , void * userdata )
+"""
+SSH channel PTY windows change (terminal size) from a client.
+
+### Parameters
+* `session`: the session
+* `channel`: the channel
+* `width`: width of the terminal, in characters
+* `height`: height of the terminal, in characters
+* `pxwidth`: width of the terminal, in pixels
+* `pwheight`: height of the terminal, in pixels
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+-1 if the request is denied
+"""
 const ssh_channel_pty_window_change_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_channel_exec_request_callback ) ( ssh_session session , ssh_channel channel , const char * command , void * userdata )
+"""
+SSH channel Exec request from a client.
+
+### Parameters
+* `session`: the session
+* `channel`: the channel
+* `command`: the shell command to be executed
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+1 if the request is denied
+"""
 const ssh_channel_exec_request_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_channel_env_request_callback ) ( ssh_session session , ssh_channel channel , const char * env_name , const char * env_value , void * userdata )
+"""
+SSH channel environment request from a client.
+
+!!! warning
+
+    some environment variables can be dangerous if changed (e.g. LD\\_PRELOAD) and should not be fulfilled.
+
+### Parameters
+* `session`: the session
+* `channel`: the channel
+* `env_name`: name of the environment value to be set
+* `env_value`: value of the environment value to be set
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+1 if the request is denied
+"""
 const ssh_channel_env_request_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_channel_subsystem_request_callback ) ( ssh_session session , ssh_channel channel , const char * subsystem , void * userdata )
+"""
+SSH channel subsystem request from a client.
+
+### Parameters
+* `session`: the session
+* `channel`: the channel
+* `subsystem`: the subsystem required
+* `userdata`: Userdata to be passed to the callback function.
+### Returns
+1 if the request is denied
+"""
 const ssh_channel_subsystem_request_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_channel_write_wontblock_callback ) ( ssh_session session , ssh_channel channel , uint32_t bytes , void * userdata )
+"""
+SSH channel write will not block (flow control).
+
+### Parameters
+* `session`: the session
+* `channel`: the channel
+* `bytes`:\\[in\\] size of the remote window in bytes. Writing as much data will not block.
+* `userdata`:\\[in\\] Userdata to be passed to the callback function.
+### Returns
+0 default return value (other return codes may be added in future).
+"""
 const ssh_channel_write_wontblock_callback = Ptr{Cvoid}
 
 mutable struct ssh_channel_callbacks_struct
@@ -2345,19 +3603,80 @@ end
 
 const ssh_channel_callbacks = Ptr{ssh_channel_callbacks_struct}
 
+"""
+    ssh_set_channel_callbacks(channel, cb)
+
+Set the channel callback functions.
+
+This functions sets the callback structure to use your own callback functions for channel data and exceptions.
+
+Note, that the structure is not copied to the channel structure so it needs to be valid as for the whole life of the channel or until it is removed with [`ssh_remove_channel_callbacks`](@ref)().
+
+```c++
+ struct ssh_channel_callbacks_struct cb = {
+   .userdata = data,
+   .channel_data_function = my_channel_data_function
+ };
+ ssh_callbacks_init(&cb);
+ ssh_set_channel_callbacks(channel, &cb);
+```
+
+!!! warning
+
+    this function will not replace existing callbacks but set the new one atop of them.
+
+### Parameters
+* `channel`: The channel to set the callback structure.
+* `cb`: The callback structure itself.
+### Returns
+[`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
+"""
 function ssh_set_channel_callbacks(channel, cb)
-    ccall((:ssh_set_channel_callbacks, libssh), Cint, (ssh_channel, ssh_channel_callbacks), channel, cb)
+    @ccall libssh.ssh_set_channel_callbacks(channel::ssh_channel, cb::ssh_channel_callbacks)::Cint
 end
 
+"""
+    ssh_add_channel_callbacks(channel, cb)
+
+Add channel callback functions
+
+This function will add channel callback functions to the channel callback list. Callbacks missing from a callback structure will be probed in the next on the list.
+
+### Parameters
+* `channel`: The channel to set the callback structure.
+* `cb`: The callback structure itself.
+### Returns
+[`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
+### See also
+[`ssh_set_channel_callbacks`](@ref)
+"""
 function ssh_add_channel_callbacks(channel, cb)
-    ccall((:ssh_add_channel_callbacks, libssh), Cint, (ssh_channel, ssh_channel_callbacks), channel, cb)
+    @ccall libssh.ssh_add_channel_callbacks(channel::ssh_channel, cb::ssh_channel_callbacks)::Cint
 end
 
+"""
+    ssh_remove_channel_callbacks(channel, cb)
+
+Remove a channel callback.
+
+The channel has been added with [`ssh_add_channel_callbacks`](@ref) or [`ssh_set_channel_callbacks`](@ref) in this case.
+
+### Parameters
+* `channel`: The channel to remove the callback structure from.
+* `cb`: The callback structure to remove
+### Returns
+[`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
+"""
 function ssh_remove_channel_callbacks(channel, cb)
-    ccall((:ssh_remove_channel_callbacks, libssh), Cint, (ssh_channel, ssh_channel_callbacks), channel, cb)
+    @ccall libssh.ssh_remove_channel_callbacks(channel::ssh_channel, cb::ssh_channel_callbacks)::Cint
 end
 
 # typedef int ( * ssh_thread_callback ) ( void * * lock )
+"""
+` libssh_threads`
+
+@{
+"""
 const ssh_thread_callback = Ptr{Cvoid}
 
 # typedef unsigned long ( * ssh_thread_id_callback ) ( void )
@@ -2372,28 +3691,92 @@ mutable struct ssh_threads_callbacks_struct
     thread_id::ssh_thread_id_callback
 end
 
+"""
+    ssh_threads_set_callbacks(cb)
+
+Set the thread callbacks structure.
+
+This is necessary if your program is using libssh in a multithreaded fashion. This function must be called first, outside of any threading context (in your main() function for instance), before you call [`ssh_init`](@ref)().
+
+\\bug libgcrypt 1.6 and bigger backend does not support custom callback. Using anything else than pthreads here will fail.
+
+### Parameters
+* `cb`:\\[in\\] A pointer to a [`ssh_threads_callbacks_struct`](@ref) structure, which contains the different callbacks to be set.
+### Returns
+Always returns [`SSH_OK`](@ref).
+### See also
+[`ssh_threads_callbacks_struct`](@ref), SSH\\_THREADS\\_PTHREAD
+"""
 function ssh_threads_set_callbacks(cb)
-    ccall((:ssh_threads_set_callbacks, libssh), Cint, (Ptr{ssh_threads_callbacks_struct},), cb)
+    @ccall libssh.ssh_threads_set_callbacks(cb::Ptr{ssh_threads_callbacks_struct})::Cint
 end
 
+"""
+    ssh_threads_get_default()
+
+Returns a pointer to the appropriate callbacks structure for the environment, to be used with [`ssh_threads_set_callbacks`](@ref).
+
+### Returns
+A pointer to a [`ssh_threads_callbacks_struct`](@ref) to be used with [`ssh_threads_set_callbacks`](@ref).
+### See also
+[`ssh_threads_set_callbacks`](@ref)
+"""
 function ssh_threads_get_default()
-    ccall((:ssh_threads_get_default, libssh), Ptr{ssh_threads_callbacks_struct}, ())
+    @ccall libssh.ssh_threads_get_default()::Ptr{ssh_threads_callbacks_struct}
 end
 
+"""
+    ssh_threads_get_pthread()
+
+Returns a pointer on the pthread threads callbacks, to be used with [`ssh_threads_set_callbacks`](@ref).
+
+### See also
+[`ssh_threads_set_callbacks`](@ref)
+"""
 function ssh_threads_get_pthread()
-    ccall((:ssh_threads_get_pthread, libssh), Ptr{ssh_threads_callbacks_struct}, ())
+    @ccall libssh.ssh_threads_get_pthread()::Ptr{ssh_threads_callbacks_struct}
 end
 
+"""
+    ssh_threads_get_noop()
+
+Get the noop threads callbacks structure
+
+This can be used with [`ssh_threads_set_callbacks`](@ref). These callbacks do nothing and are being used by default.
+
+### Returns
+Always returns a valid pointer to the noop callbacks structure.
+### See also
+[`ssh_threads_set_callbacks`](@ref)
+"""
 function ssh_threads_get_noop()
-    ccall((:ssh_threads_get_noop, libssh), Ptr{ssh_threads_callbacks_struct}, ())
+    @ccall libssh.ssh_threads_get_noop()::Ptr{ssh_threads_callbacks_struct}
 end
 
+"""
+    ssh_set_log_callback(cb)
+
+Set the logging callback function.
+
+### Parameters
+* `cb`:\\[in\\] The callback to set.
+### Returns
+0 on success, < 0 on error.
+"""
 function ssh_set_log_callback(cb)
-    ccall((:ssh_set_log_callback, libssh), Cint, (ssh_logging_callback,), cb)
+    @ccall libssh.ssh_set_log_callback(cb::ssh_logging_callback)::Cint
 end
 
+"""
+    ssh_get_log_callback()
+
+Get the pointer to the logging callback function.
+
+### Returns
+The pointer the the callback or NULL if none set.
+"""
 function ssh_get_log_callback()
-    ccall((:ssh_get_log_callback, libssh), ssh_logging_callback, ())
+    @ccall libssh.ssh_get_log_callback()::ssh_logging_callback
 end
 
 # Skipping MacroDefinition: LIBSSH_API __attribute__ ( ( visibility ( "default" ) ) )
