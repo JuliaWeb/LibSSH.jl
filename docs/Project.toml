@@ -1,0 +1,8 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+LibSSH = "00483490-30f8-4353-8aba-35b82f51f4d0"
+MD5 = "6ac74813-4b46-53a4-afec-0b5dc9d7885c"
+
+[compat]
+Documenter = "1"
+MD5 = "0.2"

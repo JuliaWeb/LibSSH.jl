@@ -37,6 +37,11 @@ mutable struct ssh_knownhosts_entry
     comment::Ptr{Cchar}
 end
 
+"""
+    ssh_knownhosts_entry_free(entry)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga97b827bd9eef76277e8420359e843cd8).
+"""
 function ssh_knownhosts_entry_free(entry)
     @ccall libssh.ssh_knownhosts_entry_free(entry::Ptr{ssh_knownhosts_entry})::Cvoid
 end
@@ -45,10 +50,20 @@ mutable struct ssh_message_struct end
 
 const ssh_message = Ptr{ssh_message_struct}
 
+"""
+    ssh_message_free(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__messages.html#ga9d1b1d2279c6be3539f2b630960759c3).
+"""
 function ssh_message_free(msg)
     @ccall libssh.ssh_message_free(msg::ssh_message)::Cvoid
 end
 
+"""
+    ssh_key_free(key)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga08808beb83a42ccd6f1c710ddeb1b4c2).
+"""
 function ssh_key_free(key)
     @ccall libssh.ssh_key_free(key::ssh_key)::Cvoid
 end
@@ -57,10 +72,20 @@ mutable struct ssh_string_struct end
 
 const ssh_string = Ptr{ssh_string_struct}
 
+"""
+    ssh_string_free(str)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#ga7d748d8c04e5df426d0c2af036345f12).
+"""
 function ssh_string_free(str)
     @ccall libssh.ssh_string_free(str::ssh_string)::Cvoid
 end
 
+"""
+    ssh_string_free_char(s)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#gafc10700722d6cafc468c2ee97585449a).
+"""
 function ssh_string_free_char(s)
     @ccall libssh.ssh_string_free_char(s::Ptr{Cchar})::Cvoid
 end
@@ -69,6 +94,11 @@ mutable struct ssh_buffer_struct end
 
 const ssh_buffer = Ptr{ssh_buffer_struct}
 
+"""
+    ssh_buffer_free(buffer)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__buffer.html#ga1e3c3dcb7b9c34cac4bae25f52c18478).
+"""
 function ssh_buffer_free(buffer)
     @ccall libssh.ssh_buffer_free(buffer::ssh_buffer)::Cvoid
 end
@@ -100,6 +130,9 @@ const ssh_scp = Ptr{ssh_scp_struct}
 
 mutable struct ssh_session_struct end
 
+"""
+Session struct ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_guided_tour.html)).
+"""
 const ssh_session = Ptr{ssh_session_struct}
 
 mutable struct ssh_event_struct end
@@ -315,258 +348,578 @@ end
     SSH_CONNECTOR_BOTH = 3
 end
 
+"""
+    ssh_blocking_flush(session, timeout)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga60da8e2c47897a209a455923c35d52d8).
+"""
 function ssh_blocking_flush(session, timeout)
     @ccall libssh.ssh_blocking_flush(session::ssh_session, timeout::Cint)::Cint
 end
 
+"""
+    ssh_channel_accept_x11(channel, timeout_ms)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga548bd0f77a50b7c8180942544b375866).
+"""
 function ssh_channel_accept_x11(channel, timeout_ms)
     @ccall libssh.ssh_channel_accept_x11(channel::ssh_channel, timeout_ms::Cint)::ssh_channel
 end
 
+"""
+    ssh_channel_change_pty_size(channel, cols, rows)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gaf0e778fdd87d2b42c3362cce4c0a52df).
+"""
 function ssh_channel_change_pty_size(channel, cols, rows)
     @ccall libssh.ssh_channel_change_pty_size(channel::ssh_channel, cols::Cint, rows::Cint)::Cint
 end
 
+"""
+    ssh_channel_close(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga238f07e0455456a5bfd8a49ead917732).
+"""
 function ssh_channel_close(channel)
     @ccall libssh.ssh_channel_close(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_free(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gad1417f9eae8928fed20faafe2d9dbfff).
+"""
 function ssh_channel_free(channel)
     @ccall libssh.ssh_channel_free(channel::ssh_channel)::Cvoid
 end
 
+"""
+    ssh_channel_get_exit_status(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga9eea019dd0bbaa8a817fff2c762d1a2d).
+"""
 function ssh_channel_get_exit_status(channel)
     @ccall libssh.ssh_channel_get_exit_status(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_get_session(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga747aa5315575aa7ac9d8367c7372d8dd).
+"""
 function ssh_channel_get_session(channel)
     @ccall libssh.ssh_channel_get_session(channel::ssh_channel)::ssh_session
 end
 
+"""
+    ssh_channel_is_closed(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gab2720b44cb7f1dfe2b38ffe07c2f45c7).
+"""
 function ssh_channel_is_closed(channel)
     @ccall libssh.ssh_channel_is_closed(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_is_eof(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gab535264029443d77214c0615a0788b0a).
+"""
 function ssh_channel_is_eof(channel)
     @ccall libssh.ssh_channel_is_eof(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_is_open(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gaaafcda943c96ddb91e5c28c0bdee7045).
+"""
 function ssh_channel_is_open(channel)
     @ccall libssh.ssh_channel_is_open(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_new(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gada8ccda7bf65165fe145d3096a252dcc).
+"""
 function ssh_channel_new(session)
     @ccall libssh.ssh_channel_new(session::ssh_session)::ssh_channel
 end
 
+"""
+    ssh_channel_open_auth_agent(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga6c4d4f5436dd5be58973606c6bcd8bb4).
+"""
 function ssh_channel_open_auth_agent(channel)
     @ccall libssh.ssh_channel_open_auth_agent(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_open_forward(channel, remotehost, remoteport, sourcehost, localport)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gae86b0704a1f2bdebb268b55567f7f47b).
+"""
 function ssh_channel_open_forward(channel, remotehost, remoteport, sourcehost, localport)
     @ccall libssh.ssh_channel_open_forward(channel::ssh_channel, remotehost::Ptr{Cchar}, remoteport::Cint, sourcehost::Ptr{Cchar}, localport::Cint)::Cint
 end
 
+"""
+    ssh_channel_open_forward_unix(channel, remotepath, sourcehost, localport)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga93ddd5055eb3322d38c70986aa63c673).
+"""
 function ssh_channel_open_forward_unix(channel, remotepath, sourcehost, localport)
     @ccall libssh.ssh_channel_open_forward_unix(channel::ssh_channel, remotepath::Ptr{Cchar}, sourcehost::Ptr{Cchar}, localport::Cint)::Cint
 end
 
+"""
+    ssh_channel_open_session(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gaf051dd30d75bf6dc45d1a5088cf970bd).
+"""
 function ssh_channel_open_session(channel)
     @ccall libssh.ssh_channel_open_session(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_open_x11(channel, orig_addr, orig_port)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gae4aa2cb2a96cfe13712150517d6a90da).
+"""
 function ssh_channel_open_x11(channel, orig_addr, orig_port)
     @ccall libssh.ssh_channel_open_x11(channel::ssh_channel, orig_addr::Ptr{Cchar}, orig_port::Cint)::Cint
 end
 
+"""
+    ssh_channel_poll(channel, is_stderr)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga157f7d1df5de07ec6c6976e2034ba6e2).
+"""
 function ssh_channel_poll(channel, is_stderr)
     @ccall libssh.ssh_channel_poll(channel::ssh_channel, is_stderr::Cint)::Cint
 end
 
+"""
+    ssh_channel_poll_timeout(channel, timeout, is_stderr)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gab56c7b7959e4c23959f2989468811661).
+"""
 function ssh_channel_poll_timeout(channel, timeout, is_stderr)
     @ccall libssh.ssh_channel_poll_timeout(channel::ssh_channel, timeout::Cint, is_stderr::Cint)::Cint
 end
 
+"""
+    ssh_channel_read(channel, dest, count, is_stderr)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gac92381c4c5d4a7eab35f6e84686f033d).
+"""
 function ssh_channel_read(channel, dest, count, is_stderr)
     @ccall libssh.ssh_channel_read(channel::ssh_channel, dest::Ptr{Cvoid}, count::UInt32, is_stderr::Cint)::Cint
 end
 
+"""
+    ssh_channel_read_timeout(channel, dest, count, is_stderr, timeout_ms)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga2f4e02cb3b3adbc30a534623164068fd).
+"""
 function ssh_channel_read_timeout(channel, dest, count, is_stderr, timeout_ms)
     @ccall libssh.ssh_channel_read_timeout(channel::ssh_channel, dest::Ptr{Cvoid}, count::UInt32, is_stderr::Cint, timeout_ms::Cint)::Cint
 end
 
+"""
+    ssh_channel_read_nonblocking(channel, dest, count, is_stderr)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gaaca5a3fbe9839c3ffb37b746afc35f4c).
+"""
 function ssh_channel_read_nonblocking(channel, dest, count, is_stderr)
     @ccall libssh.ssh_channel_read_nonblocking(channel::ssh_channel, dest::Ptr{Cvoid}, count::UInt32, is_stderr::Cint)::Cint
 end
 
+"""
+    ssh_channel_request_env(channel, name, value)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga7aede2f9af4c494ff9e41fc08a4572f1).
+"""
 function ssh_channel_request_env(channel, name, value)
     @ccall libssh.ssh_channel_request_env(channel::ssh_channel, name::Ptr{Cchar}, value::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_channel_request_exec(channel, cmd)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga567d509183ade0a77190f390e2b5747d).
+"""
 function ssh_channel_request_exec(channel, cmd)
     @ccall libssh.ssh_channel_request_exec(channel::ssh_channel, cmd::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_channel_request_pty(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga37c1cec33fe5a2f184768aba52e3a0db).
+"""
 function ssh_channel_request_pty(channel)
     @ccall libssh.ssh_channel_request_pty(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_request_pty_size(channel, term, cols, rows)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga9944318d4e8c427d99938d301df0a9a4).
+"""
 function ssh_channel_request_pty_size(channel, term, cols, rows)
     @ccall libssh.ssh_channel_request_pty_size(channel::ssh_channel, term::Ptr{Cchar}, cols::Cint, rows::Cint)::Cint
 end
 
+"""
+    ssh_channel_request_shell(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gaed4c5fb30c9df2b2548421ccf4e81bf1).
+"""
 function ssh_channel_request_shell(channel)
     @ccall libssh.ssh_channel_request_shell(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_request_send_signal(channel, signum)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga88a15c262309c5d9fdb1841149ba2da8).
+"""
 function ssh_channel_request_send_signal(channel, signum)
     @ccall libssh.ssh_channel_request_send_signal(channel::ssh_channel, signum::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_channel_request_send_break(channel, length)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gaef198ad0dcf0968aa2a449c8898d985e).
+"""
 function ssh_channel_request_send_break(channel, length)
     @ccall libssh.ssh_channel_request_send_break(channel::ssh_channel, length::UInt32)::Cint
 end
 
+"""
+    ssh_channel_request_sftp(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga3d2a402cddd799036006294eb61649fe).
+"""
 function ssh_channel_request_sftp(channel)
     @ccall libssh.ssh_channel_request_sftp(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_request_subsystem(channel, subsystem)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga95e7e9b022595334fe68329ba61a94d5).
+"""
 function ssh_channel_request_subsystem(channel, subsystem)
     @ccall libssh.ssh_channel_request_subsystem(channel::ssh_channel, subsystem::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_channel_request_x11(channel, single_connection, protocol, cookie, screen_number)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gadfa34624c28164bd73453cd04aa64c1f).
+"""
 function ssh_channel_request_x11(channel, single_connection, protocol, cookie, screen_number)
     @ccall libssh.ssh_channel_request_x11(channel::ssh_channel, single_connection::Cint, protocol::Ptr{Cchar}, cookie::Ptr{Cchar}, screen_number::Cint)::Cint
 end
 
+"""
+    ssh_channel_request_auth_agent(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gab2e28b520b8f8fe5ff5626de2a4113d9).
+"""
 function ssh_channel_request_auth_agent(channel)
     @ccall libssh.ssh_channel_request_auth_agent(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_send_eof(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga072f82fdf3e50514f747653af2c99004).
+"""
 function ssh_channel_send_eof(channel)
     @ccall libssh.ssh_channel_send_eof(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_set_blocking(channel, blocking)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga1c00ed18679d9a8c5b971260b5df13a2).
+"""
 function ssh_channel_set_blocking(channel, blocking)
     @ccall libssh.ssh_channel_set_blocking(channel::ssh_channel, blocking::Cint)::Cvoid
 end
 
+"""
+    ssh_channel_set_counter(channel, counter)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gab0649fe21b7a900b4a8e10ecb3401395).
+"""
 function ssh_channel_set_counter(channel, counter)
     @ccall libssh.ssh_channel_set_counter(channel::ssh_channel, counter::ssh_counter)::Cvoid
 end
 
+"""
+    ssh_channel_write(channel, data, len)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga5d658df773ba854b35ff9f905341e2fb).
+"""
 function ssh_channel_write(channel, data, len)
     @ccall libssh.ssh_channel_write(channel::ssh_channel, data::Ptr{Cvoid}, len::UInt32)::Cint
 end
 
+"""
+    ssh_channel_write_stderr(channel, data, len)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga7ebd0ed490ee4485c6d5feb7d22bc162).
+"""
 function ssh_channel_write_stderr(channel, data, len)
     @ccall libssh.ssh_channel_write_stderr(channel::ssh_channel, data::Ptr{Cvoid}, len::UInt32)::Cint
 end
 
+"""
+    ssh_channel_window_size(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gadf53c5a5b501086af26d06cba3f1491f).
+"""
 function ssh_channel_window_size(channel)
     @ccall libssh.ssh_channel_window_size(channel::ssh_channel)::UInt32
 end
 
+"""
+    ssh_basename(path)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__misc.html#ga83b053a8bdf80eea5ebc662e5098a52b).
+"""
 function ssh_basename(path)
     @ccall libssh.ssh_basename(path::Ptr{Cchar})::Ptr{Cchar}
 end
 
+"""
+    ssh_clean_pubkey_hash(hash)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga07827fd70a51ddc4030364f220eb4c9c).
+"""
 function ssh_clean_pubkey_hash(hash)
     @ccall libssh.ssh_clean_pubkey_hash(hash::Ptr{Ptr{Cuchar}})::Cvoid
 end
 
+"""
+    ssh_connect(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga032e07cbd8bc3f14cb2dd375db0b03d7).
+"""
 function ssh_connect(session)
     @ccall libssh.ssh_connect(session::ssh_session)::Cint
 end
 
+"""
+    ssh_connector_new(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga6923476bf129f12137af85ca238fb498).
+"""
 function ssh_connector_new(session)
     @ccall libssh.ssh_connector_new(session::ssh_session)::ssh_connector
 end
 
+"""
+    ssh_connector_free(connector)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaef2bbc39f4fb5bb7b522a41237b08f89).
+"""
 function ssh_connector_free(connector)
     @ccall libssh.ssh_connector_free(connector::ssh_connector)::Cvoid
 end
 
+"""
+    ssh_connector_set_in_channel(connector, channel, flags)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaf4ddaffee9e8676d84766cc64652c565).
+"""
 function ssh_connector_set_in_channel(connector, channel, flags)
     @ccall libssh.ssh_connector_set_in_channel(connector::ssh_connector, channel::ssh_channel, flags::ssh_connector_flags_e)::Cint
 end
 
+"""
+    ssh_connector_set_out_channel(connector, channel, flags)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga4607653b47ce52ff65c2b910289898af).
+"""
 function ssh_connector_set_out_channel(connector, channel, flags)
     @ccall libssh.ssh_connector_set_out_channel(connector::ssh_connector, channel::ssh_channel, flags::ssh_connector_flags_e)::Cint
 end
 
+"""
+    ssh_connector_set_in_fd(connector, fd)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga47b38e389ee866f2252677c3e7992df2).
+"""
 function ssh_connector_set_in_fd(connector, fd)
     @ccall libssh.ssh_connector_set_in_fd(connector::ssh_connector, fd::socket_t)::Cvoid
 end
 
+"""
+    ssh_connector_set_out_fd(connector, fd)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga47b7c3d1ffc07b7ec3374ec771d97443).
+"""
 function ssh_connector_set_out_fd(connector, fd)
     @ccall libssh.ssh_connector_set_out_fd(connector::ssh_connector, fd::socket_t)::Cvoid
 end
 
+"""
+    ssh_copyright()
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaffbc8276ff57983966ce108998df40bd).
+"""
 function ssh_copyright()
     @ccall libssh.ssh_copyright()::Ptr{Cchar}
 end
 
+"""
+    ssh_disconnect(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga0f048a4c0dbe02cfb7e9c5b6d0db0f27).
+"""
 function ssh_disconnect(session)
     @ccall libssh.ssh_disconnect(session::ssh_session)::Cvoid
 end
 
+"""
+    ssh_dirname(path)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__misc.html#gad36f0f8dbde59aefedd385dff76384fa).
+"""
 function ssh_dirname(path)
     @ccall libssh.ssh_dirname(path::Ptr{Cchar})::Ptr{Cchar}
 end
 
+"""
+    ssh_finalize()
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh.html#ga94a851d00248acde9cd7da084b491242).
+"""
 function ssh_finalize()
     @ccall libssh.ssh_finalize()::Cint
 end
 
+"""
+    ssh_channel_open_forward_port(session, timeout_ms, destination_port, originator, originator_port)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga4dce3b5fb6755ec0f610846b220f50ff).
+"""
 function ssh_channel_open_forward_port(session, timeout_ms, destination_port, originator, originator_port)
     @ccall libssh.ssh_channel_open_forward_port(session::ssh_session, timeout_ms::Cint, destination_port::Ptr{Cint}, originator::Ptr{Ptr{Cchar}}, originator_port::Ptr{Cint})::ssh_channel
 end
 
+"""
+    ssh_channel_accept_forward(session, timeout_ms, destination_port)
+
+Deprecated function.
+"""
 function ssh_channel_accept_forward(session, timeout_ms, destination_port)
     @ccall libssh.ssh_channel_accept_forward(session::ssh_session, timeout_ms::Cint, destination_port::Ptr{Cint})::ssh_channel
 end
 
+"""
+    ssh_channel_cancel_forward(session, address, port)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga3bff751afc5ecb5bbf9d6447e4e5370f).
+"""
 function ssh_channel_cancel_forward(session, address, port)
     @ccall libssh.ssh_channel_cancel_forward(session::ssh_session, address::Ptr{Cchar}, port::Cint)::Cint
 end
 
+"""
+    ssh_channel_listen_forward(session, address, port, bound_port)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga758cda957227751870c8772df46e5b39).
+"""
 function ssh_channel_listen_forward(session, address, port, bound_port)
     @ccall libssh.ssh_channel_listen_forward(session::ssh_session, address::Ptr{Cchar}, port::Cint, bound_port::Ptr{Cint})::Cint
 end
 
+"""
+    ssh_free(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gae5af27a98a7488e9f5ded6b37c274156).
+"""
 function ssh_free(session)
     @ccall libssh.ssh_free(session::ssh_session)::Cvoid
 end
 
+"""
+    ssh_get_disconnect_message(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gad19e368e35d48e02ba95970a7d1e87f5).
+"""
 function ssh_get_disconnect_message(session)
     @ccall libssh.ssh_get_disconnect_message(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_get_error(error)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__error.html#ga9241586665bf21f823806473fc386258).
+"""
 function ssh_get_error(error)
     @ccall libssh.ssh_get_error(error::Ptr{Cvoid})::Ptr{Cchar}
 end
 
+"""
+    ssh_get_error_code(error)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__error.html#ga036433b7bf3d4ca94206253f58d136f9).
+"""
 function ssh_get_error_code(error)
     @ccall libssh.ssh_get_error_code(error::Ptr{Cvoid})::Cint
 end
 
+"""
+    ssh_get_fd(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gafe509fcea47714b5cd277d1e35e83276).
+"""
 function ssh_get_fd(session)
     @ccall libssh.ssh_get_fd(session::ssh_session)::socket_t
 end
 
+"""
+    ssh_get_hexa(what, len)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__misc.html#ga6ebcfc53884fdc5afb1607c94f8007d4).
+"""
 function ssh_get_hexa(what, len)
     @ccall libssh.ssh_get_hexa(what::Ptr{Cuchar}, len::Csize_t)::Ptr{Cchar}
 end
 
+"""
+    ssh_get_issue_banner(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga89864d4d5cc6d3d6ef1c39652f2a688f).
+"""
 function ssh_get_issue_banner(session)
     @ccall libssh.ssh_get_issue_banner(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_get_openssh_version(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gac55d2895467a1e898ee75b4710d836a5).
+"""
 function ssh_get_openssh_version(session)
     @ccall libssh.ssh_get_openssh_version(session::ssh_session)::Cint
 end
 
+"""
+    ssh_get_server_publickey(session, key)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga5342eefee0497636e9657c968e106782).
+"""
 function ssh_get_server_publickey(session, key)
     @ccall libssh.ssh_get_server_publickey(session::ssh_session, key::Ptr{ssh_key})::Cint
 end
@@ -577,258 +930,578 @@ end
     SSH_PUBLICKEY_HASH_SHA256 = 2
 end
 
+"""
+    ssh_get_publickey_hash(key, type, hash, hlen)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga7a7b16a4bed6d8d58f10bdb269172ff7).
+"""
 function ssh_get_publickey_hash(key, type, hash, hlen)
     @ccall libssh.ssh_get_publickey_hash(key::ssh_key, type::ssh_publickey_hash_type, hash::Ptr{Ptr{Cuchar}}, hlen::Ptr{Csize_t})::Cint
 end
 
+"""
+    ssh_get_pubkey_hash(session, hash)
+
+Deprecated function.
+"""
 function ssh_get_pubkey_hash(session, hash)
     @ccall libssh.ssh_get_pubkey_hash(session::ssh_session, hash::Ptr{Ptr{Cuchar}})::Cint
 end
 
+"""
+    ssh_forward_accept(session, timeout_ms)
+
+Deprecated function.
+"""
 function ssh_forward_accept(session, timeout_ms)
     @ccall libssh.ssh_forward_accept(session::ssh_session, timeout_ms::Cint)::ssh_channel
 end
 
+"""
+    ssh_forward_cancel(session, address, port)
+
+Deprecated function.
+"""
 function ssh_forward_cancel(session, address, port)
     @ccall libssh.ssh_forward_cancel(session::ssh_session, address::Ptr{Cchar}, port::Cint)::Cint
 end
 
+"""
+    ssh_forward_listen(session, address, port, bound_port)
+
+Deprecated function.
+"""
 function ssh_forward_listen(session, address, port, bound_port)
     @ccall libssh.ssh_forward_listen(session::ssh_session, address::Ptr{Cchar}, port::Cint, bound_port::Ptr{Cint})::Cint
 end
 
+"""
+    ssh_get_publickey(session, key)
+
+Deprecated function.
+"""
 function ssh_get_publickey(session, key)
     @ccall libssh.ssh_get_publickey(session::ssh_session, key::Ptr{ssh_key})::Cint
 end
 
+"""
+    ssh_write_knownhost(session)
+
+Deprecated function.
+"""
 function ssh_write_knownhost(session)
     @ccall libssh.ssh_write_knownhost(session::ssh_session)::Cint
 end
 
+"""
+    ssh_dump_knownhost(session)
+
+Deprecated function.
+"""
 function ssh_dump_knownhost(session)
     @ccall libssh.ssh_dump_knownhost(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_is_server_known(session)
+
+Deprecated function.
+"""
 function ssh_is_server_known(session)
     @ccall libssh.ssh_is_server_known(session::ssh_session)::Cint
 end
 
+"""
+    ssh_print_hexa(descr, what, len)
+
+Deprecated function.
+"""
 function ssh_print_hexa(descr, what, len)
     @ccall libssh.ssh_print_hexa(descr::Ptr{Cchar}, what::Ptr{Cuchar}, len::Csize_t)::Cvoid
 end
 
+"""
+    ssh_channel_select(readchans, writechans, exceptchans, timeout)
+
+Deprecated function.
+"""
 function ssh_channel_select(readchans, writechans, exceptchans, timeout)
     @ccall libssh.ssh_channel_select(readchans::Ptr{ssh_channel}, writechans::Ptr{ssh_channel}, exceptchans::Ptr{ssh_channel}, timeout::Ptr{Cvoid})::Cint
 end
 
+"""
+    ssh_scp_accept_request(scp)
+
+Deprecated function.
+"""
 function ssh_scp_accept_request(scp)
     @ccall libssh.ssh_scp_accept_request(scp::ssh_scp)::Cint
 end
 
+"""
+    ssh_scp_close(scp)
+
+Deprecated function.
+"""
 function ssh_scp_close(scp)
     @ccall libssh.ssh_scp_close(scp::ssh_scp)::Cint
 end
 
+"""
+    ssh_scp_deny_request(scp, reason)
+
+Deprecated function.
+"""
 function ssh_scp_deny_request(scp, reason)
     @ccall libssh.ssh_scp_deny_request(scp::ssh_scp, reason::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_scp_free(scp)
+
+Deprecated function.
+"""
 function ssh_scp_free(scp)
     @ccall libssh.ssh_scp_free(scp::ssh_scp)::Cvoid
 end
 
+"""
+    ssh_scp_init(scp)
+
+Deprecated function.
+"""
 function ssh_scp_init(scp)
     @ccall libssh.ssh_scp_init(scp::ssh_scp)::Cint
 end
 
+"""
+    ssh_scp_leave_directory(scp)
+
+Deprecated function.
+"""
 function ssh_scp_leave_directory(scp)
     @ccall libssh.ssh_scp_leave_directory(scp::ssh_scp)::Cint
 end
 
+"""
+    ssh_scp_new(session, mode, location)
+
+Deprecated function.
+"""
 function ssh_scp_new(session, mode, location)
     @ccall libssh.ssh_scp_new(session::ssh_session, mode::Cint, location::Ptr{Cchar})::ssh_scp
 end
 
+"""
+    ssh_scp_pull_request(scp)
+
+Deprecated function.
+"""
 function ssh_scp_pull_request(scp)
     @ccall libssh.ssh_scp_pull_request(scp::ssh_scp)::Cint
 end
 
+"""
+    ssh_scp_push_directory(scp, dirname, mode)
+
+Deprecated function.
+"""
 function ssh_scp_push_directory(scp, dirname, mode)
     @ccall libssh.ssh_scp_push_directory(scp::ssh_scp, dirname::Ptr{Cchar}, mode::Cint)::Cint
 end
 
+"""
+    ssh_scp_push_file(scp, filename, size, perms)
+
+Deprecated function.
+"""
 function ssh_scp_push_file(scp, filename, size, perms)
     @ccall libssh.ssh_scp_push_file(scp::ssh_scp, filename::Ptr{Cchar}, size::Csize_t, perms::Cint)::Cint
 end
 
+"""
+    ssh_scp_push_file64(scp, filename, size, perms)
+
+Deprecated function.
+"""
 function ssh_scp_push_file64(scp, filename, size, perms)
     @ccall libssh.ssh_scp_push_file64(scp::ssh_scp, filename::Ptr{Cchar}, size::UInt64, perms::Cint)::Cint
 end
 
+"""
+    ssh_scp_read(scp, buffer, size)
+
+Deprecated function.
+"""
 function ssh_scp_read(scp, buffer, size)
     @ccall libssh.ssh_scp_read(scp::ssh_scp, buffer::Ptr{Cvoid}, size::Csize_t)::Cint
 end
 
+"""
+    ssh_scp_request_get_filename(scp)
+
+Deprecated function.
+"""
 function ssh_scp_request_get_filename(scp)
     @ccall libssh.ssh_scp_request_get_filename(scp::ssh_scp)::Ptr{Cchar}
 end
 
+"""
+    ssh_scp_request_get_permissions(scp)
+
+Deprecated function.
+"""
 function ssh_scp_request_get_permissions(scp)
     @ccall libssh.ssh_scp_request_get_permissions(scp::ssh_scp)::Cint
 end
 
+"""
+    ssh_scp_request_get_size(scp)
+
+Deprecated function.
+"""
 function ssh_scp_request_get_size(scp)
     @ccall libssh.ssh_scp_request_get_size(scp::ssh_scp)::Csize_t
 end
 
+"""
+    ssh_scp_request_get_size64(scp)
+
+Deprecated function.
+"""
 function ssh_scp_request_get_size64(scp)
     @ccall libssh.ssh_scp_request_get_size64(scp::ssh_scp)::UInt64
 end
 
+"""
+    ssh_scp_request_get_warning(scp)
+
+Deprecated function.
+"""
 function ssh_scp_request_get_warning(scp)
     @ccall libssh.ssh_scp_request_get_warning(scp::ssh_scp)::Ptr{Cchar}
 end
 
+"""
+    ssh_scp_write(scp, buffer, len)
+
+Deprecated function.
+"""
 function ssh_scp_write(scp, buffer, len)
     @ccall libssh.ssh_scp_write(scp::ssh_scp, buffer::Ptr{Cvoid}, len::Csize_t)::Cint
 end
 
+"""
+    ssh_get_random(where, len, strong)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga60b8b02bba48b49b2d754d37222bfaad).
+"""
 function ssh_get_random(where, len, strong)
     @ccall libssh.ssh_get_random(where::Ptr{Cvoid}, len::Cint, strong::Cint)::Cint
 end
 
+"""
+    ssh_get_version(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga8467735e4735165336f68ee82e24de0e).
+"""
 function ssh_get_version(session)
     @ccall libssh.ssh_get_version(session::ssh_session)::Cint
 end
 
+"""
+    ssh_get_status(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gac199314d1646372c566ef14b9b6dca53).
+"""
 function ssh_get_status(session)
     @ccall libssh.ssh_get_status(session::ssh_session)::Cint
 end
 
+"""
+    ssh_get_poll_flags(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gae9d0104fbeca17bcfb0659ad718c4606).
+"""
 function ssh_get_poll_flags(session)
     @ccall libssh.ssh_get_poll_flags(session::ssh_session)::Cint
 end
 
+"""
+    ssh_init()
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh.html#ga3ebf8d6920e563f3b032e3cd5277598e).
+"""
 function ssh_init()
     @ccall libssh.ssh_init()::Cint
 end
 
+"""
+    ssh_is_blocking(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga0c959bde817801ac5de2db1e64b52f26).
+"""
 function ssh_is_blocking(session)
     @ccall libssh.ssh_is_blocking(session::ssh_session)::Cint
 end
 
+"""
+    ssh_is_connected(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga49d8f413a3c7879070a112703de1d6e2).
+"""
 function ssh_is_connected(session)
     @ccall libssh.ssh_is_connected(session::ssh_session)::Cint
 end
 
+"""
+    ssh_known_hosts_parse_line(host, line, entry)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gafac3628356d7e65b7cf74a82adc52ff7).
+"""
 function ssh_known_hosts_parse_line(host, line, entry)
     @ccall libssh.ssh_known_hosts_parse_line(host::Ptr{Cchar}, line::Ptr{Cchar}, entry::Ptr{Ptr{ssh_knownhosts_entry}})::Cint
 end
 
+"""
+    ssh_session_has_known_hosts_entry(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaffea2fa1210919f833a081739734476d).
+"""
 function ssh_session_has_known_hosts_entry(session)
     @ccall libssh.ssh_session_has_known_hosts_entry(session::ssh_session)::ssh_known_hosts_e
 end
 
+"""
+    ssh_session_export_known_hosts_entry(session, pentry_string)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga519c3985c8803c67d24ce9f937e3da9a).
+"""
 function ssh_session_export_known_hosts_entry(session, pentry_string)
     @ccall libssh.ssh_session_export_known_hosts_entry(session::ssh_session, pentry_string::Ptr{Ptr{Cchar}})::Cint
 end
 
+"""
+    ssh_session_update_known_hosts(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga958fdd1aedcd85a5c496c0aa22362d34).
+"""
 function ssh_session_update_known_hosts(session)
     @ccall libssh.ssh_session_update_known_hosts(session::ssh_session)::Cint
 end
 
+"""
+    ssh_session_get_known_hosts_entry(session, pentry)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga874d3246c9c9bfc7040302e10650bce8).
+"""
 function ssh_session_get_known_hosts_entry(session, pentry)
     @ccall libssh.ssh_session_get_known_hosts_entry(session::ssh_session, pentry::Ptr{Ptr{ssh_knownhosts_entry}})::ssh_known_hosts_e
 end
 
+"""
+    ssh_session_is_known_server(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gacbc5d04fe66beee863a0c61a93fdf765).
+"""
 function ssh_session_is_known_server(session)
     @ccall libssh.ssh_session_is_known_server(session::ssh_session)::ssh_known_hosts_e
 end
 
+"""
+    ssh_set_log_level(level)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__log.html#ga9719dabb8fab8a3ebeb4dc2ebcd2dd45).
+"""
 function ssh_set_log_level(level)
     @ccall libssh.ssh_set_log_level(level::Cint)::Cint
 end
 
+"""
+    ssh_get_log_level()
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__log.html#gad6a0b7b581b12be4e34a110b7312614b).
+"""
 function ssh_get_log_level()
     @ccall libssh.ssh_get_log_level()::Cint
 end
 
+"""
+    ssh_get_log_userdata()
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__log.html#ga887a1e754cd935b55fea1afb1f718761).
+"""
 function ssh_get_log_userdata()
     @ccall libssh.ssh_get_log_userdata()::Ptr{Cvoid}
 end
 
+"""
+    ssh_set_log_userdata(data)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__log.html#ga0addd5c29922f40e9f842a43e0cb0b27).
+"""
 function ssh_set_log_userdata(data)
     @ccall libssh.ssh_set_log_userdata(data::Ptr{Cvoid})::Cint
 end
 
+"""
+    ssh_message_channel_request_open_reply_accept(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaf9afe350861a5085901b37c5ff9b7702).
+"""
 function ssh_message_channel_request_open_reply_accept(msg)
     @ccall libssh.ssh_message_channel_request_open_reply_accept(msg::ssh_message)::ssh_channel
 end
 
+"""
+    ssh_message_channel_request_open_reply_accept_channel(msg, chan)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gabf37c510c2ba4f05bfc201b652af896c).
+"""
 function ssh_message_channel_request_open_reply_accept_channel(msg, chan)
     @ccall libssh.ssh_message_channel_request_open_reply_accept_channel(msg::ssh_message, chan::ssh_channel)::Cint
 end
 
+"""
+    ssh_message_channel_request_reply_success(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga4e277170f19e464918281cfe177df7e0).
+"""
 function ssh_message_channel_request_reply_success(msg)
     @ccall libssh.ssh_message_channel_request_reply_success(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_get(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__messages.html#ga8e536b6f1c824b7ca43d0e8f954b3bd4).
+"""
 function ssh_message_get(session)
     @ccall libssh.ssh_message_get(session::ssh_session)::ssh_message
 end
 
+"""
+    ssh_message_subtype(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__messages.html#ga7aa19d51c443b779fe454f0be3c666d4).
+"""
 function ssh_message_subtype(msg)
     @ccall libssh.ssh_message_subtype(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_type(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__messages.html#ga20fc6e536f170b98c7d62ce3675d8cdb).
+"""
 function ssh_message_type(msg)
     @ccall libssh.ssh_message_type(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_mkdir(pathname, mode)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__misc.html#ga5e15e93beecaef3af67d02b7ba55309f).
+"""
 function ssh_mkdir(pathname, mode)
     @ccall libssh.ssh_mkdir(pathname::Ptr{Cchar}, mode::mode_t)::Cint
 end
 
+"""
+    ssh_new()
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaadadc0f9601547c30db7c4d62017d32c).
+"""
 function ssh_new()
     @ccall libssh.ssh_new()::ssh_session
 end
 
+"""
+    ssh_options_copy(src, dest)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaead8cef1f39e785139bc510852ce1dff).
+"""
 function ssh_options_copy(src, dest)
     @ccall libssh.ssh_options_copy(src::ssh_session, dest::Ptr{ssh_session})::Cint
 end
 
+"""
+    ssh_options_getopt(session, argcptr, argv)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga93f7f7159893f3ce62c9b178724eff75).
+"""
 function ssh_options_getopt(session, argcptr, argv)
     @ccall libssh.ssh_options_getopt(session::ssh_session, argcptr::Ptr{Cint}, argv::Ptr{Ptr{Cchar}})::Cint
 end
 
+"""
+    ssh_options_parse_config(session, filename)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga82371e723260c7572ea061edecc2e9f1).
+"""
 function ssh_options_parse_config(session, filename)
     @ccall libssh.ssh_options_parse_config(session::ssh_session, filename::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_options_set(session, type, value)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga7a801b85800baa3f4e16f5b47db0a73d).
+"""
 function ssh_options_set(session, type, value)
     @ccall libssh.ssh_options_set(session::ssh_session, type::ssh_options_e, value::Ptr{Cvoid})::Cint
 end
 
+"""
+    ssh_options_get(session, type, value)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaaa9d400920cad4d6e4a0fb09ff8c7b01).
+"""
 function ssh_options_get(session, type, value)
     @ccall libssh.ssh_options_get(session::ssh_session, type::ssh_options_e, value::Ptr{Ptr{Cchar}})::Cint
 end
 
+"""
+    ssh_options_get_port(session, port_target)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga90e81d919eb2c6d8adc22bc162662e4b).
+"""
 function ssh_options_get_port(session, port_target)
     @ccall libssh.ssh_options_get_port(session::ssh_session, port_target::Ptr{Cuint})::Cint
 end
 
+"""
+    ssh_pcap_file_close(pcap)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga9a1826e1f905d7575c1ca272f67c574e).
+"""
 function ssh_pcap_file_close(pcap)
     @ccall libssh.ssh_pcap_file_close(pcap::ssh_pcap_file)::Cint
 end
 
+"""
+    ssh_pcap_file_free(pcap)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga2e2289e002bba832dd4568f8ff25f92c).
+"""
 function ssh_pcap_file_free(pcap)
     @ccall libssh.ssh_pcap_file_free(pcap::ssh_pcap_file)::Cvoid
 end
 
+"""
+    ssh_pcap_file_new()
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga84bce2270ce58125175111cb3fc139a7).
+"""
 function ssh_pcap_file_new()
     @ccall libssh.ssh_pcap_file_new()::ssh_pcap_file
 end
 
+"""
+    ssh_pcap_file_open(pcap, filename)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gad1db24b2fd0237af37b1c2a519c1afa0).
+"""
 function ssh_pcap_file_open(pcap, filename)
     @ccall libssh.ssh_pcap_file_open(pcap::ssh_pcap_file, filename::Ptr{Cchar})::Cint
 end
@@ -858,262 +1531,587 @@ function ssh_key_new()
     @ccall libssh.ssh_key_new()::ssh_key
 end
 
+"""
+    ssh_key_type(key)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga9cb4a857f8e510f80cfc38e46c476490).
+"""
 function ssh_key_type(key)
     @ccall libssh.ssh_key_type(key::ssh_key)::ssh_keytypes_e
 end
 
+"""
+    ssh_key_type_to_char(type)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga302919f046a4af504e5a2a9924b031c1).
+"""
 function ssh_key_type_to_char(type)
     @ccall libssh.ssh_key_type_to_char(type::ssh_keytypes_e)::Ptr{Cchar}
 end
 
+"""
+    ssh_key_type_from_name(name)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga44584f2316c6ccd40e9939454335d8bc).
+"""
 function ssh_key_type_from_name(name)
     @ccall libssh.ssh_key_type_from_name(name::Ptr{Cchar})::ssh_keytypes_e
 end
 
+"""
+    ssh_key_is_public(k)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga9bc688b5cbc400320ac44896eba21924).
+"""
 function ssh_key_is_public(k)
     @ccall libssh.ssh_key_is_public(k::ssh_key)::Cint
 end
 
+"""
+    ssh_key_is_private(k)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga09de68aba0a7c4e31d8ba7df43b637c5).
+"""
 function ssh_key_is_private(k)
     @ccall libssh.ssh_key_is_private(k::ssh_key)::Cint
 end
 
+"""
+    ssh_key_cmp(k1, k2, what)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga4dc33945294c2bbd671365a9d3db8e2f).
+"""
 function ssh_key_cmp(k1, k2, what)
     @ccall libssh.ssh_key_cmp(k1::ssh_key, k2::ssh_key, what::ssh_keycmp_e)::Cint
 end
 
+"""
+    ssh_key_dup(key)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gae0944d085d1a63c73b7eaf78924ddca8).
+"""
 function ssh_key_dup(key)
     @ccall libssh.ssh_key_dup(key::ssh_key)::ssh_key
 end
 
+"""
+    ssh_pki_generate(type, parameter, pkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gae038fa1b34f9427c7ba84082a1a20bad).
+"""
 function ssh_pki_generate(type, parameter, pkey)
     @ccall libssh.ssh_pki_generate(type::ssh_keytypes_e, parameter::Cint, pkey::Ptr{ssh_key})::Cint
 end
 
+"""
+    ssh_pki_import_privkey_base64(b64_key, passphrase, auth_fn, auth_data, pkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga5f2a2ca4b9b711d1c1af8020dfbd4a53).
+"""
 function ssh_pki_import_privkey_base64(b64_key, passphrase, auth_fn, auth_data, pkey)
     @ccall libssh.ssh_pki_import_privkey_base64(b64_key::Ptr{Cchar}, passphrase::Ptr{Cchar}, auth_fn::ssh_auth_callback, auth_data::Ptr{Cvoid}, pkey::Ptr{ssh_key})::Cint
 end
 
+"""
+    ssh_pki_export_privkey_base64(privkey, passphrase, auth_fn, auth_data, b64_key)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga320970245fa4e3ab873888b581e13378).
+"""
 function ssh_pki_export_privkey_base64(privkey, passphrase, auth_fn, auth_data, b64_key)
     @ccall libssh.ssh_pki_export_privkey_base64(privkey::ssh_key, passphrase::Ptr{Cchar}, auth_fn::ssh_auth_callback, auth_data::Ptr{Cvoid}, b64_key::Ptr{Ptr{Cchar}})::Cint
 end
 
+"""
+    ssh_pki_import_privkey_file(filename, passphrase, auth_fn, auth_data, pkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga1c8f84137606b1585006302499100ee0).
+"""
 function ssh_pki_import_privkey_file(filename, passphrase, auth_fn, auth_data, pkey)
     @ccall libssh.ssh_pki_import_privkey_file(filename::Ptr{Cchar}, passphrase::Ptr{Cchar}, auth_fn::ssh_auth_callback, auth_data::Ptr{Cvoid}, pkey::Ptr{ssh_key})::Cint
 end
 
+"""
+    ssh_pki_export_privkey_file(privkey, passphrase, auth_fn, auth_data, filename)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga3b294c44e2280c935cb0b82ede5c42ee).
+"""
 function ssh_pki_export_privkey_file(privkey, passphrase, auth_fn, auth_data, filename)
     @ccall libssh.ssh_pki_export_privkey_file(privkey::ssh_key, passphrase::Ptr{Cchar}, auth_fn::ssh_auth_callback, auth_data::Ptr{Cvoid}, filename::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_pki_copy_cert_to_privkey(cert_key, privkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga33273331262e5261709779df95d4083e).
+"""
 function ssh_pki_copy_cert_to_privkey(cert_key, privkey)
     @ccall libssh.ssh_pki_copy_cert_to_privkey(cert_key::ssh_key, privkey::ssh_key)::Cint
 end
 
+"""
+    ssh_pki_import_pubkey_base64(b64_key, type, pkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gac8d7d3fa88b93d8b059b6b5b2f457913).
+"""
 function ssh_pki_import_pubkey_base64(b64_key, type, pkey)
     @ccall libssh.ssh_pki_import_pubkey_base64(b64_key::Ptr{Cchar}, type::ssh_keytypes_e, pkey::Ptr{ssh_key})::Cint
 end
 
+"""
+    ssh_pki_import_pubkey_file(filename, pkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gaffb08168b870fb9e86cc7649c8987eb0).
+"""
 function ssh_pki_import_pubkey_file(filename, pkey)
     @ccall libssh.ssh_pki_import_pubkey_file(filename::Ptr{Cchar}, pkey::Ptr{ssh_key})::Cint
 end
 
+"""
+    ssh_pki_import_cert_base64(b64_cert, type, pkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga78c1f26eac4345a56749b4e086d9fa28).
+"""
 function ssh_pki_import_cert_base64(b64_cert, type, pkey)
     @ccall libssh.ssh_pki_import_cert_base64(b64_cert::Ptr{Cchar}, type::ssh_keytypes_e, pkey::Ptr{ssh_key})::Cint
 end
 
+"""
+    ssh_pki_import_cert_file(filename, pkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga95cb20de349b935e9d997327674d7065).
+"""
 function ssh_pki_import_cert_file(filename, pkey)
     @ccall libssh.ssh_pki_import_cert_file(filename::Ptr{Cchar}, pkey::Ptr{ssh_key})::Cint
 end
 
+"""
+    ssh_pki_export_privkey_to_pubkey(privkey, pkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga5777bc537da6a447b2a9aa9eceff9877).
+"""
 function ssh_pki_export_privkey_to_pubkey(privkey, pkey)
     @ccall libssh.ssh_pki_export_privkey_to_pubkey(privkey::ssh_key, pkey::Ptr{ssh_key})::Cint
 end
 
+"""
+    ssh_pki_export_pubkey_base64(key, b64_key)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga2caa40cbd9620e9f7e3e7ab654b256c5).
+"""
 function ssh_pki_export_pubkey_base64(key, b64_key)
     @ccall libssh.ssh_pki_export_pubkey_base64(key::ssh_key, b64_key::Ptr{Ptr{Cchar}})::Cint
 end
 
+"""
+    ssh_pki_export_pubkey_file(key, filename)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga576cb3a5c7f40a0e20a88b14a023613d).
+"""
 function ssh_pki_export_pubkey_file(key, filename)
     @ccall libssh.ssh_pki_export_pubkey_file(key::ssh_key, filename::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_pki_key_ecdsa_name(key)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gaf9ba4d3e3cd2a8b61fabe33b5b7e59c2).
+"""
 function ssh_pki_key_ecdsa_name(key)
     @ccall libssh.ssh_pki_key_ecdsa_name(key::ssh_key)::Ptr{Cchar}
 end
 
+"""
+    ssh_get_fingerprint_hash(type, hash, len)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga775072dc331a11b575957fe23fdd311b).
+"""
 function ssh_get_fingerprint_hash(type, hash, len)
     @ccall libssh.ssh_get_fingerprint_hash(type::ssh_publickey_hash_type, hash::Ptr{Cuchar}, len::Csize_t)::Ptr{Cchar}
 end
 
+"""
+    ssh_print_hash(type, hash, len)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga93e85883ddac5198ed590e36eef4dc3b).
+"""
 function ssh_print_hash(type, hash, len)
     @ccall libssh.ssh_print_hash(type::ssh_publickey_hash_type, hash::Ptr{Cuchar}, len::Csize_t)::Cvoid
 end
 
+"""
+    ssh_send_ignore(session, data)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gab8827415fd19cf6cb64e7fc83c09e423).
+"""
 function ssh_send_ignore(session, data)
     @ccall libssh.ssh_send_ignore(session::ssh_session, data::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_send_debug(session, message, always_display)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga5ffa2201152e29cc680c4b8e4a3f4fdf).
+"""
 function ssh_send_debug(session, message, always_display)
     @ccall libssh.ssh_send_debug(session::ssh_session, message::Ptr{Cchar}, always_display::Cint)::Cint
 end
 
+"""
+    ssh_gssapi_set_creds(session, creds)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga56def15a8017f9e1748263a9160eafb9).
+"""
 function ssh_gssapi_set_creds(session, creds)
     @ccall libssh.ssh_gssapi_set_creds(session::ssh_session, creds::ssh_gssapi_creds)::Cvoid
 end
 
+"""
+    ssh_select(channels, outchannels, maxfd, readfds, timeout)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga86cbf041bced56d18a2a5248c46cecb4).
+"""
 function ssh_select(channels, outchannels, maxfd, readfds, timeout)
     @ccall libssh.ssh_select(channels::Ptr{ssh_channel}, outchannels::Ptr{ssh_channel}, maxfd::socket_t, readfds::Ptr{fd_set}, timeout::Ptr{Cvoid})::Cint
 end
 
+"""
+    ssh_service_request(session, service)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga933eaa4065b3536242c2237a6095329e).
+"""
 function ssh_service_request(session, service)
     @ccall libssh.ssh_service_request(session::ssh_session, service::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_set_agent_channel(session, channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga5cfc7675941d8f82f6c9d08fb020f40e).
+"""
 function ssh_set_agent_channel(session, channel)
     @ccall libssh.ssh_set_agent_channel(session::ssh_session, channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_set_agent_socket(session, fd)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga925a9b6033c304eb6dfb426541f84184).
+"""
 function ssh_set_agent_socket(session, fd)
     @ccall libssh.ssh_set_agent_socket(session::ssh_session, fd::socket_t)::Cint
 end
 
+"""
+    ssh_set_blocking(session, blocking)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga2a29cff08855611be84d050e5bec73bc).
+"""
 function ssh_set_blocking(session, blocking)
     @ccall libssh.ssh_set_blocking(session::ssh_session, blocking::Cint)::Cvoid
 end
 
+"""
+    ssh_set_counters(session, scounter, rcounter)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga84d4ac53ac8582b70da9b63739df61ad).
+"""
 function ssh_set_counters(session, scounter, rcounter)
     @ccall libssh.ssh_set_counters(session::ssh_session, scounter::ssh_counter, rcounter::ssh_counter)::Cvoid
 end
 
+"""
+    ssh_set_fd_except(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga06453278350fd9e940c5c1b0d5225f19).
+"""
 function ssh_set_fd_except(session)
     @ccall libssh.ssh_set_fd_except(session::ssh_session)::Cvoid
 end
 
+"""
+    ssh_set_fd_toread(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga0e05c91c6f475eabc8d221914d25a425).
+"""
 function ssh_set_fd_toread(session)
     @ccall libssh.ssh_set_fd_toread(session::ssh_session)::Cvoid
 end
 
+"""
+    ssh_set_fd_towrite(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga3f1b3c59662464eec3649d3d72a40543).
+"""
 function ssh_set_fd_towrite(session)
     @ccall libssh.ssh_set_fd_towrite(session::ssh_session)::Cvoid
 end
 
+"""
+    ssh_silent_disconnect(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gae1bd16255ba373325adf76307d0c8c42).
+"""
 function ssh_silent_disconnect(session)
     @ccall libssh.ssh_silent_disconnect(session::ssh_session)::Cvoid
 end
 
+"""
+    ssh_set_pcap_file(session, pcapfile)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga8de98b5de1e7e3b516f904d25ef431be).
+"""
 function ssh_set_pcap_file(session, pcapfile)
     @ccall libssh.ssh_set_pcap_file(session::ssh_session, pcapfile::ssh_pcap_file)::Cint
 end
 
+"""
+    ssh_userauth_none(session, username)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga58e7c265236edbc97a2f117d3f23b4dd).
+"""
 function ssh_userauth_none(session, username)
     @ccall libssh.ssh_userauth_none(session::ssh_session, username::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_userauth_list(session, username)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga35d44897a44b4bb3b7c01108c1812a37).
+"""
 function ssh_userauth_list(session, username)
     @ccall libssh.ssh_userauth_list(session::ssh_session, username::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_userauth_try_publickey(session, username, pubkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga592f673c4d417a6a46cd4876ac8287aa).
+"""
 function ssh_userauth_try_publickey(session, username, pubkey)
     @ccall libssh.ssh_userauth_try_publickey(session::ssh_session, username::Ptr{Cchar}, pubkey::ssh_key)::Cint
 end
 
+"""
+    ssh_userauth_publickey(session, username, privkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#gaa38c4f3194ef36720da7eddb0aa99e23).
+"""
 function ssh_userauth_publickey(session, username, privkey)
     @ccall libssh.ssh_userauth_publickey(session::ssh_session, username::Ptr{Cchar}, privkey::ssh_key)::Cint
 end
 
+"""
+    ssh_userauth_agent(session, username)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga7d84f3f89f65455b80b10e2643d80719).
+"""
 function ssh_userauth_agent(session, username)
     @ccall libssh.ssh_userauth_agent(session::ssh_session, username::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_userauth_publickey_auto_get_current_identity(session, value)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#gade79dc6d1cb59c097a6b17a6767c391a).
+"""
 function ssh_userauth_publickey_auto_get_current_identity(session, value)
     @ccall libssh.ssh_userauth_publickey_auto_get_current_identity(session::ssh_session, value::Ptr{Ptr{Cchar}})::Cint
 end
 
+"""
+    ssh_userauth_publickey_auto(session, username, passphrase)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga53e6771b250c061463ed98b6e5b6e0af).
+"""
 function ssh_userauth_publickey_auto(session, username, passphrase)
     @ccall libssh.ssh_userauth_publickey_auto(session::ssh_session, username::Ptr{Cchar}, passphrase::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_userauth_password(session, username, password)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga50c0c150f8c4703e7ee49b3e3e3ca215).
+"""
 function ssh_userauth_password(session, username, password)
     @ccall libssh.ssh_userauth_password(session::ssh_session, username::Ptr{Cchar}, password::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_userauth_kbdint(session, user, submethods)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga6b3b1c2a045286d9476b0252791a07d2).
+"""
 function ssh_userauth_kbdint(session, user, submethods)
     @ccall libssh.ssh_userauth_kbdint(session::ssh_session, user::Ptr{Cchar}, submethods::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_userauth_kbdint_getinstruction(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#gaa757fbdbd4f95261bbbbc12b1ec33078).
+"""
 function ssh_userauth_kbdint_getinstruction(session)
     @ccall libssh.ssh_userauth_kbdint_getinstruction(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_userauth_kbdint_getname(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#gaf920b6f8ed1e3c53cc2a683230098657).
+"""
 function ssh_userauth_kbdint_getname(session)
     @ccall libssh.ssh_userauth_kbdint_getname(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_userauth_kbdint_getnprompts(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#gacb996ff4979670db009a71a90172ece9).
+"""
 function ssh_userauth_kbdint_getnprompts(session)
     @ccall libssh.ssh_userauth_kbdint_getnprompts(session::ssh_session)::Cint
 end
 
+"""
+    ssh_userauth_kbdint_getprompt(session, i, echo)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga4e7466c30852a3339003af7046fab396).
+"""
 function ssh_userauth_kbdint_getprompt(session, i, echo)
     @ccall libssh.ssh_userauth_kbdint_getprompt(session::ssh_session, i::Cuint, echo::Ptr{Cchar})::Ptr{Cchar}
 end
 
+"""
+    ssh_userauth_kbdint_getnanswers(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga3a98024f73a8bba6afed0b21de513bcd).
+"""
 function ssh_userauth_kbdint_getnanswers(session)
     @ccall libssh.ssh_userauth_kbdint_getnanswers(session::ssh_session)::Cint
 end
 
+"""
+    ssh_userauth_kbdint_getanswer(session, i)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga66f1634f9f839b42cd600753f032c7da).
+"""
 function ssh_userauth_kbdint_getanswer(session, i)
     @ccall libssh.ssh_userauth_kbdint_getanswer(session::ssh_session, i::Cuint)::Ptr{Cchar}
 end
 
+"""
+    ssh_userauth_kbdint_setanswer(session, i, answer)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga75e44b1f27059a00080f80fac0107a20).
+"""
 function ssh_userauth_kbdint_setanswer(session, i, answer)
     @ccall libssh.ssh_userauth_kbdint_setanswer(session::ssh_session, i::Cuint, answer::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_userauth_gssapi(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga2758b0e86a848fe0d1d3d263d2a34d28).
+"""
 function ssh_userauth_gssapi(session)
     @ccall libssh.ssh_userauth_gssapi(session::ssh_session)::Cint
 end
 
+"""
+    ssh_version(req_version)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__misc.html#gaeda71ed34a62fa332762f25b14dac6eb).
+"""
 function ssh_version(req_version)
     @ccall libssh.ssh_version(req_version::Cint)::Ptr{Cchar}
 end
 
+"""
+    ssh_string_burn(str)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#ga0c6315a827f4df697a06e9b3b7dec6aa).
+"""
 function ssh_string_burn(str)
     @ccall libssh.ssh_string_burn(str::ssh_string)::Cvoid
 end
 
+"""
+    ssh_string_copy(str)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#ga7c5b645c4fe7eb0f64ced653248ae2d5).
+"""
 function ssh_string_copy(str)
     @ccall libssh.ssh_string_copy(str::ssh_string)::ssh_string
 end
 
+"""
+    ssh_string_data(str)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#gad0f2ae7a61a0caf75f1934067abde04a).
+"""
 function ssh_string_data(str)
     @ccall libssh.ssh_string_data(str::ssh_string)::Ptr{Cvoid}
 end
 
+"""
+    ssh_string_fill(str, data, len)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#ga0c20941997ea045cfdba72634bcf8bcc).
+"""
 function ssh_string_fill(str, data, len)
     @ccall libssh.ssh_string_fill(str::ssh_string, data::Ptr{Cvoid}, len::Csize_t)::Cint
 end
 
+"""
+    ssh_string_from_char(what)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#ga6bc953e439e43f05e168b6763211bcee).
+"""
 function ssh_string_from_char(what)
     @ccall libssh.ssh_string_from_char(what::Ptr{Cchar})::ssh_string
 end
 
+"""
+    ssh_string_len(str)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#ga83ca7cda99e8a0b231d2ae85c1de3339).
+"""
 function ssh_string_len(str)
     @ccall libssh.ssh_string_len(str::ssh_string)::Csize_t
 end
 
+"""
+    ssh_string_new(size)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#gadeb4071bcc356331123862a4a351d182).
+"""
 function ssh_string_new(size)
     @ccall libssh.ssh_string_new(size::Csize_t)::ssh_string
 end
 
+"""
+    ssh_string_get_char(str)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#ga68fb6898708458f2a7c5945f6697fcbf).
+"""
 function ssh_string_get_char(str)
     @ccall libssh.ssh_string_get_char(str::ssh_string)::Ptr{Cchar}
 end
 
+"""
+    ssh_string_to_char(str)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#ga4f0a88044621f37d651c9a5d9df420cd).
+"""
 function ssh_string_to_char(str)
     @ccall libssh.ssh_string_to_char(str::ssh_string)::Ptr{Cchar}
 end
 
+"""
+    ssh_getpass(prompt, buf, len, echo, verify)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__misc.html#gad6effc9fcc3529ae5d7301fb096aa71c).
+"""
 function ssh_getpass(prompt, buf, len, echo, verify)
     @ccall libssh.ssh_getpass(prompt::Ptr{Cchar}, buf::Ptr{Cchar}, len::Csize_t, echo::Cint, verify::Cint)::Cint
 end
@@ -1121,94 +2119,209 @@ end
 # typedef int ( * ssh_event_callback ) ( socket_t fd , int revents , void * userdata )
 const ssh_event_callback = Ptr{Cvoid}
 
+"""
+    ssh_event_new()
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__poll.html#ga406895f99b6b486c4b65536e5399ff96).
+"""
 function ssh_event_new()
     @ccall libssh.ssh_event_new()::ssh_event
 end
 
+"""
+    ssh_event_add_fd(event, fd, events, cb, userdata)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__poll.html#ga41d63ffe950a48e8b2c513877e0cd6b4).
+"""
 function ssh_event_add_fd(event, fd, events, cb, userdata)
     @ccall libssh.ssh_event_add_fd(event::ssh_event, fd::socket_t, events::Cshort, cb::ssh_event_callback, userdata::Ptr{Cvoid})::Cint
 end
 
+"""
+    ssh_event_add_session(event, session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__poll.html#ga51af38de4cc3adbd5566ec1f1b91983d).
+"""
 function ssh_event_add_session(event, session)
     @ccall libssh.ssh_event_add_session(event::ssh_event, session::ssh_session)::Cint
 end
 
+"""
+    ssh_event_add_connector(event, connector)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__poll.html#gae1f53a6ce420a41ae06ffb962f477f99).
+"""
 function ssh_event_add_connector(event, connector)
     @ccall libssh.ssh_event_add_connector(event::ssh_event, connector::ssh_connector)::Cint
 end
 
+"""
+    ssh_event_dopoll(event, timeout)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__poll.html#gada90c0ca6919271708ba1ea0352632cb).
+"""
 function ssh_event_dopoll(event, timeout)
     @ccall libssh.ssh_event_dopoll(event::ssh_event, timeout::Cint)::Cint
 end
 
+"""
+    ssh_event_remove_fd(event, fd)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__poll.html#gaf2cdca09a3a2024ed9bb4f134c8ae368).
+"""
 function ssh_event_remove_fd(event, fd)
     @ccall libssh.ssh_event_remove_fd(event::ssh_event, fd::socket_t)::Cint
 end
 
+"""
+    ssh_event_remove_session(event, session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__poll.html#gaab8dec05a0afb49392c63b2ec158ac3d).
+"""
 function ssh_event_remove_session(event, session)
     @ccall libssh.ssh_event_remove_session(event::ssh_event, session::ssh_session)::Cint
 end
 
+"""
+    ssh_event_remove_connector(event, connector)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__poll.html#gae120116df5a1da09ee9edd42e6a63397).
+"""
 function ssh_event_remove_connector(event, connector)
     @ccall libssh.ssh_event_remove_connector(event::ssh_event, connector::ssh_connector)::Cint
 end
 
+"""
+    ssh_event_free(event)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__poll.html#ga101388903c74d53ed550574b587449cd).
+"""
 function ssh_event_free(event)
     @ccall libssh.ssh_event_free(event::ssh_event)::Cvoid
 end
 
+"""
+    ssh_get_clientbanner(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga1e76a1fc03d1d16fb59b0bd5e9978aa0).
+"""
 function ssh_get_clientbanner(session)
     @ccall libssh.ssh_get_clientbanner(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_get_serverbanner(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gac89bcc9f438d031a32260926b04ea6b9).
+"""
 function ssh_get_serverbanner(session)
     @ccall libssh.ssh_get_serverbanner(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_get_kex_algo(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga3870bf9e03a2ac470ab202424224b15e).
+"""
 function ssh_get_kex_algo(session)
     @ccall libssh.ssh_get_kex_algo(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_get_cipher_in(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga81d8525f77c58d93ed0d320c38e62009).
+"""
 function ssh_get_cipher_in(session)
     @ccall libssh.ssh_get_cipher_in(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_get_cipher_out(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga0a0b33868aec5337ba1d9aee8fee26d1).
+"""
 function ssh_get_cipher_out(session)
     @ccall libssh.ssh_get_cipher_out(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_get_hmac_in(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga293196b7f1b1653ff970b8206671def9).
+"""
 function ssh_get_hmac_in(session)
     @ccall libssh.ssh_get_hmac_in(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_get_hmac_out(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga2fc37631d6a350d9c31dcb336b98a836).
+"""
 function ssh_get_hmac_out(session)
     @ccall libssh.ssh_get_hmac_out(session::ssh_session)::Ptr{Cchar}
 end
 
+"""
+    ssh_buffer_new()
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__buffer.html#ga9dac97ee54473a32f97992b68c7d7a21).
+"""
 function ssh_buffer_new()
     @ccall libssh.ssh_buffer_new()::ssh_buffer
 end
 
+"""
+    ssh_buffer_reinit(buffer)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__buffer.html#ga5b971c9dd08262d5da8da4980a833622).
+"""
 function ssh_buffer_reinit(buffer)
     @ccall libssh.ssh_buffer_reinit(buffer::ssh_buffer)::Cint
 end
 
+"""
+    ssh_buffer_add_data(buffer, data, len)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__buffer.html#ga22a919e3f95a4e7da623f282c9b0a86c).
+"""
 function ssh_buffer_add_data(buffer, data, len)
     @ccall libssh.ssh_buffer_add_data(buffer::ssh_buffer, data::Ptr{Cvoid}, len::UInt32)::Cint
 end
 
+"""
+    ssh_buffer_get_data(buffer, data, requestedlen)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__buffer.html#ga264fccd461a7a4810ed2854d38c13593).
+"""
 function ssh_buffer_get_data(buffer, data, requestedlen)
     @ccall libssh.ssh_buffer_get_data(buffer::ssh_buffer, data::Ptr{Cvoid}, requestedlen::UInt32)::UInt32
 end
 
+"""
+    ssh_buffer_get(buffer)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__buffer.html#ga324bc10df53af78b5336632e20f49da3).
+"""
 function ssh_buffer_get(buffer)
     @ccall libssh.ssh_buffer_get(buffer::ssh_buffer)::Ptr{Cvoid}
 end
 
+"""
+    ssh_buffer_get_len(buffer)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__buffer.html#gace2482788db059349c087549119dabb4).
+"""
 function ssh_buffer_get_len(buffer)
     @ccall libssh.ssh_buffer_get_len(buffer::ssh_buffer)::UInt32
 end
 
+"""
+    ssh_session_set_disconnect_message(session, message)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gab9d24979888b0b0ad217fb2071fe7f9a).
+"""
 function ssh_session_set_disconnect_message(session, message)
     @ccall libssh.ssh_session_set_disconnect_message(session::ssh_session, message::Ptr{Cchar})::Cint
 end
@@ -1221,254 +2334,569 @@ mutable struct ssh_public_key_struct end
 
 const ssh_public_key = Ptr{ssh_public_key_struct}
 
+"""
+    ssh_auth_list(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga45af3e96b41cb6aff8982295ad089ea2).
+"""
 function ssh_auth_list(session)
     @ccall libssh.ssh_auth_list(session::ssh_session)::Cint
 end
 
+"""
+    ssh_userauth_offer_pubkey(session, username, type, publickey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga78b485bf5c4e68ddfbc25f17de8b6521).
+"""
 function ssh_userauth_offer_pubkey(session, username, type, publickey)
     @ccall libssh.ssh_userauth_offer_pubkey(session::ssh_session, username::Ptr{Cchar}, type::Cint, publickey::ssh_string)::Cint
 end
 
+"""
+    ssh_userauth_pubkey(session, username, publickey, privatekey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga18f0c63c75b9af6c28c032e93628a7c5).
+"""
 function ssh_userauth_pubkey(session, username, publickey, privatekey)
     @ccall libssh.ssh_userauth_pubkey(session::ssh_session, username::Ptr{Cchar}, publickey::ssh_string, privatekey::ssh_private_key)::Cint
 end
 
+"""
+    ssh_userauth_agent_pubkey(session, username, publickey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga5cc49db459d6e27c8645a20bbd0f5f88).
+"""
 function ssh_userauth_agent_pubkey(session, username, publickey)
     @ccall libssh.ssh_userauth_agent_pubkey(session::ssh_session, username::Ptr{Cchar}, publickey::ssh_public_key)::Cint
 end
 
+"""
+    ssh_userauth_autopubkey(session, passphrase)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#gad07655f2c742ce68271422197cf2acda).
+"""
 function ssh_userauth_autopubkey(session, passphrase)
     @ccall libssh.ssh_userauth_autopubkey(session::ssh_session, passphrase::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_userauth_privatekey_file(session, username, filename, passphrase)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga60e80b5020e6182da7790c1f0cb220c1).
+"""
 function ssh_userauth_privatekey_file(session, username, filename, passphrase)
     @ccall libssh.ssh_userauth_privatekey_file(session::ssh_session, username::Ptr{Cchar}, filename::Ptr{Cchar}, passphrase::Ptr{Cchar})::Cint
 end
 
+"""
+    buffer_free(buffer)
+
+Deprecated function.
+"""
 function buffer_free(buffer)
     @ccall libssh.buffer_free(buffer::ssh_buffer)::Cvoid
 end
 
+"""
+    buffer_get(buffer)
+
+Deprecated function.
+"""
 function buffer_get(buffer)
     @ccall libssh.buffer_get(buffer::ssh_buffer)::Ptr{Cvoid}
 end
 
+"""
+    buffer_get_len(buffer)
+
+Deprecated function.
+"""
 function buffer_get_len(buffer)
     @ccall libssh.buffer_get_len(buffer::ssh_buffer)::UInt32
 end
 
+"""
+    buffer_new()
+
+Deprecated function.
+"""
 function buffer_new()
     @ccall libssh.buffer_new()::ssh_buffer
 end
 
+"""
+    channel_accept_x11(channel, timeout_ms)
+
+Deprecated function.
+"""
 function channel_accept_x11(channel, timeout_ms)
     @ccall libssh.channel_accept_x11(channel::ssh_channel, timeout_ms::Cint)::ssh_channel
 end
 
+"""
+    channel_change_pty_size(channel, cols, rows)
+
+Deprecated function.
+"""
 function channel_change_pty_size(channel, cols, rows)
     @ccall libssh.channel_change_pty_size(channel::ssh_channel, cols::Cint, rows::Cint)::Cint
 end
 
+"""
+    channel_forward_accept(session, timeout_ms)
+
+Deprecated function.
+"""
 function channel_forward_accept(session, timeout_ms)
     @ccall libssh.channel_forward_accept(session::ssh_session, timeout_ms::Cint)::ssh_channel
 end
 
+"""
+    channel_close(channel)
+
+Deprecated function.
+"""
 function channel_close(channel)
     @ccall libssh.channel_close(channel::ssh_channel)::Cint
 end
 
+"""
+    channel_forward_cancel(session, address, port)
+
+Deprecated function.
+"""
 function channel_forward_cancel(session, address, port)
     @ccall libssh.channel_forward_cancel(session::ssh_session, address::Ptr{Cchar}, port::Cint)::Cint
 end
 
+"""
+    channel_forward_listen(session, address, port, bound_port)
+
+Deprecated function.
+"""
 function channel_forward_listen(session, address, port, bound_port)
     @ccall libssh.channel_forward_listen(session::ssh_session, address::Ptr{Cchar}, port::Cint, bound_port::Ptr{Cint})::Cint
 end
 
+"""
+    channel_free(channel)
+
+Deprecated function.
+"""
 function channel_free(channel)
     @ccall libssh.channel_free(channel::ssh_channel)::Cvoid
 end
 
+"""
+    channel_get_exit_status(channel)
+
+Deprecated function.
+"""
 function channel_get_exit_status(channel)
     @ccall libssh.channel_get_exit_status(channel::ssh_channel)::Cint
 end
 
+"""
+    channel_get_session(channel)
+
+Deprecated function.
+"""
 function channel_get_session(channel)
     @ccall libssh.channel_get_session(channel::ssh_channel)::ssh_session
 end
 
+"""
+    channel_is_closed(channel)
+
+Deprecated function.
+"""
 function channel_is_closed(channel)
     @ccall libssh.channel_is_closed(channel::ssh_channel)::Cint
 end
 
+"""
+    channel_is_eof(channel)
+
+Deprecated function.
+"""
 function channel_is_eof(channel)
     @ccall libssh.channel_is_eof(channel::ssh_channel)::Cint
 end
 
+"""
+    channel_is_open(channel)
+
+Deprecated function.
+"""
 function channel_is_open(channel)
     @ccall libssh.channel_is_open(channel::ssh_channel)::Cint
 end
 
+"""
+    channel_new(session)
+
+Deprecated function.
+"""
 function channel_new(session)
     @ccall libssh.channel_new(session::ssh_session)::ssh_channel
 end
 
+"""
+    channel_open_forward(channel, remotehost, remoteport, sourcehost, localport)
+
+Deprecated function.
+"""
 function channel_open_forward(channel, remotehost, remoteport, sourcehost, localport)
     @ccall libssh.channel_open_forward(channel::ssh_channel, remotehost::Ptr{Cchar}, remoteport::Cint, sourcehost::Ptr{Cchar}, localport::Cint)::Cint
 end
 
+"""
+    channel_open_session(channel)
+
+Deprecated function.
+"""
 function channel_open_session(channel)
     @ccall libssh.channel_open_session(channel::ssh_channel)::Cint
 end
 
+"""
+    channel_poll(channel, is_stderr)
+
+Deprecated function.
+"""
 function channel_poll(channel, is_stderr)
     @ccall libssh.channel_poll(channel::ssh_channel, is_stderr::Cint)::Cint
 end
 
+"""
+    channel_read(channel, dest, count, is_stderr)
+
+Deprecated function.
+"""
 function channel_read(channel, dest, count, is_stderr)
     @ccall libssh.channel_read(channel::ssh_channel, dest::Ptr{Cvoid}, count::UInt32, is_stderr::Cint)::Cint
 end
 
+"""
+    channel_read_buffer(channel, buffer, count, is_stderr)
+
+Deprecated function.
+"""
 function channel_read_buffer(channel, buffer, count, is_stderr)
     @ccall libssh.channel_read_buffer(channel::ssh_channel, buffer::ssh_buffer, count::UInt32, is_stderr::Cint)::Cint
 end
 
+"""
+    channel_read_nonblocking(channel, dest, count, is_stderr)
+
+Deprecated function.
+"""
 function channel_read_nonblocking(channel, dest, count, is_stderr)
     @ccall libssh.channel_read_nonblocking(channel::ssh_channel, dest::Ptr{Cvoid}, count::UInt32, is_stderr::Cint)::Cint
 end
 
+"""
+    channel_request_env(channel, name, value)
+
+Deprecated function.
+"""
 function channel_request_env(channel, name, value)
     @ccall libssh.channel_request_env(channel::ssh_channel, name::Ptr{Cchar}, value::Ptr{Cchar})::Cint
 end
 
+"""
+    channel_request_exec(channel, cmd)
+
+Deprecated function.
+"""
 function channel_request_exec(channel, cmd)
     @ccall libssh.channel_request_exec(channel::ssh_channel, cmd::Ptr{Cchar})::Cint
 end
 
+"""
+    channel_request_pty(channel)
+
+Deprecated function.
+"""
 function channel_request_pty(channel)
     @ccall libssh.channel_request_pty(channel::ssh_channel)::Cint
 end
 
+"""
+    channel_request_pty_size(channel, term, cols, rows)
+
+Deprecated function.
+"""
 function channel_request_pty_size(channel, term, cols, rows)
     @ccall libssh.channel_request_pty_size(channel::ssh_channel, term::Ptr{Cchar}, cols::Cint, rows::Cint)::Cint
 end
 
+"""
+    channel_request_shell(channel)
+
+Deprecated function.
+"""
 function channel_request_shell(channel)
     @ccall libssh.channel_request_shell(channel::ssh_channel)::Cint
 end
 
+"""
+    channel_request_send_signal(channel, signum)
+
+Deprecated function.
+"""
 function channel_request_send_signal(channel, signum)
     @ccall libssh.channel_request_send_signal(channel::ssh_channel, signum::Ptr{Cchar})::Cint
 end
 
+"""
+    channel_request_sftp(channel)
+
+Deprecated function.
+"""
 function channel_request_sftp(channel)
     @ccall libssh.channel_request_sftp(channel::ssh_channel)::Cint
 end
 
+"""
+    channel_request_subsystem(channel, subsystem)
+
+Deprecated function.
+"""
 function channel_request_subsystem(channel, subsystem)
     @ccall libssh.channel_request_subsystem(channel::ssh_channel, subsystem::Ptr{Cchar})::Cint
 end
 
+"""
+    channel_request_x11(channel, single_connection, protocol, cookie, screen_number)
+
+Deprecated function.
+"""
 function channel_request_x11(channel, single_connection, protocol, cookie, screen_number)
     @ccall libssh.channel_request_x11(channel::ssh_channel, single_connection::Cint, protocol::Ptr{Cchar}, cookie::Ptr{Cchar}, screen_number::Cint)::Cint
 end
 
+"""
+    channel_send_eof(channel)
+
+Deprecated function.
+"""
 function channel_send_eof(channel)
     @ccall libssh.channel_send_eof(channel::ssh_channel)::Cint
 end
 
+"""
+    channel_select(readchans, writechans, exceptchans, timeout)
+
+Deprecated function.
+"""
 function channel_select(readchans, writechans, exceptchans, timeout)
     @ccall libssh.channel_select(readchans::Ptr{ssh_channel}, writechans::Ptr{ssh_channel}, exceptchans::Ptr{ssh_channel}, timeout::Ptr{Cvoid})::Cint
 end
 
+"""
+    channel_set_blocking(channel, blocking)
+
+Deprecated function.
+"""
 function channel_set_blocking(channel, blocking)
     @ccall libssh.channel_set_blocking(channel::ssh_channel, blocking::Cint)::Cvoid
 end
 
+"""
+    channel_write(channel, data, len)
+
+Deprecated function.
+"""
 function channel_write(channel, data, len)
     @ccall libssh.channel_write(channel::ssh_channel, data::Ptr{Cvoid}, len::UInt32)::Cint
 end
 
+"""
+    privatekey_free(prv)
+
+Deprecated function.
+"""
 function privatekey_free(prv)
     @ccall libssh.privatekey_free(prv::ssh_private_key)::Cvoid
 end
 
+"""
+    privatekey_from_file(session, filename, type, passphrase)
+
+Deprecated function.
+"""
 function privatekey_from_file(session, filename, type, passphrase)
     @ccall libssh.privatekey_from_file(session::ssh_session, filename::Ptr{Cchar}, type::Cint, passphrase::Ptr{Cchar})::ssh_private_key
 end
 
+"""
+    publickey_free(key)
+
+Deprecated function.
+"""
 function publickey_free(key)
     @ccall libssh.publickey_free(key::ssh_public_key)::Cvoid
 end
 
+"""
+    ssh_publickey_to_file(session, file, pubkey, type)
+
+Deprecated function.
+"""
 function ssh_publickey_to_file(session, file, pubkey, type)
     @ccall libssh.ssh_publickey_to_file(session::ssh_session, file::Ptr{Cchar}, pubkey::ssh_string, type::Cint)::Cint
 end
 
+"""
+    publickey_from_file(session, filename, type)
+
+Deprecated function.
+"""
 function publickey_from_file(session, filename, type)
     @ccall libssh.publickey_from_file(session::ssh_session, filename::Ptr{Cchar}, type::Ptr{Cint})::ssh_string
 end
 
+"""
+    publickey_from_privatekey(prv)
+
+Deprecated function.
+"""
 function publickey_from_privatekey(prv)
     @ccall libssh.publickey_from_privatekey(prv::ssh_private_key)::ssh_public_key
 end
 
+"""
+    publickey_to_string(key)
+
+Deprecated function.
+"""
 function publickey_to_string(key)
     @ccall libssh.publickey_to_string(key::ssh_public_key)::ssh_string
 end
 
+"""
+    ssh_try_publickey_from_file(session, keyfile, publickey, type)
+
+Deprecated function.
+"""
 function ssh_try_publickey_from_file(session, keyfile, publickey, type)
     @ccall libssh.ssh_try_publickey_from_file(session::ssh_session, keyfile::Ptr{Cchar}, publickey::Ptr{ssh_string}, type::Ptr{Cint})::Cint
 end
 
+"""
+    ssh_privatekey_type(privatekey)
+
+Deprecated function.
+"""
 function ssh_privatekey_type(privatekey)
     @ccall libssh.ssh_privatekey_type(privatekey::ssh_private_key)::ssh_keytypes_e
 end
 
+"""
+    ssh_get_pubkey(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gafe1d691887a2b6d8a6b9a5270a972355).
+"""
 function ssh_get_pubkey(session)
     @ccall libssh.ssh_get_pubkey(session::ssh_session)::ssh_string
 end
 
+"""
+    ssh_message_retrieve(session, packettype)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga9720d314a136676df9eea7a17069b246).
+"""
 function ssh_message_retrieve(session, packettype)
     @ccall libssh.ssh_message_retrieve(session::ssh_session, packettype::UInt32)::ssh_message
 end
 
+"""
+    ssh_message_auth_publickey(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaa5e80a5891527b2207dcb53efece1203).
+"""
 function ssh_message_auth_publickey(msg)
     @ccall libssh.ssh_message_auth_publickey(msg::ssh_message)::ssh_public_key
 end
 
+"""
+    string_burn(str)
+
+Deprecated function.
+"""
 function string_burn(str)
     @ccall libssh.string_burn(str::ssh_string)::Cvoid
 end
 
+"""
+    string_copy(str)
+
+Deprecated function.
+"""
 function string_copy(str)
     @ccall libssh.string_copy(str::ssh_string)::ssh_string
 end
 
+"""
+    string_data(str)
+
+Deprecated function.
+"""
 function string_data(str)
     @ccall libssh.string_data(str::ssh_string)::Ptr{Cvoid}
 end
 
+"""
+    string_fill(str, data, len)
+
+Deprecated function.
+"""
 function string_fill(str, data, len)
     @ccall libssh.string_fill(str::ssh_string, data::Ptr{Cvoid}, len::Csize_t)::Cint
 end
 
+"""
+    string_free(str)
+
+Deprecated function.
+"""
 function string_free(str)
     @ccall libssh.string_free(str::ssh_string)::Cvoid
 end
 
+"""
+    string_from_char(what)
+
+Deprecated function.
+"""
 function string_from_char(what)
     @ccall libssh.string_from_char(what::Ptr{Cchar})::ssh_string
 end
 
+"""
+    string_len(str)
+
+Deprecated function.
+"""
 function string_len(str)
     @ccall libssh.string_len(str::ssh_string)::Csize_t
 end
 
+"""
+    string_new(size)
+
+Deprecated function.
+"""
 function string_new(size)
     @ccall libssh.string_new(size::Csize_t)::ssh_string
 end
 
+"""
+    string_to_char(str)
+
+Deprecated function.
+"""
 function string_to_char(str)
     @ccall libssh.string_to_char(str::ssh_string)::Ptr{Cchar}
 end
@@ -2428,78 +3856,173 @@ function sftp_server_version(sftp)
     @ccall libssh.sftp_server_version(sftp::sftp_session)::Cint
 end
 
+"""
+    sftp_get_client_message(sftp)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gaf69bf7238de4e804c2fd17f6a8a11001).
+"""
 function sftp_get_client_message(sftp)
     @ccall libssh.sftp_get_client_message(sftp::sftp_session)::sftp_client_message
 end
 
+"""
+    sftp_client_message_free(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga35e7a9f643b445c5941efb7b65e9f13f).
+"""
 function sftp_client_message_free(msg)
     @ccall libssh.sftp_client_message_free(msg::sftp_client_message)::Cvoid
 end
 
+"""
+    sftp_client_message_get_type(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gafbfe4b6f784243b63dce579d3c3a04e5).
+"""
 function sftp_client_message_get_type(msg)
     @ccall libssh.sftp_client_message_get_type(msg::sftp_client_message)::UInt8
 end
 
+"""
+    sftp_client_message_get_filename(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga4a7c93588770e75442deeb2530147496).
+"""
 function sftp_client_message_get_filename(msg)
     @ccall libssh.sftp_client_message_get_filename(msg::sftp_client_message)::Ptr{Cchar}
 end
 
+"""
+    sftp_client_message_set_filename(msg, newname)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gac898adba0ee7fc96a1ef7a9c8f1f82a7).
+"""
 function sftp_client_message_set_filename(msg, newname)
     @ccall libssh.sftp_client_message_set_filename(msg::sftp_client_message, newname::Ptr{Cchar})::Cvoid
 end
 
+"""
+    sftp_client_message_get_data(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga1f923468c2c86b68959a88c8fc71962b).
+"""
 function sftp_client_message_get_data(msg)
     @ccall libssh.sftp_client_message_get_data(msg::sftp_client_message)::Ptr{Cchar}
 end
 
+"""
+    sftp_client_message_get_flags(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga165fd110b672e4fd9006619db7bbbc38).
+"""
 function sftp_client_message_get_flags(msg)
     @ccall libssh.sftp_client_message_get_flags(msg::sftp_client_message)::UInt32
 end
 
+"""
+    sftp_client_message_get_submessage(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga9b8c46cd885b4763f5fb195c7b26b65d).
+"""
 function sftp_client_message_get_submessage(msg)
     @ccall libssh.sftp_client_message_get_submessage(msg::sftp_client_message)::Ptr{Cchar}
 end
 
+"""
+    sftp_send_client_message(sftp, msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gaa4db10d155d6cc2e26e97e6731e111cc).
+"""
 function sftp_send_client_message(sftp, msg)
     @ccall libssh.sftp_send_client_message(sftp::sftp_session, msg::sftp_client_message)::Cint
 end
 
+"""
+    sftp_reply_name(msg, name, attr)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gaab10ad4962d89adf6f1ee7a2ae643476).
+"""
 function sftp_reply_name(msg, name, attr)
     @ccall libssh.sftp_reply_name(msg::sftp_client_message, name::Ptr{Cchar}, attr::sftp_attributes)::Cint
 end
 
+"""
+    sftp_reply_handle(msg, handle)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gae4d374a63448952463acae5f26982aef).
+"""
 function sftp_reply_handle(msg, handle)
     @ccall libssh.sftp_reply_handle(msg::sftp_client_message, handle::ssh_string)::Cint
 end
 
+"""
+    sftp_handle_alloc(sftp, info)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga9ecd7c670de9ceb8d02593974cc563f6).
+"""
 function sftp_handle_alloc(sftp, info)
     @ccall libssh.sftp_handle_alloc(sftp::sftp_session, info::Ptr{Cvoid})::ssh_string
 end
 
+"""
+    sftp_reply_attr(msg, attr)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gaa93891afd1d6050d543fbbb8ad878396).
+"""
 function sftp_reply_attr(msg, attr)
     @ccall libssh.sftp_reply_attr(msg::sftp_client_message, attr::sftp_attributes)::Cint
 end
 
+"""
+    sftp_handle(sftp, handle)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga1d4cbf49abd0d54fe6ea8f7ee1529b0a).
+"""
 function sftp_handle(sftp, handle)
     @ccall libssh.sftp_handle(sftp::sftp_session, handle::ssh_string)::Ptr{Cvoid}
 end
 
+"""
+    sftp_reply_status(msg, status, message)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gaa9758584b26f520381ad119199b2813e).
+"""
 function sftp_reply_status(msg, status, message)
     @ccall libssh.sftp_reply_status(msg::sftp_client_message, status::UInt32, message::Ptr{Cchar})::Cint
 end
 
+"""
+    sftp_reply_names_add(msg, file, longname, attr)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga429f8854340d04d41da523150cffb9ae).
+"""
 function sftp_reply_names_add(msg, file, longname, attr)
     @ccall libssh.sftp_reply_names_add(msg::sftp_client_message, file::Ptr{Cchar}, longname::Ptr{Cchar}, attr::sftp_attributes)::Cint
 end
 
+"""
+    sftp_reply_names(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gab41b4bb5a38a3afe6d8b8ee52ce7f294).
+"""
 function sftp_reply_names(msg)
     @ccall libssh.sftp_reply_names(msg::sftp_client_message)::Cint
 end
 
+"""
+    sftp_reply_data(msg, data, len)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga135d42b765dda7781367b2c446441580).
+"""
 function sftp_reply_data(msg, data, len)
     @ccall libssh.sftp_reply_data(msg::sftp_client_message, data::Ptr{Cvoid}, len::Cint)::Cint
 end
 
+"""
+    sftp_handle_remove(sftp, handle)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gace56dc327f841198048f89cf34382239).
+"""
 function sftp_handle_remove(sftp, handle)
     @ccall libssh.sftp_handle_remove(sftp::sftp_session, handle::Ptr{Cvoid})::Cvoid
 end
@@ -2531,6 +4054,9 @@ end
 
 mutable struct ssh_bind_struct end
 
+"""
+[Server struct](https://api.libssh.org/stable/group__libssh__server.html)
+"""
 const ssh_bind = Ptr{ssh_bind_struct}
 
 # typedef void ( * ssh_bind_incoming_connection_callback ) ( ssh_bind sshbind , void * userdata )
@@ -2555,6 +4081,9 @@ mutable struct ssh_bind_callbacks_struct
     incoming_connection::ssh_bind_incoming_connection_callback
 end
 
+"""
+Callbacks for a [`ssh_bind`](@ref) ([upstream documentation](https://api.libssh.org/stable/group__libssh__server.html)).
+"""
 const ssh_bind_callbacks = Ptr{ssh_bind_callbacks_struct}
 
 """
@@ -2569,10 +4098,20 @@ function ssh_bind_new()
     @ccall libssh.ssh_bind_new()::ssh_bind
 end
 
+"""
+    ssh_bind_options_set(sshbind, type, value)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga8fd4253643bc9cf33d6f41d170e83fff).
+"""
 function ssh_bind_options_set(sshbind, type, value)
     @ccall libssh.ssh_bind_options_set(sshbind::ssh_bind, type::ssh_bind_options_e, value::Ptr{Cvoid})::Cint
 end
 
+"""
+    ssh_bind_options_parse_config(sshbind, filename)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gae66c1ffe0e35b70cf88f5b8b05ed1bd6).
+"""
 function ssh_bind_options_parse_config(sshbind, filename)
     @ccall libssh.ssh_bind_options_parse_config(sshbind::ssh_bind, filename::Ptr{Cchar})::Cint
 end
@@ -2703,6 +4242,11 @@ function ssh_bind_accept_fd(ssh_bind_o, session, fd)
     @ccall libssh.ssh_bind_accept_fd(ssh_bind_o::ssh_bind, session::ssh_session, fd::socket_t)::Cint
 end
 
+"""
+    ssh_gssapi_get_creds(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaf576655a2f2217407c1a25ff046c68b8).
+"""
 function ssh_gssapi_get_creds(session)
     @ccall libssh.ssh_gssapi_get_creds(session::ssh_session)::ssh_gssapi_creds
 end
@@ -2857,6 +4401,11 @@ function ssh_message_auth_pubkey(msg)
     @ccall libssh.ssh_message_auth_pubkey(msg::ssh_message)::ssh_key
 end
 
+"""
+    ssh_message_auth_kbdint_is_response(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga5132c82c49de985e9e10f51f393e52a4).
+"""
 function ssh_message_auth_kbdint_is_response(msg)
     @ccall libssh.ssh_message_auth_kbdint_is_response(msg::ssh_message)::Cint
 end
@@ -2873,146 +4422,326 @@ function ssh_message_auth_publickey_state(msg)
     @ccall libssh.ssh_message_auth_publickey_state(msg::ssh_message)::ssh_publickey_state_e
 end
 
+"""
+    ssh_message_auth_reply_success(msg, partial)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gac875c1c55b0def057cb46e4bbc1a61a7).
+"""
 function ssh_message_auth_reply_success(msg, partial)
     @ccall libssh.ssh_message_auth_reply_success(msg::ssh_message, partial::Cint)::Cint
 end
 
+"""
+    ssh_message_auth_reply_pk_ok(msg, algo, pubkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga2ce88786e073b36991fc96c8f6b58c09).
+"""
 function ssh_message_auth_reply_pk_ok(msg, algo, pubkey)
     @ccall libssh.ssh_message_auth_reply_pk_ok(msg::ssh_message, algo::ssh_string, pubkey::ssh_string)::Cint
 end
 
+"""
+    ssh_message_auth_reply_pk_ok_simple(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga98321ead09cda145a08603d481a62a9e).
+"""
 function ssh_message_auth_reply_pk_ok_simple(msg)
     @ccall libssh.ssh_message_auth_reply_pk_ok_simple(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_auth_set_methods(msg, methods)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gab993157d98e5b4b3399d216c9243effc).
+"""
 function ssh_message_auth_set_methods(msg, methods)
     @ccall libssh.ssh_message_auth_set_methods(msg::ssh_message, methods::Cint)::Cint
 end
 
+"""
+    ssh_message_auth_interactive_request(msg, name, instruction, num_prompts, prompts, echo)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaacbc31ce3b39ac93061164feec822c77).
+"""
 function ssh_message_auth_interactive_request(msg, name, instruction, num_prompts, prompts, echo)
     @ccall libssh.ssh_message_auth_interactive_request(msg::ssh_message, name::Ptr{Cchar}, instruction::Ptr{Cchar}, num_prompts::Cuint, prompts::Ptr{Ptr{Cchar}}, echo::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_message_service_reply_success(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gad0bd348b84300149f017f5abbaff38f5).
+"""
 function ssh_message_service_reply_success(msg)
     @ccall libssh.ssh_message_service_reply_success(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_service_service(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gad7038491b4f0c2bd046801330d25046c).
+"""
 function ssh_message_service_service(msg)
     @ccall libssh.ssh_message_service_service(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_global_request_reply_success(msg, bound_port)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga9c09466e299aff371b2fba996054a6a2).
+"""
 function ssh_message_global_request_reply_success(msg, bound_port)
     @ccall libssh.ssh_message_global_request_reply_success(msg::ssh_message, bound_port::UInt16)::Cint
 end
 
+"""
+    ssh_set_message_callback(session, ssh_bind_message_callback, data)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaccad877b20fca2d4a7eda5bebc1f5af1).
+"""
 function ssh_set_message_callback(session, ssh_bind_message_callback, data)
     @ccall libssh.ssh_set_message_callback(session::ssh_session, ssh_bind_message_callback::Ptr{Cvoid}, data::Ptr{Cvoid})::Cvoid
 end
 
+"""
+    ssh_execute_message_callbacks(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gac5c9893e27dad15af4bd2dd8abc4760c).
+"""
 function ssh_execute_message_callbacks(session)
     @ccall libssh.ssh_execute_message_callbacks(session::ssh_session)::Cint
 end
 
+"""
+    ssh_message_channel_request_open_originator(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga42c9bc711d8c7eac69974ad72096eab8).
+"""
 function ssh_message_channel_request_open_originator(msg)
     @ccall libssh.ssh_message_channel_request_open_originator(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_open_originator_port(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaf24d0f28aca42d1b26e5a08fe4abc9fd).
+"""
 function ssh_message_channel_request_open_originator_port(msg)
     @ccall libssh.ssh_message_channel_request_open_originator_port(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_open_destination(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga69cfb6fccfe3baa5b2628787da411cf6).
+"""
 function ssh_message_channel_request_open_destination(msg)
     @ccall libssh.ssh_message_channel_request_open_destination(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_open_destination_port(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaf8b7350f50918f37f331efe2099ffa8b).
+"""
 function ssh_message_channel_request_open_destination_port(msg)
     @ccall libssh.ssh_message_channel_request_open_destination_port(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_channel(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga813cf45163230416cd179cd1dadc4118).
+"""
 function ssh_message_channel_request_channel(msg)
     @ccall libssh.ssh_message_channel_request_channel(msg::ssh_message)::ssh_channel
 end
 
+"""
+    ssh_message_channel_request_pty_term(msg)
+
+Deprecated function.
+"""
 function ssh_message_channel_request_pty_term(msg)
     @ccall libssh.ssh_message_channel_request_pty_term(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_pty_width(msg)
+
+Deprecated function.
+"""
 function ssh_message_channel_request_pty_width(msg)
     @ccall libssh.ssh_message_channel_request_pty_width(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_pty_height(msg)
+
+Deprecated function.
+"""
 function ssh_message_channel_request_pty_height(msg)
     @ccall libssh.ssh_message_channel_request_pty_height(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_pty_pxwidth(msg)
+
+Deprecated function.
+"""
 function ssh_message_channel_request_pty_pxwidth(msg)
     @ccall libssh.ssh_message_channel_request_pty_pxwidth(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_pty_pxheight(msg)
+
+Deprecated function.
+"""
 function ssh_message_channel_request_pty_pxheight(msg)
     @ccall libssh.ssh_message_channel_request_pty_pxheight(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_env_name(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga49ca22102c7c2ccd88bd98c48766e268).
+"""
 function ssh_message_channel_request_env_name(msg)
     @ccall libssh.ssh_message_channel_request_env_name(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_env_value(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga2a43c4dcaa08419d83910c7cd63c0f5a).
+"""
 function ssh_message_channel_request_env_value(msg)
     @ccall libssh.ssh_message_channel_request_env_value(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_command(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gafc4194f5b79d931c84814fb41c667baa).
+"""
 function ssh_message_channel_request_command(msg)
     @ccall libssh.ssh_message_channel_request_command(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_subsystem(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga31792e72c21e82f7a5e6bcada2d73f70).
+"""
 function ssh_message_channel_request_subsystem(msg)
     @ccall libssh.ssh_message_channel_request_subsystem(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_x11_single_connection(msg)
+
+Deprecated function.
+"""
 function ssh_message_channel_request_x11_single_connection(msg)
     @ccall libssh.ssh_message_channel_request_x11_single_connection(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_x11_auth_protocol(msg)
+
+Deprecated function.
+"""
 function ssh_message_channel_request_x11_auth_protocol(msg)
     @ccall libssh.ssh_message_channel_request_x11_auth_protocol(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_x11_auth_cookie(msg)
+
+Deprecated function.
+"""
 function ssh_message_channel_request_x11_auth_cookie(msg)
     @ccall libssh.ssh_message_channel_request_x11_auth_cookie(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_x11_screen_number(msg)
+
+Deprecated function.
+"""
 function ssh_message_channel_request_x11_screen_number(msg)
     @ccall libssh.ssh_message_channel_request_x11_screen_number(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_global_request_address(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gae2d5ebdc9308046313f597ffa53946a5).
+"""
 function ssh_message_global_request_address(msg)
     @ccall libssh.ssh_message_global_request_address(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_global_request_port(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga2df15146bcf25bbf9e97bdd4b1728e40).
+"""
 function ssh_message_global_request_port(msg)
     @ccall libssh.ssh_message_global_request_port(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_channel_open_reverse_forward(channel, remotehost, remoteport, sourcehost, localport)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga9f66bf86a741ba17fe097dcb0594260e).
+"""
 function ssh_channel_open_reverse_forward(channel, remotehost, remoteport, sourcehost, localport)
     @ccall libssh.ssh_channel_open_reverse_forward(channel::ssh_channel, remotehost::Ptr{Cchar}, remoteport::Cint, sourcehost::Ptr{Cchar}, localport::Cint)::Cint
 end
 
+"""
+    ssh_channel_request_send_exit_status(channel, exit_status)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gadc35e456e45b92c1e1da0fff8b6dfec9).
+"""
 function ssh_channel_request_send_exit_status(channel, exit_status)
     @ccall libssh.ssh_channel_request_send_exit_status(channel::ssh_channel, exit_status::Cint)::Cint
 end
 
+"""
+    ssh_channel_request_send_exit_signal(channel, signum, core, errmsg, lang)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga7f780f1b471ec2bddd5895bdc43b28da).
+"""
 function ssh_channel_request_send_exit_signal(channel, signum, core, errmsg, lang)
     @ccall libssh.ssh_channel_request_send_exit_signal(channel::ssh_channel, signum::Ptr{Cchar}, core::Cint, errmsg::Ptr{Cchar}, lang::Ptr{Cchar})::Cint
 end
 
+"""
+    ssh_send_keepalive(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaa1ac2e1b7fdc23fd7e253aa9f0a47e7a).
+"""
 function ssh_send_keepalive(session)
     @ccall libssh.ssh_send_keepalive(session::ssh_session)::Cint
 end
 
+"""
+    ssh_accept(session)
+
+Deprecated function.
+"""
 function ssh_accept(session)
     @ccall libssh.ssh_accept(session::ssh_session)::Cint
 end
 
+"""
+    channel_write_stderr(channel, data, len)
+
+Deprecated function.
+"""
 function channel_write_stderr(channel, data, len)
     @ccall libssh.channel_write_stderr(channel::ssh_channel, data::Ptr{Cvoid}, len::UInt32)::Cint
 end
@@ -3682,6 +5411,11 @@ const ssh_thread_callback = Ptr{Cvoid}
 # typedef unsigned long ( * ssh_thread_id_callback ) ( void )
 const ssh_thread_id_callback = Ptr{Cvoid}
 
+"""
+    ssh_threads_callbacks_struct
+
+Threads callbacks. See [`ssh_threads_set_callbacks`](@ref)
+"""
 mutable struct ssh_threads_callbacks_struct
     type::Ptr{Cchar}
     mutex_init::ssh_thread_callback
@@ -3793,18 +5527,39 @@ const SSH_COMP = 4
 
 const SSH_LANG = 5
 
+"""
+Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
+"""
 const SSH_AUTH_METHOD_UNKNOWN = Cuint(0)
 
+"""
+Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
+"""
 const SSH_AUTH_METHOD_NONE = Cuint(1)
 
+"""
+Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
+"""
 const SSH_AUTH_METHOD_PASSWORD = Cuint(2)
 
+"""
+Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
+"""
 const SSH_AUTH_METHOD_PUBLICKEY = Cuint(4)
 
+"""
+Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
+"""
 const SSH_AUTH_METHOD_HOSTBASED = Cuint(8)
 
+"""
+Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
+"""
 const SSH_AUTH_METHOD_INTERACTIVE = Cuint(16)
 
+"""
+Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
+"""
 const SSH_AUTH_METHOD_GSSAPI_MIC = Cuint(32)
 
 const SSH_CLOSED = 1
@@ -3819,10 +5574,19 @@ const MD5_DIGEST_LEN = 16
 
 const SSH_ADDRSTRLEN = 46
 
+"""
+Value returned on success.
+"""
 const SSH_OK = 0
 
+"""
+Value returned if an error occurred.
+"""
 const SSH_ERROR = -1
 
+"""
+Value returned when the function is in non-blocking mode and must be called again.
+"""
 const SSH_AGAIN = -2
 
 const SSH_EOF = -127
@@ -4068,6 +5832,9 @@ const SSH_SOCKET_CONNECTED_TIMEOUT = 3
 
 const SSH_PACKET_USED = 1
 
+"""
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__callbacks.html#ga4766917128a12b646a8aee7ebc019f8c).
+"""
 const SSH_PACKET_NOT_USED = 2
 
 """

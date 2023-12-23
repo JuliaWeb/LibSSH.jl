@@ -66,7 +66,7 @@ function _callback_wrapper(key::Symbol, args...)
     return c_result
 end
 
-"""
+#=
 Helper macro to either generate a cfunction for a callback. Strictly only
 for internal use. It must be called in a constructor with a `self` object
 referencing the callback struct.
@@ -78,7 +78,7 @@ Depends on these fields being present in the containing struct:
 - jl_result_types
 - jl_result_defaults
 - jl_result_to_ctype
-"""
+=#
 function _gencb(key, user_callback,
                 jl_return_type, jl_default, jl_result_to_ctype,
                 c_return_type, c_arg_types)
