@@ -1,4 +1,5 @@
 [deps]
 Clang = "40e3b903-d033-50b4-a0cc-940c62c95e31"
 MD5 = "6ac74813-4b46-53a4-afec-0b5dc9d7885c"
+XML = "72c71f33-b9b6-44de-8c94-c961784809e2"
 libssh_jll = "a8d4f100-aa25-5708-be18-96e0805c2c9d"
