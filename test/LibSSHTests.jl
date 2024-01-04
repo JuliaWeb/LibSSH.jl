@@ -54,109 +54,119 @@ end
 @testset "Server" begin
     hostkey = joinpath(@__DIR__, "ed25519_test_key")
 
-    # We shouldn't be able to create a server without some kind of key
-    @test_throws ArgumentError ssh.Server(2222)
-    # We also shouldn't be able to pass multiple keys
-    @test_throws ArgumentError ssh.Server(2222; hostkey=hostkey,
-                                          key=pki.generate(pki.KeyType_rsa))
+    @testset "Initialization and finalizing" begin
+        # We shouldn't be able to create a server without some kind of key
+        @test_throws ArgumentError ssh.Server(2222)
+        # We also shouldn't be able to pass multiple keys
+        @test_throws ArgumentError ssh.Server(2222; hostkey=hostkey,
+                                              key=pki.generate(pki.KeyType_rsa))
 
-    server = ssh.Server(2222; hostkey)
+        server = ssh.Server(2222; hostkey)
 
-    # Unsetting a ssh_bind option shouldn't be allowed
-    @test_throws ArgumentError server.port = nothing
+        # Unsetting a ssh_bind option shouldn't be allowed
+        @test_throws ArgumentError server.port = nothing
 
-    # Basic listener test
-    t = errormonitor(@async ssh.listen(_ -> nothing, server))
-    ssh.wait_for_listener(server)
+        # Basic listener test
+        t = errormonitor(@async ssh.listen(_ -> nothing, server))
+        ssh.wait_for_listener(server)
 
-    @test istaskstarted(t)
-    close(server)
-    wait(t)
-    @test istaskdone(t)
+        @test istaskstarted(t)
+        close(server)
+        wait(t)
+        @test istaskdone(t)
 
-    finalize(server)
-    @test server.bind_ptr == nothing
+        finalize(server)
+        @test server.bind_ptr == nothing
+    end
 
+    # Helper function to set up an `ssh` command
     ssh_cmd(cmd::Cmd) = ignorestatus(`sshpass -p bar ssh -o NoHostAuthenticationForLocalhost=yes $cmd`)
 
-    # More complicated test, where we run a command and check the output
-    demo_server = DemoServer(2222; password="bar") do
-        cmd_out = IOBuffer()
-        cmd = ssh_cmd(`-p 2222 foo@localhost whoami`)
-        cmd_result = run(pipeline(cmd; stdout=cmd_out))
+    @testset "Password authentication and session channels" begin
+        # More complicated test, where we run a command and check the output
+        demo_server = DemoServer(2222; password="bar") do
+            cmd_out = IOBuffer()
+            cmd = ssh_cmd(`-p 2222 foo@localhost whoami`)
+            cmd_result = run(pipeline(cmd; stdout=cmd_out))
 
-        @test cmd_result.exitcode == 0
-        @test strip(String(take!(cmd_out))) == username()
-    end
+            @test cmd_result.exitcode == 0
+            @test strip(String(take!(cmd_out))) == username()
+        end
 
-    logs = demo_server.callback_log
+        logs = demo_server.callback_log
 
-    # Check that the authentication methods were called
-    @test logs[:auth_none] == [true]
-    @test logs[:auth_password] == [("foo", "bar")]
+        # Check that the authentication methods were called
+        @test logs[:auth_none] == [true]
+        @test logs[:auth_password] == [("foo", "bar")]
 
-    # And a channel was created
-    @test !isnothing(demo_server.sshchan)
+        # And a channel was created
+        @test !isnothing(demo_server.sshchan)
 
-    # Make sure that it can handle errors too
-    demo_server = DemoServer(2222; password="bar") do
-        cmd = ssh_cmd(`-p 2222 foo@localhost exit 42`)
-        cmd_result = run(pipeline(ignorestatus(cmd)))
-        @test cmd_result.exitcode == 42
-    end
-    # Test the dummy HTTP server we'll use later
-    http_server(9090) do
-        @test run(`curl localhost:9090`).exitcode == 0
-    end
-
-    # Test direct port forwarding
-    demo_server = DemoServer(2222; password="bar", log_verbosity=ssh.SSH_LOG_NOLOG) do
-        mktempdir() do tmpdir
-            tmpfile = joinpath(tmpdir, "foo")
-
-            # Start a client and wait for it
-            cmd = ssh_cmd(`-p 2222 -L 8080:localhost:9090 foo@localhost "touch $tmpfile; while [ -f $tmpfile ]; do sleep 0.1; done"`)
-            ssh_process = run(cmd; wait=false)
-            if timedwait(() -> isfile(tmpfile), 5) == :timed_out
-                error("Timeout waiting for sentinel file $tmpfile to be created")
-            end
-
-            # At this point the client will be listening on port 8080, so we make a
-            # request to trigger a forward request to the server. Note that the
-            # client only requests a port forward when it accepts a connection
-            # on the listening port, so we only need the HTTP server running
-            # while we're making the request.
-            http_server(9090) do
-                curl_process = run(ignorestatus(`curl localhost:8080`))
-                @test curl_process.exitcode == 0
-            end
-
-            # Afterwards we close the client and cleanup
-            rm(tmpfile)
-            wait(ssh_process)
+        # Make sure that it can handle errors too
+        DemoServer(2222; password="bar") do
+            cmd = ssh_cmd(`-p 2222 foo@localhost exit 42`)
+            cmd_result = run(pipeline(ignorestatus(cmd)))
+            @test cmd_result.exitcode == 42
         end
     end
 
-    @test demo_server.callback_log[:message_request] == [(ssh.RequestType_ChannelOpen, lib.SSH_CHANNEL_DIRECT_TCPIP)]
+    @testset "Direct port forwarding" begin
+        # Test the dummy HTTP server we'll use later
+        http_server(9090) do
+            @test run(`curl localhost:9090`).exitcode == 0
+        end
+
+        # Test direct port forwarding
+        demo_server = DemoServer(2222; password="bar", log_verbosity=ssh.SSH_LOG_NOLOG) do
+            mktempdir() do tmpdir
+                tmpfile = joinpath(tmpdir, "foo")
+
+                # Start a client and wait for it
+                cmd = ssh_cmd(`-p 2222 -L 8080:localhost:9090 foo@localhost "touch $tmpfile; while [ -f $tmpfile ]; do sleep 0.1; done"`)
+                ssh_process = run(cmd; wait=false)
+                if timedwait(() -> isfile(tmpfile), 5) == :timed_out
+                    error("Timeout waiting for sentinel file $tmpfile to be created")
+                end
+
+                # At this point the client will be listening on port 8080, so we make a
+                # request to trigger a forward request to the server. Note that the
+                # client only requests a port forward when it accepts a connection
+                # on the listening port, so we only need the HTTP server running
+                # while we're making the request.
+                http_server(9090) do
+                    curl_process = run(ignorestatus(`curl localhost:8080`))
+                    @test curl_process.exitcode == 0
+                end
+
+                # Afterwards we close the client and cleanup
+                rm(tmpfile)
+                wait(ssh_process)
+            end
+        end
+
+        @test demo_server.callback_log[:message_request] == [(ssh.RequestType_ChannelOpen, lib.SSH_CHANNEL_DIRECT_TCPIP)]
+    end
 end
 
 @testset "Session" begin
     session = ssh.Session("localhost"; log_verbosity=lib.SSH_LOG_NOLOG)
 
-    # Test initial settings
-    @test session.user == username()
-    @test session.port == 22
-    @test session.host == "localhost"
-    @test session.log_verbosity == lib.SSH_LOG_NOLOG
+    @testset "Setting options" begin
+        # Test initial settings
+        @test session.user == username()
+        @test session.port == 22
+        @test session.host == "localhost"
+        @test session.log_verbosity == lib.SSH_LOG_NOLOG
 
-    # Test explicitly setting options with getproperty()/setproperty!()
-    session.port = 10
-    @test session.port == 10
-    session.user = "foo"
-    @test session.user == "foo"
-    session.host = "quux"
-    @test session.host == "quux"
-    @test_throws ErrorException session.foo
+        # Test explicitly setting options with getproperty()/setproperty!()
+        session.port = 10
+        @test session.port == 10
+        session.user = "foo"
+        @test session.user == "foo"
+        session.host = "quux"
+        @test session.host == "quux"
+        @test_throws ErrorException session.foo
+    end
 
     @test !ssh.isconnected(session)
 
@@ -164,17 +174,19 @@ end
     finalize(session)
     @test session.ptr == nothing
 
-    # Test connecting to a server and doing password authentication
-    demo_server = DemoServer(2222; password="foo") do
-        session = ssh.Session("127.0.0.1", 2222; log_verbosity=lib.SSH_LOG_NOLOG)
-        ssh.connect(session)
+    @testset "Password authentication" begin
+        # Test connecting to a server and doing password authentication
+        DemoServer(2222; password="foo") do
+            session = ssh.Session("127.0.0.1", 2222; log_verbosity=lib.SSH_LOG_NOLOG)
+            ssh.connect(session)
 
-        @test ssh.isconnected(session)
-        ssh.userauth_list(session)
-        @test ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
+            @test ssh.isconnected(session)
+            ssh.userauth_list(session)
+            @test ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
 
-        ssh.disconnect(session)
-        close(session)
+            ssh.disconnect(session)
+            close(session)
+        end
     end
 end
 
@@ -239,51 +251,57 @@ end
     session = ssh.Session("localhost")
     @test_throws ArgumentError ssh.SshChannel(session)
 
-    # Test creating and closing channels
-    demo_server_with_session(2222) do session
-        # Create a channel
-        sshchan = ssh.SshChannel(session)
+    @testset "Creating/closing channels" begin
+        # Test creating and closing channels
+        demo_server_with_session(2222) do session
+            # Create a channel
+            sshchan = ssh.SshChannel(session)
 
-        # Create a non-owning channel and make sure that we can't close it
-        non_owning_sshchan = ssh.SshChannel(sshchan.ptr; own=false)
-        @test_throws ArgumentError close(non_owning_sshchan)
+            # Create a non-owning channel and make sure that we can't close it
+            non_owning_sshchan = ssh.SshChannel(sshchan.ptr; own=false)
+            @test_throws ArgumentError close(non_owning_sshchan)
 
-        close(sshchan)
-        @test isnothing(sshchan.ptr)
-        @test isempty(session.channels)
+            close(sshchan)
+            @test isnothing(sshchan.ptr)
+            @test isempty(session.channels)
+        end
     end
 
-    # Test executing commands
-    demo_server_with_session(2222) do session
-        ret, output = ssh.execute(session, "whoami")
-        @test ret == 0
-        @test strip(output) == username()
+    @testset "Executing commands" begin
+        # Test executing commands
+        demo_server_with_session(2222) do session
+            ret, output = ssh.execute(session, "whoami")
+            @test ret == 0
+            @test strip(output) == username()
+        end
+
+        # Check that we read stderr as well as stdout
+        demo_server_with_session(2222) do session
+            ret, output = ssh.execute(session, "thisdoesntexist")
+            @test ret == 127
+            @test !isempty(output)
+        end
     end
 
-    # Check that we read stderr as well as stdout
-    demo_server_with_session(2222) do session
-        ret, output = ssh.execute(session, "thisdoesntexist")
-        @test ret == 127
-        @test !isempty(output)
-    end
+    @testset "Direct port forwarding" begin
+        # Test port forwarding
+        demo_server_with_session(2222) do session
+            forwarder = ssh.Forwarder(session, 8080, "localhost", 9090)
+            close(forwarder)
+        end
 
-    # Test port forwarding
-    demo_server_with_session(2222) do session
-        forwarder = ssh.Forwarder(session, 8080, "localhost", 9090)
-        close(forwarder)
-    end
+        demo_server_with_session(2222) do session
+            ssh.Forwarder(session, 8080, "localhost", 9090) do forwarder
+                http_server(9090) do
+                    curl_proc = run(ignorestatus(`curl localhost:8080`); wait=false)
+                    try
+                        wait(curl_proc)
+                    finally
+                        kill(curl_proc)
+                    end
 
-    demo_server_with_session(2222) do session
-        ssh.Forwarder(session, 8080, "localhost", 9090) do forwarder
-            http_server(9090) do
-                curl_proc = run(ignorestatus(`curl localhost:8080`); wait=false)
-                try
-                    wait(curl_proc)
-                finally
-                    kill(curl_proc)
+                    @test curl_proc.exitcode == 0
                 end
-
-                @test curl_proc.exitcode == 0
             end
         end
     end
