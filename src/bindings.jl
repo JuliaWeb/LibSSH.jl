@@ -4894,6 +4894,44 @@ function ssh_get_log_callback()
     @ccall libssh.ssh_get_log_callback()::ssh_logging_callback
 end
 
+"""
+    message_auth_user(msg)::String
+
+Auto-generated wrapper around [`ssh_message_auth_user`](@ref).
+"""
+function message_auth_user(msg)::String
+    ret = ssh_message_auth_user(msg)
+    if ret == C_NULL
+        return nothing
+    else
+        return unsafe_string(Ptr{UInt8}(ret))
+    end
+end
+
+"""
+    message_auth_password(msg)::String
+
+Auto-generated wrapper around [`ssh_message_auth_password`](@ref).
+"""
+function message_auth_password(msg)::String
+    ret = ssh_message_auth_password(msg)
+    if ret == C_NULL
+        return nothing
+    else
+        return unsafe_string(Ptr{UInt8}(ret))
+    end
+end
+
+"""
+    message_auth_kbdint_is_response(msg)::Bool
+
+Auto-generated wrapper around [`ssh_message_auth_kbdint_is_response`](@ref).
+"""
+function message_auth_kbdint_is_response(msg)::Bool
+    ret = ssh_message_auth_kbdint_is_response(msg)
+    return ret == 1
+end
+
 # Skipping MacroDefinition: LIBSSH_API __attribute__ ( ( visibility ( "default" ) ) )
 
 # Skipping MacroDefinition: SSH_DEPRECATED __attribute__ ( ( deprecated ) )

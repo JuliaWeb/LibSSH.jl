@@ -1,13 +1,18 @@
 import libssh_jll
 
-using MD5
 import XML
+import MacroTools
+import MacroTools: @capture
 import Clang
-import Clang: LibClang, spelling
-using Clang.Generators
+import Clang.Generators: ExprNode, AbstractFunctionNodeType
 
 
 ctx_objects = Dict{Symbol, Any}()
+
+# These are lists of functions that we'll rewrite to return Julia types
+string_functions = [:ssh_message_auth_user, :ssh_message_auth_password]
+bool_functions = [:ssh_message_auth_kbdint_is_response]
+all_rewritable_functions = vcat(string_functions, bool_functions)
 
 """
 Helper function to generate documentation for symbols with missing docstrings.
@@ -47,6 +52,8 @@ function get_docs(node::ExprNode)
         url = "https://api.libssh.org/stable/$(anchorfile)#$(anchor)"
 
         String["[Upstream documentation]($url)."]
+    elseif Symbol("ssh_" * string(node.id)) in all_rewritable_functions
+        String["Auto-generated wrapper around [`ssh_$(node.id)`](@ref)."]
     else
         String[]
     end
@@ -81,25 +88,78 @@ function read_tags()
     return tags
 end
 
+function rewrite!(ctx)
+    dag = ctx.dag
+
+    for node_idx in eachindex(dag.nodes)
+        node = dag.nodes[node_idx]
+
+        for i in eachindex(node.exprs)
+            expr = node.exprs[i]
+
+            # Look for function expressions
+            if @capture(expr, function name_(args__) body_ end)
+                wrapper = nothing
+                ret_type = nothing
+
+                # Check if we can rewrite the function
+                if name in string_functions
+                    wrapper = quote
+                        if ret == C_NULL
+                            return nothing
+                        else
+                            return unsafe_string(Ptr{UInt8}(ret))
+                        end
+                    end
+                    ret_type = String
+                elseif name in bool_functions
+                    wrapper = :(return ret == 1)
+                    ret_type = Bool
+                end
+
+                if !isnothing(wrapper)
+                    wrapper_name = Symbol(chopprefix(string(name), "ssh_"))
+                    new_expr = quote
+                        function $wrapper_name($(args...))::$ret_type
+                            ret = $name($(args...))
+                            $wrapper
+                        end
+                    end
+
+                    wrapper_node = ExprNode(wrapper_name, node.type, Clang.CLCursor(Clang.getNullCursor()),
+                                            [MacroTools.prettify(new_expr)],
+                                            Int[])
+                    push!(dag.nodes, wrapper_node)
+                end
+            end
+        end
+    end
+end
+
 cd(@__DIR__) do
     # Load the doxygen tags
     ctx_objects[:tags] = read_tags()
 
     # Set the options
-    options = load_options(joinpath(@__DIR__, "generator.toml"))
+    options = Clang.load_options(joinpath(@__DIR__, "generator.toml"))
     options["general"]["callback_documentation"] = get_docs
     ctx_objects[:codegen_options] = options["codegen"]
 
     include_dir = normpath(libssh_jll.artifact_dir, "include")
     headers = [joinpath(include_dir, "libssh", name) for name in
                ["libssh.h", "libssh_version.h", "sftp.h", "server.h", "callbacks.h"]]
-    args = get_default_args()
+    args = Clang.get_default_args()
     push!(args, "-I$include_dir")
 
     # Generate the bindings
-    ctx = create_context(headers, args, options)
+    ctx = Clang.create_context(headers, args, options)
     ctx_objects[:dag] = ctx.dag
-    build!(ctx)
+    Clang.build!(ctx, Clang.BUILDSTAGE_NO_PRINTING)
+
+    # Rewrite expressions
+    rewrite!(ctx)
+
+    Clang.build!(ctx, Clang.BUILDSTAGE_PRINTING_ONLY)
 
     empty!(ctx_objects)
 
