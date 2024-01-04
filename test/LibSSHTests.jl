@@ -10,7 +10,7 @@ import ReTest: @testset, @test, @test_throws
 import LibSSH as ssh
 import LibSSH.PKI as pki
 import LibSSH: lib
-import LibSSH.Test as sshtest
+import LibSSH.Demo: DemoServer
 
 
 username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
@@ -80,7 +80,7 @@ end
     ssh_cmd(cmd::Cmd) = ignorestatus(`sshpass -p bar ssh -o NoHostAuthenticationForLocalhost=yes $cmd`)
 
     # More complicated test, where we run a command and check the output
-    test_server = sshtest.TestServer(2222; password="bar") do
+    demo_server = DemoServer(2222; password="bar") do
         cmd_out = IOBuffer()
         cmd = ssh_cmd(`-p 2222 foo@localhost whoami`)
         cmd_result = run(pipeline(cmd; stdout=cmd_out))
@@ -89,17 +89,17 @@ end
         @test strip(String(take!(cmd_out))) == username()
     end
 
-    logs = test_server.callback_log
+    logs = demo_server.callback_log
 
     # Check that the authentication methods were called
     @test logs[:auth_none] == [true]
     @test logs[:auth_password] == [("foo", "bar")]
 
     # And a channel was created
-    @test !isnothing(test_server.sshchan)
+    @test !isnothing(demo_server.sshchan)
 
     # Make sure that it can handle errors too
-    test_server = sshtest.TestServer(2222; password="bar") do
+    demo_server = DemoServer(2222; password="bar") do
         cmd = ssh_cmd(`-p 2222 foo@localhost exit 42`)
         cmd_result = run(pipeline(ignorestatus(cmd)))
         @test cmd_result.exitcode == 42
@@ -110,7 +110,7 @@ end
     end
 
     # Test direct port forwarding
-    test_server = sshtest.TestServer(2222; password="bar", log_verbosity=ssh.SSH_LOG_NOLOG) do
+    demo_server = DemoServer(2222; password="bar", log_verbosity=ssh.SSH_LOG_NOLOG) do
         mktempdir() do tmpdir
             tmpfile = joinpath(tmpdir, "foo")
 
@@ -137,7 +137,7 @@ end
         end
     end
 
-    @test test_server.callback_log[:message_request] == [(ssh.RequestType_ChannelOpen, lib.SSH_CHANNEL_DIRECT_TCPIP)]
+    @test demo_server.callback_log[:message_request] == [(ssh.RequestType_ChannelOpen, lib.SSH_CHANNEL_DIRECT_TCPIP)]
 end
 
 @testset "Session" begin
@@ -165,7 +165,7 @@ end
     @test session.ptr == nothing
 
     # Test connecting to a server and doing password authentication
-    test_server = sshtest.TestServer(2222; password="foo") do
+    demo_server = DemoServer(2222; password="foo") do
         session = ssh.Session("127.0.0.1", 2222; log_verbosity=lib.SSH_LOG_NOLOG)
         ssh.connect(session)
 
@@ -180,13 +180,13 @@ end
 
 # Helper function to start a TestServer and create a session connected to
 # it. Also supports timeouts.
-function test_server_with_session(f::Function, port, args...;
+function demo_server_with_session(f::Function, port, args...;
                                   timeout=10,
                                   kill_grace_period=3,
                                   password="foo",
                                   log_verbosity=lib.SSH_LOG_NOLOG,
                                   kwargs...)
-    test_server = sshtest.TestServer(port, args...; password, kwargs...) do
+    demo_server = DemoServer(port, args...; password, kwargs...) do
         # Create a session
         session = ssh.Session("127.0.0.1", port; log_verbosity)
         ssh.connect(session)
@@ -232,7 +232,7 @@ function test_server_with_session(f::Function, port, args...;
         end
     end
 
-    return test_server
+    return demo_server
 end
 
 @testset "SshChannel" begin
@@ -240,7 +240,7 @@ end
     @test_throws ArgumentError ssh.SshChannel(session)
 
     # Test creating and closing channels
-    test_server_with_session(2222) do session
+    demo_server_with_session(2222) do session
         # Create a channel
         sshchan = ssh.SshChannel(session)
 
@@ -254,26 +254,26 @@ end
     end
 
     # Test executing commands
-    test_server_with_session(2222) do session
+    demo_server_with_session(2222) do session
         ret, output = ssh.execute(session, "whoami")
         @test ret == 0
         @test strip(output) == username()
     end
 
     # Check that we read stderr as well as stdout
-    test_server_with_session(2222) do session
+    demo_server_with_session(2222) do session
         ret, output = ssh.execute(session, "thisdoesntexist")
         @test ret == 127
         @test !isempty(output)
     end
 
     # Test port forwarding
-    test_server_with_session(2222) do session
+    demo_server_with_session(2222) do session
         forwarder = ssh.Forwarder(session, 8080, "localhost", 9090)
         close(forwarder)
     end
 
-    test_server_with_session(2222) do session
+    demo_server_with_session(2222) do session
         ssh.Forwarder(session, 8080, "localhost", 9090) do forwarder
             http_server(9090) do
                 curl_proc = run(ignorestatus(`curl localhost:8080`); wait=false)

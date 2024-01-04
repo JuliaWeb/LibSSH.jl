@@ -1,5 +1,5 @@
 # API
 
 ```@autodocs
-Modules = [LibSSH, LibSSH.PKI, LibSSH.Test]
+Modules = [LibSSH, LibSSH.PKI, LibSSH.Demo]
 ```
