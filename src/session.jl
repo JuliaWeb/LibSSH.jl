@@ -220,7 +220,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around `LibSSH.lib.ssh_connect()`.
+Wrapper around [`lib.ssh_connect()`](@ref).
 """
 function connect(session::Session)
     while true
@@ -342,8 +342,61 @@ function userauth_password(session::Session, password::String)
 end
 
 """
+$(TYPEDSIGNATURES)
+
+Wrapper around [`lib.ssh_userauth_kbdint`](@ref).
+"""
+function userauth_kbdint(session::Session)
+    ret = _session_trywait(session) do
+        lib.ssh_userauth_kbdint(session.ptr, C_NULL, C_NULL)
+    end
+
+    return AuthStatus(ret)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Combination of [`lib.ssh_userauth_kbdint_getnprompts`](@ref) and
+[`lib.userauth_kbdint_getprompt`](@ref). This should be preferred over the
+lower-level functions.
+"""
+function userauth_kbdint_getprompts(session::Session)
+    prompts = Tuple{String, Bool}[]
+    n_prompts = lib.ssh_userauth_kbdint_getnprompts(session.ptr)
+    for i in 0:n_prompts - 1
+        echo_ref = Ref{Cchar}()
+        prompt = lib.userauth_kbdint_getprompt(session.ptr, i, echo_ref)
+        push!(prompts, (prompt, Bool(echo_ref[])))
+    end
+
+    return prompts
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Sets answers for a keyboard-interactive auth session. Uses
+[`lib.ssh_userauth_kbdint_setanswer`](@ref) internally.
+"""
+function userauth_kbdint_setanswers(session::Session, answers::Vector{String})
+    n_prompts = lib.ssh_userauth_kbdint_getnprompts(session.ptr)
+    if n_prompts != length(answers)
+        throw(ArgumentError("Server sent $(n_prompts) prompts, but was passed $(length(answers)) answers"))
+    end
+
+    for (i, answer) in enumerate(answers)
+        ret = lib.ssh_userauth_kbdint_setanswer(session.ptr, i - 1,
+                                                Base.cconvert(Cstring, answer))
+        if ret != SSH_OK
+            throw("Error while setting answer $(i) with ssh_userauth_kbdint_setanswer(): $(ret)")
+        end
+    end
+end
+
+"""
 Helper function to aid with calling non-blocking functions. It will try calling
-`f()` as long as `f()` returns `SSH_AGAIN`.
+`f()` as long as `f()` returns `SSH_AGAIN` or `SSH_AUTH_AGAIN`.
 """
 function _session_trywait(f::Function, session::Session)
     ret = SSH_ERROR
@@ -351,7 +404,7 @@ function _session_trywait(f::Function, session::Session)
     while true
         ret = f()
 
-        if ret != SSH_AGAIN
+        if ret != SSH_AGAIN && ret != lib.SSH_AUTH_AGAIN
             break
         else
             try

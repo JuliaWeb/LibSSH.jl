@@ -197,8 +197,33 @@ end
             ssh.connect(session)
 
             @test ssh.isconnected(session)
-            ssh.userauth_list(session)
             @test ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
+
+            ssh.disconnect(session)
+            close(session)
+        end
+    end
+
+    @testset "Keyboard-interactive authentication" begin
+        DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
+            session = ssh.Session(Sockets.localhost, 2222)
+            ssh.connect(session)
+            @test ssh.isconnected(session)
+
+            @test ssh.userauth_kbdint(session) == ssh.AuthStatus_Info
+            @test ssh.userauth_kbdint_getprompts(session) == [("Password: ", true), ("Token: ", true)]
+
+            # This should throw because we're passing the wrong number of answers
+            @test_throws ArgumentError ssh.userauth_kbdint_setanswers(session, ["foo"])
+
+            # Test passing incorrect answers
+            ssh.userauth_kbdint_setanswers(session, ["foo", "quux"])
+            @test ssh.userauth_kbdint(session) == ssh.AuthStatus_Denied
+
+            # And then correct answers
+            @test ssh.userauth_kbdint(session) == ssh.AuthStatus_Info
+            ssh.userauth_kbdint_setanswers(session, ["foo", "bar"])
+            @test ssh.userauth_kbdint(session) == ssh.AuthStatus_Success
 
             ssh.disconnect(session)
             close(session)

@@ -27,6 +27,7 @@ end
     AuthStatus_Denied = Int(SSH_AUTH_DENIED)
     AuthStatus_Partial = Int(SSH_AUTH_PARTIAL)
     AuthStatus_Success = Int(SSH_AUTH_SUCCESS)
+    AuthStatus_Info = Int(SSH_AUTH_INFO)
     AuthStatus_Again = Int(SSH_AUTH_AGAIN)
 end
 
