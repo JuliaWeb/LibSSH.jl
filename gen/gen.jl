@@ -106,7 +106,7 @@ function rewrite!(ctx)
                 if name in string_functions
                     wrapper = quote
                         if ret == C_NULL
-                            return nothing
+                            throw(LibSSHException($("Error from $name, no string found (returned C_NULL)")))
                         else
                             return unsafe_string(Ptr{UInt8}(ret))
                         end
@@ -119,10 +119,19 @@ function rewrite!(ctx)
 
                 if !isnothing(wrapper)
                     wrapper_name = Symbol(chopprefix(string(name), "ssh_"))
-                    new_expr = quote
-                        function $wrapper_name($(args...))::$ret_type
-                            ret = $name($(args...))
-                            $wrapper
+                    new_expr = if isnothing(ret_type)
+                        quote
+                            function $wrapper_name($(args...))
+                                ret = $name($(args...))
+                                $wrapper
+                            end
+                        end
+                    else
+                        quote
+                            function $wrapper_name($(args...))::$ret_type
+                                ret = $name($(args...))
+                                $wrapper
+                            end
                         end
                     end
 

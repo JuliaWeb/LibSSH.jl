@@ -5,6 +5,10 @@ using CEnum
 using libssh_jll
 using DocStringExtensions
 
+struct LibSSHException <: Exception
+    msg::String
+end
+
 
 const __uid_t = Cuint
 
@@ -4902,7 +4906,7 @@ Auto-generated wrapper around [`ssh_message_auth_user`](@ref).
 function message_auth_user(msg)::String
     ret = ssh_message_auth_user(msg)
     if ret == C_NULL
-        return nothing
+        throw(LibSSHException("Error from ssh_message_auth_user, no string found (returned C_NULL)"))
     else
         return unsafe_string(Ptr{UInt8}(ret))
     end
@@ -4916,7 +4920,7 @@ Auto-generated wrapper around [`ssh_message_auth_password`](@ref).
 function message_auth_password(msg)::String
     ret = ssh_message_auth_password(msg)
     if ret == C_NULL
-        return nothing
+        throw(LibSSHException("Error from ssh_message_auth_password, no string found (returned C_NULL)"))
     else
         return unsafe_string(Ptr{UInt8}(ret))
     end

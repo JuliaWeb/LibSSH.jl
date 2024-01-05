@@ -8,12 +8,8 @@ using DocStringExtensions
 
 include("bindings.jl")
 using .lib
-import .lib: ssh_options_get, ssh_options_set, SSH_OK, SSH_ERROR, SSH_AGAIN, SSH_EOF
+import .lib: LibSSHException, ssh_options_get, ssh_options_set, SSH_OK, SSH_ERROR, SSH_AGAIN, SSH_EOF
 
-
-struct LibSSHException <: Exception
-    msg::String
-end
 
 @enum AuthMethod begin
     AuthMethod_Unknown = SSH_AUTH_METHOD_UNKNOWN
