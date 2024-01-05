@@ -817,14 +817,45 @@ $(TYPEDSIGNATURES)
 Do-constructor to execute a function while the server is running and have it
 safely cleaned up afterwards.
 """
-function DemoServer(f::Function, args...; kwargs...)
+function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
     demo_server = DemoServer(args...; kwargs...)
     start(demo_server)
 
-    try
+    timer = Timer(timeout)
+    still_running = true
+    t = Threads.@spawn try
         f()
     finally
-        stop(demo_server)
+        still_running = false
+        close(timer)
+    end
+
+    # Wait for a timeout or the function to finish
+    try
+        wait(timer)
+    catch
+        # An exception means that the function finished in time and closed
+        # the timer early.
+    end
+
+    # If the function is still running, we attempt to kill it explicitly
+    kill_failed = nothing
+    if still_running
+        @async Base.throwto(t, InterruptException())
+        result = timedwait(() -> istaskdone(t), kill_timeout)
+        kill_failed = result == :timed_out
+    end
+
+    # After attempting to kill the function we stop the server
+    stop(demo_server)
+
+    # If there was a timeout we throw an exception, otherwise we wait() on
+    # the task, which will cause any exeption thrown by f() to bubble up.
+    if !isnothing(kill_failed)
+        kill_failed_msg = kill_failed ? " (failed to kill function after $(kill_timeout)s, it's still running)" : ""
+        error("DemoServer function timed out after $(timeout)s" * kill_failed_msg)
+    else
+        wait(t)
     end
 
     return demo_server

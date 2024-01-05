@@ -206,57 +206,25 @@ end
     end
 end
 
-# Helper function to start a TestServer and create a session connected to
-# it. Also supports timeouts.
+# Helper function to start a DemoServer and create a session connected to it
 function demo_server_with_session(f::Function, port, args...;
                                   timeout=10,
-                                  kill_grace_period=3,
+                                  kill_timeout=3,
                                   password="foo",
                                   log_verbosity=lib.SSH_LOG_NOLOG,
                                   kwargs...)
-    demo_server = DemoServer(port, args...; password, kwargs...) do
+    demo_server = DemoServer(port, args...; password, timeout, kill_timeout, kwargs...) do
         # Create a session
         session = ssh.Session("127.0.0.1", port; log_verbosity)
         ssh.connect(session)
         @test ssh.isconnected(session)
         @test ssh.userauth_password(session, password) == ssh.AuthStatus_Success
 
-        # Create a timer and start the function
-        timer = Timer(timeout)
-        still_running = true
-        t = Threads.@spawn try
+        try
             f(session)
         finally
-            still_running = false
-            close(timer)
-        end
-
-        # Wait for a timeout or the function to finish
-        try
-            wait(timer)
-        catch
-            # An exception means that the function finished in time and closed
-            # the timer early.
-        end
-
-        ssh.disconnect(session)
-        close(session)
-
-        # If the function is still running, we attempt to kill it explicitly
-        kill_failed = nothing
-        if still_running
-            @async Base.throwto(t, InterruptException())
-            result = timedwait(() -> istaskdone(t), kill_grace_period)
-            kill_failed = result == :timed_out
-        end
-
-        # If there was a timeout we throw an exception, otherwise we wait() on
-        # the task, which will cause any exeption thrown by f() to bubble up.
-        if !isnothing(kill_failed)
-            kill_failed_msg = kill_failed ? " (failed to kill function, it's still running)" : ""
-            error("TestServer function timed out after $(timeout)s" * kill_failed_msg)
-        else
-            wait(t)
+            ssh.disconnect(session)
+            close(session)
         end
     end
 
