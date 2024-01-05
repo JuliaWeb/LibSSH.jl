@@ -10,9 +10,12 @@ import Clang.Generators: ExprNode, AbstractFunctionNodeType
 ctx_objects = Dict{Symbol, Any}()
 
 # These are lists of functions that we'll rewrite to return Julia types
-string_functions = [:ssh_message_auth_user, :ssh_message_auth_password]
+string_functions = [:ssh_message_auth_user, :ssh_message_auth_password,
+                    :ssh_userauth_kbdint_getanswer]
 bool_functions = [:ssh_message_auth_kbdint_is_response]
-all_rewritable_functions = vcat(string_functions, bool_functions)
+ssh_ok_functions = [:ssh_message_auth_reply_success, :ssh_message_auth_set_methods,
+                    :ssh_message_reply_default]
+all_rewritable_functions = vcat(string_functions, bool_functions, ssh_ok_functions)
 
 """
 Helper function to generate documentation for symbols with missing docstrings.
@@ -115,6 +118,16 @@ function rewrite!(ctx)
                 elseif name in bool_functions
                     wrapper = :(return ret == 1)
                     ret_type = Bool
+                elseif name in ssh_ok_functions
+                    wrapper = quote
+                        if ret != SSH_OK
+                            # This ugly concatenation is necessary because we
+                            # have to interpolate the function name into the
+                            # error string but also keep the return value
+                            # interpolation from being escaped.
+                            throw(LibSSHException($("Error from $name, did not return SSH_OK: ") * "$(ret)"))
+                        end
+                    end
                 end
 
                 if !isnothing(wrapper)

@@ -98,6 +98,7 @@ end
         # Check that the authentication methods were called
         @test logs[:auth_none] == [true]
         @test logs[:auth_password] == [("foo", "bar")]
+        @test demo_server.authenticated
 
         # And a channel was created
         @test !isnothing(demo_server.sshchan)
@@ -145,6 +146,21 @@ end
         end
 
         @test demo_server.callback_log[:message_request] == [(ssh.RequestType_ChannelOpen, lib.SSH_CHANNEL_DIRECT_TCPIP)]
+    end
+
+    @testset "Keyboard-interactive authentication" begin
+        demo_server = DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
+            # Run the script
+            script_path = joinpath(@__DIR__, "interactive_ssh.sh")
+            proc = run(`expect -f $script_path`; wait=false)
+            wait(proc)
+        end
+
+        # Check that authentication succeeded
+        @test demo_server.authenticated
+
+        # And the command was executed
+        @test demo_server.callback_log[:channel_exec_request] == ["whoami"]
     end
 end
 

@@ -4899,6 +4899,32 @@ function ssh_get_log_callback()
 end
 
 """
+    userauth_kbdint_getanswer(session, i)::String
+
+Auto-generated wrapper around [`ssh_userauth_kbdint_getanswer`](@ref).
+"""
+function userauth_kbdint_getanswer(session, i)::String
+    ret = ssh_userauth_kbdint_getanswer(session, i)
+    if ret == C_NULL
+        throw(LibSSHException("Error from ssh_userauth_kbdint_getanswer, no string found (returned C_NULL)"))
+    else
+        return unsafe_string(Ptr{UInt8}(ret))
+    end
+end
+
+"""
+    message_reply_default(msg)
+
+Auto-generated wrapper around [`ssh_message_reply_default`](@ref).
+"""
+function message_reply_default(msg)
+    ret = ssh_message_reply_default(msg)
+    if ret != SSH_OK
+        throw(LibSSHException("Error from ssh_message_reply_default, did not return SSH_OK: " * "$(ret)"))
+    end
+end
+
+"""
     message_auth_user(msg)::String
 
 Auto-generated wrapper around [`ssh_message_auth_user`](@ref).
@@ -4934,6 +4960,30 @@ Auto-generated wrapper around [`ssh_message_auth_kbdint_is_response`](@ref).
 function message_auth_kbdint_is_response(msg)::Bool
     ret = ssh_message_auth_kbdint_is_response(msg)
     return ret == 1
+end
+
+"""
+    message_auth_reply_success(msg, partial)
+
+Auto-generated wrapper around [`ssh_message_auth_reply_success`](@ref).
+"""
+function message_auth_reply_success(msg, partial)
+    ret = ssh_message_auth_reply_success(msg, partial)
+    if ret != SSH_OK
+        throw(LibSSHException("Error from ssh_message_auth_reply_success, did not return SSH_OK: " * "$(ret)"))
+    end
+end
+
+"""
+    message_auth_set_methods(msg, methods)
+
+Auto-generated wrapper around [`ssh_message_auth_set_methods`](@ref).
+"""
+function message_auth_set_methods(msg, methods)
+    ret = ssh_message_auth_set_methods(msg, methods)
+    if ret != SSH_OK
+        throw(LibSSHException("Error from ssh_message_auth_set_methods, did not return SSH_OK: " * "$(ret)"))
+    end
 end
 
 # Skipping MacroDefinition: LIBSSH_API __attribute__ ( ( visibility ( "default" ) ) )

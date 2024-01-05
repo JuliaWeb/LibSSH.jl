@@ -382,6 +382,16 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Wrapper around [`LibSSH.lib.message_auth_set_methods`](@ref).
+"""
+function set_auth_methods(msg::lib.ssh_message, auth_methods::Vector{AuthMethod})
+    bitflag = reduce(|, Int.(auth_methods))
+    lib.message_auth_set_methods(msg, bitflag)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
 Non-blocking wrapper around `LibSSH.lib.ssh_handle_key_exchange()`. Returns
 `true` or `false` depending on whether the exchange succeeded.
 """
@@ -411,10 +421,25 @@ $(TYPEDSIGNATURES)
 Set message callbacks for the sessions accepted by a Server. This must be set
 before `listen()` is called to take effect. `listen()` will automatically set
 the callback before passing the session to the user handler.
+
+The callback function must have the signature:
+
+    f(session::Session, msg::lib.ssh_message, userdata)::Bool
+
+The return value indicates whether further handling of the message is necessary.
+It should be `true` if the message wasn't handled or needs to be handled by
+libssh, or `false` if the message was completely handled and doesn't need any
+more action from libssh.
 """
 function set_message_callback(f::Function, server::Server, userdata)
+    if !hasmethod(f, (Session, lib.ssh_message, typeof(userdata)))
+        throw(ArgumentError("Callback function f() doesn't have the right signature"))
+    end
+
     server._message_callback = f
     server._message_callback_userdata = userdata
+
+    return nothing
 end
 
 """
@@ -434,6 +459,50 @@ function event_dopoll(event::SshEvent, session::Session, sshchan_locks...)
         unlock.(sshchan_locks)
 
         return ret
+    end
+
+    return ret
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+## Parameters
+
+- `msg`: The message to reply to.
+- `name`: The name of the message block.
+- `instruction`: The instruction for the user.
+- `prompts`: The prompts to show to the user.
+- `echo`: Whether the client should echo the answer to the prompts (e.g. it
+  probably shouldn't echo the password).
+
+Wrapper around [`lib.ssh_message_auth_interactive_request`](@ref).
+"""
+function message_auth_interactive_request(msg::lib.ssh_message,
+                                          name::AbstractString, instruction::AbstractString,
+                                          prompts::Vector{String}, echo::Vector{Bool})
+    # Check that prompts and echo have the same length
+    if length(prompts) != length(echo)
+        throw(ArgumentError("`prompts` and `echo` must have the same length! Actual lengths are $(length(prompts)) and $(length(echo))"))
+    end
+
+    # Convert arguments to C types
+    name_cstr = Base.cconvert(Cstring, name)
+    instruction_cstr = Base.cconvert(Cstring, instruction)
+    prompts_cstrs = [Base.cconvert(Cstring, p) for p in prompts]
+    echo_arr = map(Cchar, echo)
+
+    # Call library
+    GC.@preserve prompts_cstrs echo_arr begin
+        prompts_arr = pointer.(prompts_cstrs)
+
+        ret = lib.ssh_message_auth_interactive_request(msg, name_cstr, instruction_cstr,
+                                                       length(prompts), Ptr{Ptr{UInt8}}(pointer(prompts_arr)),
+                                                       pointer(echo_arr))
+    end
+
+    if ret == SSH_ERROR
+        throw(LibSSHException("Error when responding to kbdint auth request: $(ret)"))
     end
 
     return ret
@@ -483,8 +552,9 @@ end
 
 function on_auth_password(session, user, password, demo_server)::ssh.AuthStatus
     _add_log_event!(demo_server, :auth_password, (user, password))
+    demo_server.authenticated = password == demo_server.password
 
-    return password == demo_server.password ? ssh.AuthStatus_Success : ssh.AuthStatus_Denied
+    return demo_server.authenticated ? ssh.AuthStatus_Success : ssh.AuthStatus_Denied
 end
 
 function on_auth_none(session, user, demo_server)::ssh.AuthStatus
@@ -608,6 +678,46 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
         return false
     end
 
+    # Handle keyboard-interactive authentication
+    if msg_type == ssh.RequestType_Auth && msg_subtype == lib.SSH_AUTH_METHOD_INTERACTIVE
+        if demo_server.authenticated
+            _add_log_event!(demo_server, :auth_kbdint, "already authenticated")
+            lib.message_auth_reply_success(msg, Int(false))
+            return false
+        end
+
+        if !lib.message_auth_kbdint_is_response(msg)
+            # This means the user is requesting authentication
+            user = lib.message_auth_user(msg)
+            _add_log_event!(demo_server, :auth_kbdint, user)
+            ssh.message_auth_interactive_request(msg, "Demo server login", "Enter your details.",
+                                                 ["Password: ", "Token: "], [true, true])
+            return false
+        else
+            # Now they're responding to our prompts
+            n_answers = lib.ssh_userauth_kbdint_getnanswers(session.ptr)
+
+            # If they didn't return the correct number of answers, deny the request
+            if n_answers != 2
+                _add_log_event!(demo_server, :auth_kbdint, "denied")
+                lib.message_reply_default(msg)
+                return false
+            end
+
+            # Get the answers and check them
+            password = lib.userauth_kbdint_getanswer(session.ptr, 0)
+            token = lib.userauth_kbdint_getanswer(session.ptr, 1)
+            if password == "foo" && token == "bar"
+                _add_log_event!(demo_server, :auth_kbdint, "accepted with '$password' and '$token'")
+                lib.message_auth_reply_success(msg, Int(false))
+                demo_server.authenticated = true
+                return false
+            end
+
+            return true
+        end
+    end
+
     return true
 end
 
@@ -646,6 +756,7 @@ end
     sshchan::Union{ssh.SshChannel, Nothing} = nothing
     verbose::Bool = false
     password::Union{String, Nothing} = nothing
+    authenticated::Bool = false
 
     exec_task::Union{Task, Nothing} = nothing
     exec_proc::Union{Base.Process, Nothing} = nothing

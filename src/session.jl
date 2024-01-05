@@ -294,6 +294,8 @@ $(TYPEDSIGNATURES)
 Wrapper around `LibSSH.lib.ssh_userauth_list()`. It will throw a
 `LibSSHException` if the SSH server supports `AuthMethod_None` or if another
 error occurred.
+
+This wrapper will automatically call [`userauth_none()`](@ref) beforehand.
 """
 function userauth_list(session::Session)
     # First we have to call ssh_userauth_none() for... some reason, according to
