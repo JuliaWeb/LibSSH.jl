@@ -11,11 +11,17 @@ ctx_objects = Dict{Symbol, Any}()
 
 # These are lists of functions that we'll rewrite to return Julia types
 string_functions = [:ssh_message_auth_user, :ssh_message_auth_password,
-                    :ssh_userauth_kbdint_getanswer]
+                    :ssh_userauth_kbdint_getname, :ssh_userauth_kbdint_getanswer,
+                    :ssh_userauth_kbdint_getprompt]
 bool_functions = [:ssh_message_auth_kbdint_is_response]
 ssh_ok_functions = [:ssh_message_auth_reply_success, :ssh_message_auth_set_methods,
                     :ssh_message_reply_default]
 all_rewritable_functions = vcat(string_functions, bool_functions, ssh_ok_functions)
+
+function get_url(name::Symbol)
+    anchorfile, anchor = ctx_objects[:tags][name]
+    return "https://api.libssh.org/stable/$(anchorfile)#$(anchor)"
+end
 
 """
 Helper function to generate documentation for symbols with missing docstrings.
@@ -24,7 +30,7 @@ For the most part we rely on the Doxygen tag file to generate a URL to the
 upstream docs, except for certain structs/constants are referenced by the
 function docs.
 """
-function get_docs(node::ExprNode)
+function get_docs(node::ExprNode, doc::Vector{String})
     tags = ctx_objects[:tags]
 
     # There's a bunch of special cases that we take care of first, these are all
@@ -48,17 +54,26 @@ function get_docs(node::ExprNode)
         String["Threads callbacks. See [`ssh_threads_set_callbacks`](@ref)"]
     elseif node.id == :ssh_session
         String["Session struct ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_guided_tour.html))."]
+    elseif node.id == :ssh_message_auth_interactive_request
+        String["Initiate keyboard-interactive authentication from a server."]
 
     # The generic case where we try to generate a link to the upstream docs
-    elseif node.type isa AbstractFunctionNodeType && haskey(tags, node.id)
-        anchorfile, anchor = ctx_objects[:tags][node.id]
-        url = "https://api.libssh.org/stable/$(anchorfile)#$(anchor)"
+    elseif isempty(doc) && node.type isa AbstractFunctionNodeType && haskey(tags, node.id)
+        String["[Upstream documentation]($(get_url(node.id)))."]
+    elseif node.id in all_rewritable_functions
+        symbol_ref = isempty(doc) && haskey(tags, node.id) ? "[`$(node.id)`]($(get_url(node.id)))" : "`$(node.id)`"
+        original_docs_mention = isempty(doc) ? "" : " Original upstream documentation is below."
+        autogen_line = String["Auto-generated wrapper around $symbol_ref.$original_docs_mention"]
 
-        String["[Upstream documentation]($url)."]
-    elseif Symbol("ssh_" * string(node.id)) in all_rewritable_functions
-        String["Auto-generated wrapper around [`ssh_$(node.id)`](@ref)."]
+        if isempty(doc)
+            autogen_line
+        else
+            vcat(autogen_line,
+                 "\n---\n",
+                 doc)
+        end
     else
-        String[]
+        doc
     end
 end
 
@@ -94,9 +109,7 @@ end
 function rewrite!(ctx)
     dag = ctx.dag
 
-    for node_idx in eachindex(dag.nodes)
-        node = dag.nodes[node_idx]
-
+    for node in dag.nodes
         for i in eachindex(node.exprs)
             expr = node.exprs[i]
 
@@ -135,23 +148,21 @@ function rewrite!(ctx)
                     new_expr = if isnothing(ret_type)
                         quote
                             function $wrapper_name($(args...))
-                                ret = $name($(args...))
+                                ret = $body
                                 $wrapper
                             end
                         end
                     else
                         quote
                             function $wrapper_name($(args...))::$ret_type
-                                ret = $name($(args...))
+                                ret = $body
                                 $wrapper
                             end
                         end
                     end
 
-                    wrapper_node = ExprNode(wrapper_name, node.type, Clang.CLCursor(Clang.getNullCursor()),
-                                            [MacroTools.prettify(new_expr)],
-                                            Int[])
-                    push!(dag.nodes, wrapper_node)
+                    # Note that the node retains the old ID, only the expression changed
+                    node.exprs[i] = MacroTools.prettify(new_expr)
                 end
             end
         end
