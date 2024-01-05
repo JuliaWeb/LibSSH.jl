@@ -193,7 +193,7 @@ end
     @testset "Password authentication" begin
         # Test connecting to a server and doing password authentication
         DemoServer(2222; password="foo") do
-            session = ssh.Session("127.0.0.1", 2222; log_verbosity=lib.SSH_LOG_NOLOG)
+            session = ssh.Session(Sockets.localhost, 2222)
             ssh.connect(session)
 
             @test ssh.isconnected(session)

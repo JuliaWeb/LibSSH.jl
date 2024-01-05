@@ -57,14 +57,16 @@ $(TYPEDSIGNATURES)
 Constructor for creating a client session. Use this if you want to connect to a
 server.
 """
-function Session(host::String, port=22; log_verbosity=nothing)
+function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22; log_verbosity=nothing)
     session_ptr = lib.ssh_new()
     if session_ptr == C_NULL
         throw(LibSSHException("Could not initialize Session for host $(host)"))
     end
 
+    host_str = host isa AbstractString ? host : string(host)
+
     session = Session(session_ptr; log_verbosity)
-    session.host = host
+    session.host = host_str
     session.port = port
 
     # Explicitly initialize the user, otherwise an error will be thrown when

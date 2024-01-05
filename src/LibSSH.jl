@@ -2,6 +2,7 @@ module LibSSH
 
 export SSH_LOG_NOLOG, SSH_LOG_WARNING, SSH_LOG_PROTOCOL, SSH_LOG_PACKET, SSH_LOG_FUNCTIONS
 
+import Sockets
 import FileWatching
 
 using DocStringExtensions
