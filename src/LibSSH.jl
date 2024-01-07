@@ -12,6 +12,18 @@ using .lib
 import .lib: LibSSHException, ssh_options_get, ssh_options_set, SSH_OK, SSH_ERROR, SSH_AGAIN, SSH_EOF
 
 
+"""
+$(TYPEDEF)
+
+Enum for the different authentication methods libssh supports:
+- `AuthMethod_Unknown`
+- `AuthMethod_None`
+- `AuthMethod_Password`
+- `AuthMethod_PublicKey`
+- `AuthMethod_HostBased`
+- `AuthMethod_Interactive`
+- `AuthMethod_GSSAPI_MIC`
+"""
 @enum AuthMethod begin
     AuthMethod_Unknown = SSH_AUTH_METHOD_UNKNOWN
     AuthMethod_None = SSH_AUTH_METHOD_NONE
@@ -39,38 +51,11 @@ end
     RequestType_Global = Int(lib.SSH_REQUEST_GLOBAL)
 end
 
-"""
-$(TYPEDSIGNATURES)
-
-Get the type of a message. Wrapper around `LibSSH.lib.ssh_message_type()`.
-"""
-function message_type(message::lib.ssh_message)
-    ret = lib.ssh_message_type(message)
-    if ret == SSH_ERROR
-        throw(LibSSHException("Error when retrieving message type from message"))
-    end
-
-    return RequestType(ret)
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Get the subtype of a message. Wrapper around `LibSSH.lib.ssh_message_subtype()`.
-"""
-function message_subtype(message::lib.ssh_message)
-    ret = lib.ssh_message_subtype(message)
-    if ret == SSH_ERROR
-        throw(LibSSHException("Error when retrieving message subtype from message"))
-    end
-
-    return ret
-end
-
 include("pki.jl")
 include("session.jl")
 include("callbacks.jl")
 include("channel.jl")
+include("message.jl")
 include("server.jl")
 
 end

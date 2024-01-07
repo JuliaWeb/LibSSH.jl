@@ -265,13 +265,6 @@ end
     SSH_KEY_CMP_PRIVATE = 1
 end
 
-"""
-    __JL_Ctag_22
-
-` libssh_log`
-
-@{
-"""
 @cenum __JL_Ctag_22::UInt32 begin
     SSH_LOG_NOLOG = 0
     SSH_LOG_WARNING = 1
@@ -1866,7 +1859,7 @@ end
 """
     userauth_kbdint_getname(session)::String
 
-[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga5d6f5eb0ed09fe2c7a2ac69b972e130e).
+Auto-generated wrapper around [`ssh_userauth_kbdint_getname`](https://api.libssh.org/stable/group__libssh__auth.html#ga5d6f5eb0ed09fe2c7a2ac69b972e130e).
 """
 function userauth_kbdint_getname(session)::String
     ret = @ccall(libssh.ssh_userauth_kbdint_getname(session::ssh_session)::Ptr{Cchar})
@@ -1889,7 +1882,7 @@ end
 """
     userauth_kbdint_getprompt(session, i, echo)::String
 
-[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga15c0f954f79d73e1ac5981ac483efb75).
+Auto-generated wrapper around [`ssh_userauth_kbdint_getprompt`](https://api.libssh.org/stable/group__libssh__auth.html#ga15c0f954f79d73e1ac5981ac483efb75).
 """
 function userauth_kbdint_getprompt(session, i, echo)::String
     ret = @ccall(libssh.ssh_userauth_kbdint_getprompt(session::ssh_session, i::Cuint, echo::Ptr{Cchar})::Ptr{Cchar})
@@ -1912,7 +1905,7 @@ end
 """
     userauth_kbdint_getanswer(session, i)::String
 
-[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#ga4f55ed8bc6f553423ab1c92598d0194b).
+Auto-generated wrapper around [`ssh_userauth_kbdint_getanswer`](https://api.libssh.org/stable/group__libssh__auth.html#ga4f55ed8bc6f553423ab1c92598d0194b).
 """
 function userauth_kbdint_getanswer(session, i)::String
     ret = @ccall(libssh.ssh_userauth_kbdint_getanswer(session::ssh_session, i::Cuint)::Ptr{Cchar})
@@ -3952,7 +3945,7 @@ end
 """
     message_auth_kbdint_is_response(msg)::Bool
 
-[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga5132c82c49de985e9e10f51f393e52a4).
+Auto-generated wrapper around [`ssh_message_auth_kbdint_is_response`](https://api.libssh.org/stable/group__libssh__server.html#ga5132c82c49de985e9e10f51f393e52a4).
 """
 function message_auth_kbdint_is_response(msg)::Bool
     ret = @ccall(libssh.ssh_message_auth_kbdint_is_response(msg::ssh_message)::Cint)
@@ -4006,7 +3999,7 @@ end
 """
     message_auth_set_methods(msg, methods)
 
-[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gab993157d98e5b4b3399d216c9243effc).
+Auto-generated wrapper around [`ssh_message_auth_set_methods`](https://api.libssh.org/stable/group__libssh__server.html#gab993157d98e5b4b3399d216c9243effc).
 """
 function message_auth_set_methods(msg, methods)
     ret = @ccall(libssh.ssh_message_auth_set_methods(msg::ssh_message, methods::Cint)::Cint)
@@ -4874,7 +4867,9 @@ Set the thread callbacks structure.
 
 This is necessary if your program is using libssh in a multithreaded fashion. This function must be called first, outside of any threading context (in your main() function for instance), before you call [`ssh_init`](@ref)().
 
-\\bug libgcrypt 1.6 and bigger backend does not support custom callback. Using anything else than pthreads here will fail.
+!!! danger "Known bug"
+
+    libgcrypt 1.6 and bigger backend does not support custom callback. Using anything else than pthreads here will fail.
 
 ### Parameters
 * `cb`:\\[in\\] A pointer to a [`ssh_threads_callbacks_struct`](@ref) structure, which contains the different callbacks to be set.

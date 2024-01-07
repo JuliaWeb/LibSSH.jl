@@ -36,11 +36,13 @@ end
 $(TYPEDEF)
 $(TYPEDFIELDS)
 
-Use `PKI.generate()` to create a key rather than calling the constructors.
+Use [`PKI.generate`](@ref) to create a key rather than calling the constructors.
 
-WARNING: adding a SshKey to a Server will cause the key to be free'd when the
-Server is closed! Never use a SshKey after its server has been closed, or make
-sure it hasn't been closed by checking `isassigned()`.
+!!! warning
+    Adding a `SshKey` to a [`ssh.Bind`](@ref) will cause the key to be free'd
+    when the [`ssh.Bind`](@ref) is closed! Never use a `SshKey` after its
+    server has been closed, or make sure it hasn't been closed by checking
+    [`isassigned(::SshKey)`](@ref).
 """
 mutable struct SshKey
     ptr::Union{lib.ssh_key, Nothing}
@@ -74,14 +76,14 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Check if the SshKey holds a valid pointer to a `LibSSH.lib.ssh_key`.
+Check if the [`SshKey`](@ref) holds a valid pointer to a `lib.ssh_key`.
 """
 Base.isassigned(key::SshKey) = key.ptr != nothing
 
 """
 $(TYPEDSIGNATURES)
 
-Compare parts of an SSH key. Wrapper around `LibSSH.lib.ssh_key_cmp()`.
+Compare parts of an SSH key. Wrapper around [`lib.ssh_key_cmp()`](@ref).
 """
 function key_cmp(key1::SshKey, key2::SshKey, part::KeyCmp)
     if !isassigned(key1) || !isassigned(key2)
@@ -95,7 +97,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around `LibSSH.lib.ssh_pki_generate()`. Note that `bits=2048` by default.
+Wrapper around [`lib.ssh_pki_generate()`](@ref). Note that `bits=2048` by default.
 """
 function generate(ktype::KeyType; bits::Int=2048)
     ptr_ref = Ref{lib.ssh_key}()
@@ -110,7 +112,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around `LibSSH.lib.ssh_key_type()`.
+Wrapper around [`lib.ssh_key_type()`](@ref).
 """
 function key_type(key::SshKey)
     if !isassigned(key)

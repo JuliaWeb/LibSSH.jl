@@ -56,12 +56,12 @@ end
 
     @testset "Initialization and finalizing" begin
         # We shouldn't be able to create a server without some kind of key
-        @test_throws ArgumentError ssh.Server(2222)
+        @test_throws ArgumentError ssh.Bind(2222)
         # We also shouldn't be able to pass multiple keys
-        @test_throws ArgumentError ssh.Server(2222; hostkey=hostkey,
-                                              key=pki.generate(pki.KeyType_rsa))
+        @test_throws ArgumentError ssh.Bind(2222; hostkey=hostkey,
+                                            key=pki.generate(pki.KeyType_rsa))
 
-        server = ssh.Server(2222; hostkey)
+        server = ssh.Bind(2222; hostkey)
 
         # Unsetting a ssh_bind option shouldn't be allowed
         @test_throws ArgumentError server.port = nothing
@@ -76,7 +76,7 @@ end
         @test istaskdone(t)
 
         finalize(server)
-        @test server.bind_ptr == nothing
+        @test server.ptr == nothing
     end
 
     # Helper function to set up an `ssh` command

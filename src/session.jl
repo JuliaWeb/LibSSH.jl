@@ -2,27 +2,28 @@
 $(TYPEDEF)
 $(TYPEDFIELDS)
 
-`Session(ptr::lib.ssh_session; log_verbosity=SSH_LOG_NOLOG, own=true)`
-
 Represents an SSH session. Note that some properties such as the host and port are
 implemented in `getproperty()`/`setproperty!()` by using the internal values of
 the `ssh_session`, i.e. they aren't simply fields of the struct.
-
-The inner constructor is only useful if you already have a `ssh_session`
-(i.e. in a server). Do not use it if you want a client, use the other
-constructor.
-
-!!! warning
-    The `log_verbosity` argument will be ignored by the constructor if `own` is
-    `false` to avoid accidentally changing the logging level in callbacks when
-    non-owning Sessions are created. You can still set the logging level
-    explicitly with `session.log_verbosity` if necessary.
 """
 mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
     log_verbosity::Int
     channels::Vector{Any}
 
+    @doc """
+    $(TYPEDSIGNATURES)
+
+    Inner constructor. This is only useful if you already have a `ssh_session`
+    (i.e. in a server). Do not use it if you want a client, use the other
+    constructor.
+
+    !!! warning
+        The `log_verbosity` argument will be ignored by the constructor if `own` is
+        `false` to avoid accidentally changing the logging level in callbacks when
+        non-owning Sessions are created. You can still set the logging level
+        explicitly with `session.log_verbosity` if necessary.
+    """
     function Session(ptr::lib.ssh_session; log_verbosity=nothing, own=true)
         # Set to non-blocking mode
         lib.ssh_set_blocking(ptr, 0)
@@ -40,9 +41,7 @@ mutable struct Session
     end
 end
 
-"""
-Non-throwing finalizer for Session objects.
-"""
+# Non-throwing finalizer for Session objects
 function _finalizer(session::Session)
     try
         close(session)
@@ -56,6 +55,14 @@ $(TYPEDSIGNATURES)
 
 Constructor for creating a client session. Use this if you want to connect to a
 server.
+
+## Examples
+
+```julia-repl
+julia> import LibSSH as ssh
+julia> session = ssh.Session("foo.org")
+julia> session = ssh.Session(ip"12.34.56.78", 2222)
+```
 """
 function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22; log_verbosity=nothing)
     session_ptr = lib.ssh_new()
@@ -93,12 +100,17 @@ function Base.close(session::Session)
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Check if a session is open.
+"""
 Base.isopen(session::Session) = !isnothing(session.ptr)
 
 """
 $(TYPEDSIGNATURES)
 
-Get the last error set by libssh.
+Get the last error set by libssh. Wrapper around [`lib.ssh_get_error()`](@ref).
 """
 function get_error(session::Session)
     if isnothing(session.ptr)
@@ -220,7 +232,8 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around [`lib.ssh_connect()`](@ref).
+Wrapper around [`lib.ssh_connect()`](@ref). This will throw an exception if
+connecting fails, otherwise it will return nothing.
 """
 function connect(session::Session)
     while true
@@ -239,7 +252,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around `LibSSH.lib.ssh_disconnect()`.
+Wrapper around [`lib.ssh_disconnect()`](@ref).
 
 !!! warning
     This will close all channels created from the session.
@@ -264,7 +277,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around `LibSSH.lib.ssh_is_connected()`.
+Wrapper around [`lib.ssh_is_connected()`](@ref).
 """
 function isconnected(session::Session)
     isnothing(session.ptr) ? false : lib.ssh_is_connected(session.ptr) == 1
@@ -273,7 +286,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around `LibSSH.lib.ssh_userauth_none()`. It will throw a
+Wrapper around [`lib.ssh_userauth_none()`](@ref). It will throw a
 `LibSSHException` if an error occurs.
 """
 function userauth_none(session::Session)
@@ -293,7 +306,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around `LibSSH.lib.ssh_userauth_list()`. It will throw a
+Wrapper around [`lib.ssh_userauth_list()`](@ref). It will throw a
 `LibSSHException` if the SSH server supports `AuthMethod_None` or if another
 error occurred.
 
@@ -321,7 +334,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around `LibSSH.lib.ssh_userauth_password()`. This will throw a
+Wrapper around [`lib.ssh_userauth_password()`](@ref). This will throw a
 `LibSSHException` if an error is returned by the underlying library.
 """
 function userauth_password(session::Session, password::String)
@@ -356,6 +369,9 @@ end
 
 """
 $(TYPEDSIGNATURES)
+
+Returns all the keyboard-interactive prompts from the server. You should have
+already called [`userauth_kbdint()`](@ref).
 
 Combination of [`lib.ssh_userauth_kbdint_getnprompts`](@ref) and
 [`lib.userauth_kbdint_getprompt`](@ref). This should be preferred over the
@@ -394,10 +410,10 @@ function userauth_kbdint_setanswers(session::Session, answers::Vector{String})
     end
 end
 
-"""
+#=
 Helper function to aid with calling non-blocking functions. It will try calling
 `f()` as long as `f()` returns `SSH_AGAIN` or `SSH_AUTH_AGAIN`.
-"""
+=#
 function _session_trywait(f::Function, session::Session)
     ret = SSH_ERROR
 

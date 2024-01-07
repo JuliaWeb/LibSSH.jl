@@ -6,6 +6,9 @@ import MacroTools: @capture
 import Clang
 import Clang.Generators: ExprNode, AbstractFunctionNodeType
 
+include("../doc_utils.jl")
+import .DocUtils: read_tags, get_url
+
 
 ctx_objects = Dict{Symbol, Any}()
 
@@ -18,11 +21,6 @@ ssh_ok_functions = [:ssh_message_auth_reply_success, :ssh_message_auth_set_metho
                     :ssh_message_reply_default]
 all_rewritable_functions = vcat(string_functions, bool_functions, ssh_ok_functions)
 
-function get_url(name::Symbol)
-    anchorfile, anchor = ctx_objects[:tags][name]
-    return "https://api.libssh.org/stable/$(anchorfile)#$(anchor)"
-end
-
 """
 Helper function to generate documentation for symbols with missing docstrings.
 
@@ -32,6 +30,8 @@ function docs.
 """
 function get_docs(node::ExprNode, doc::Vector{String})
     tags = ctx_objects[:tags]
+
+    url = haskey(tags, node.id) ? get_url(node.id, ctx_objects[:tags]) : nothing
 
     # There's a bunch of special cases that we take care of first, these are all
     # referenced by other docstrings and Documenter.jl will complain if they
@@ -57,11 +57,12 @@ function get_docs(node::ExprNode, doc::Vector{String})
     elseif node.id == :ssh_message_auth_interactive_request
         String["Initiate keyboard-interactive authentication from a server."]
 
-    # The generic case where we try to generate a link to the upstream docs
-    elseif isempty(doc) && node.type isa AbstractFunctionNodeType && haskey(tags, node.id)
-        String["[Upstream documentation]($(get_url(node.id)))."]
+    # Internal Clang.jl structs start with '__' and we don't want to document them
+    elseif startswith(string(node.id), "__")
+        String[]
+
     elseif node.id in all_rewritable_functions
-        symbol_ref = isempty(doc) && haskey(tags, node.id) ? "[`$(node.id)`]($(get_url(node.id)))" : "`$(node.id)`"
+        symbol_ref = isempty(doc) && haskey(tags, node.id) ? "[`$(node.id)`]($url)" : "`$(node.id)`"
         original_docs_mention = isempty(doc) ? "" : " Original upstream documentation is below."
         autogen_line = String["Auto-generated wrapper around $symbol_ref.$original_docs_mention"]
 
@@ -72,38 +73,13 @@ function get_docs(node::ExprNode, doc::Vector{String})
                  "\n---\n",
                  doc)
         end
+
+    # The generic case where we try to generate a link to the upstream docs
+    elseif isempty(doc) && node.type isa AbstractFunctionNodeType && haskey(tags, node.id)
+        String["[Upstream documentation]($url)."]
     else
         doc
     end
-end
-
-"""
-Read the function info from a Doxygen tag file into a dict.
-
-In particular, the anchor file and the anchor itself.
-"""
-function read_tags()
-    doc = read(libssh_jll.doxygen_tags, XML.Node)
-
-    tags = Dict{Symbol, Any}()
-    main_element = XML.children(doc)[2]
-    for compound in XML.children(main_element)
-        if compound["kind"] == "group"
-            for child in filter(!isnothing, XML.children(compound))
-                attrs = XML.attributes(child)
-                if !isnothing(attrs) && get(attrs, "kind", "") == "function"
-                    func_children = XML.children(child)
-                    name = XML.simplevalue(func_children[2])
-                    anchorfile = XML.simplevalue(func_children[3])
-                    anchor = XML.simplevalue(func_children[4])
-
-                    tags[Symbol(name)] = (anchorfile, anchor)
-                end
-            end
-        end
-    end
-
-    return tags
 end
 
 function rewrite!(ctx)

@@ -7,13 +7,16 @@ import Sockets: TCPServer, TCPSocket, IPv4, getaddrinfo
 $(TYPEDEF)
 $(TYPEDFIELDS)
 
-Wraps a `LibSSH.lib.ssh_channel`. An `SshChannel` can be owning or non-owning
+Wraps a `lib.ssh_channel`. An `SshChannel` can be owning or non-owning
 of a pointer to the underlying `lib.ssh_channel`, and only owning `SshChannel`s
-can be closed with `close()`.
+can be closed with [`close(::SshChannel)`](@ref).
+
+The type is named `SshChannel` to avoid confusion with Julia's own `Channel`
+type.
 
 !!! warning
-    Make sure that `close(::SshChannel)` isn't called during the execution of
-    `ssh.event_dopoll()`, or you will get deeply mystifying segfaults. The best
+    Make sure that [`close(::SshChannel)`](@ref) isn't called during the execution of
+    [`event_dopoll()`](@ref), or you will get deeply mystifying segfaults. The best
     way to prevent this is by passing in the `SshChannel.close_lock` of each
     channel like so:
     ```julia
@@ -21,7 +24,7 @@ can be closed with `close()`.
     ```
 
     This will lock the channels during the execution of any channel callbacks by
-    `ssh.event_dopoll()`.
+    [`event_dopoll()`](@ref).
 """
 mutable struct SshChannel
     ptr::Union{lib.ssh_channel, Nothing}
@@ -30,6 +33,13 @@ mutable struct SshChannel
     close_lock::ReentrantLock
     local_eof::Bool
 
+    @doc """
+    $(TYPEDSIGNATURES)
+
+    Wrap a `SshChannel` around an already existing `lib.ssh_channel`. Don't use
+    this unless you know what you're doing, prefer the
+    [`SshChannel(::Session)`](@ref) constructor instead.
+    """
     function SshChannel(ptr::lib.ssh_channel, session=nothing; own=true)
         if own && isnothing(session)
             throw(ArgumentError("You must pass a session to an owning SshChannel"))
@@ -86,11 +96,10 @@ after `f()` completes.
 
 Example:
 ```julia
-data = SshChannel(session) do sshchan
+data = ssh.SshChannel(session) do sshchan
     return 42
 end
-
-@test data == 42
+@assert data == 42
 ```
 """
 function SshChannel(f::Function, session::Session)
@@ -106,7 +115,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Check if the channel holds a valid pointer to a `LibSSH.lib.ssh_channel`.
+Check if the channel holds a valid pointer to a `lib.ssh_channel`.
 """
 function Base.isassigned(sshchan::SshChannel)
     !isnothing(sshchan.ptr)
@@ -115,7 +124,8 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Checks if the channel is open. Wrapper around `LibSSH.lib.ssh_channel_is_open()`.
+Checks if the channel is open. Wrapper around
+[`lib.ssh_channel_is_open()`](@ref).
 """
 function Base.isopen(sshchan::SshChannel)
     if isassigned(sshchan)
@@ -183,8 +193,10 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Write a string to the channel and return the number of code units written. Wrapper
-around `LibSSH.lib.ssh_channel_write{_stderr}()`.
+Write a string to the channel and return the number of code units written.
+
+Wrapper around
+[`lib.ssh_channel_write()`](@ref)/[`lib.ssh_channel_write_stderr()`](@ref).
 """
 function Base.write(sshchan::SshChannel, data::AbstractString; stderr::Bool=false)
     array = Vector{UInt8}(data)
@@ -195,8 +207,11 @@ end
 $(TYPEDSIGNATURES)
 
 Write a byte array to the channel and return the number of bytes written (should
-always match the length of the array, unless there was an error). Wrapper around
-`LibSSH.lib.ssh_channel_write{_stderr}()`.
+always match the length of the array, unless there was an error, in which case
+this will throw an exception).
+
+Wrapper around
+[`lib.ssh_channel_write()`](@ref)/[`lib.ssh_channel_write_stderr()`](@ref).
 """
 function Base.write(sshchan::SshChannel, data::Vector{UInt8}; stderr::Bool=false)
     if !isassigned(sshchan) || !isopen(sshchan)
@@ -221,10 +236,10 @@ $(TYPEDSIGNATURES)
 
 Check if an EOF has been sent *by the remote end*. This does *not* imply that an
 EOF has been sent from the local end and thus the channel is not writable (for
-that, use `iswritable()`). Use `SshChannel.local_eof` to check if an EOF has
-been sent from the local end.
+that, use [`iswritable(::SshChannel)`](@ref)). Check `SshChannel.local_eof` to
+check if an EOF has been sent from the local end.
 
-Wrapper around `LibSSH.lib.ssh_channel_is_eof()`.
+Wrapper around [`lib.ssh_channel_is_eof()`](@ref).
 """
 function Base.eof(sshchan::SshChannel)
     if isassigned(sshchan)
@@ -250,7 +265,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around `LibSSH.lib.ssh_set_channel_callbacks()`. Will throw a
+Wrapper around [`lib.ssh_set_channel_callbacks()`](@ref). Will throw a
 `LibSSHException` if setting the callbacks failed.
 """
 function set_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.ChannelCallbacks)
@@ -263,7 +278,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Sends an EOF message. Wrapper around `LibSSH.lib.ssh_channel_send_eof()`.
+Sends an EOF message. Wrapper around [`lib.ssh_channel_send_eof()`](@ref).
 
 !!! warning
     Calling this function will trigger any waiting callbacks.
@@ -289,7 +304,7 @@ end
 $(TYPEDSIGNATURES)
 
 Sends an exit status in reponse to an exec request. Wrapper around
-`LibSSH.lib.ssh_channel_request_send_exit_status()`.
+[`lib.ssh_channel_request_send_exit_status()`](@ref).
 """
 function channel_request_send_exit_status(sshchan::SshChannel, status::Int)
     if !isopen(sshchan)
@@ -307,7 +322,7 @@ $(TYPEDSIGNATURES)
 
 Poll a (owning) channel in a loop while it's alive, which will trigger any
 callbacks. This function should always be called on a channel for it to work
-properly. It will return the last result from `LibSSH.lib.ssh_channel_poll()`,
+properly. It will return the last result from [`lib.ssh_channel_poll()`](@ref),
 which should be checked to see if it's `SSH_EOF`.
 """
 function poll_loop(sshchan::SshChannel)
@@ -529,8 +544,7 @@ end
 
 """
 $(TYPEDEF)
-
-    Forwarder(session::Session, localport::Int, remotehost::String, remoteport::Int; verbose=false)
+$(TYPEDFIELDS)
 
 This object manages a direct forwarding channel between `localport` and `remotehost:remoteport`.
 """
@@ -546,6 +560,12 @@ mutable struct Forwarder
     _session::Session
     verbose::Bool
 
+    @doc """
+    $(TYPEDSIGNATURES)
+
+    Create a `Forwarder` object. This will handle an internal [`SshChannel`](@ref)
+    for forwarding.
+    """
     function Forwarder(session::Session, localport::Int, remotehost::String, remoteport::Int; verbose=false)
         listen_server = Sockets.listen(IPv4(0), localport)
 
