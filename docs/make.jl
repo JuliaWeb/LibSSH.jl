@@ -59,11 +59,16 @@ makedocs(;
          sitename = "LibSSH",
          format = Documenter.HTML(
              prettyurls=get(ENV, "CI", "false") == "true",
-             size_threshold=600000),
+             size_threshold_warn=500_000,
+             size_threshold=600_000),
          pages = [
              "index.md",
-             "api.md",
-             "bindings.md"
+             "Examples" => "examples.md",
+             "sessions_and_channels.md",
+             "server_support.md",
+             "utilities.md",
+             "bindings.md",
+             "contributing.md"
          ],
          modules = [LibSSH],
          warnonly = :missing_docs

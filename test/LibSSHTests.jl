@@ -5,7 +5,8 @@ __revise_mode__ = :eval
 import Sockets
 
 import Aqua
-import ReTest: @testset, @test, @test_throws
+import Literate
+import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_logs
 
 import LibSSH as ssh
 import LibSSH.PKI as pki
@@ -196,6 +197,13 @@ end
             session = ssh.Session(Sockets.localhost, 2222)
             ssh.connect(session)
 
+            # The server uses a fake key so it should definitely fail verification
+            @test_throws ssh.HostVerificationException ssh.is_known_server(session)
+
+            # We should be able to get the public key
+            pubkey = ssh.get_server_publickey(session)
+            @test isassigned(pubkey)
+
             @test ssh.isconnected(session)
             @test ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
 
@@ -317,12 +325,42 @@ end
 end
 
 @testset "PKI" begin
-    key = pki.generate(pki.KeyType_rsa)
-    @test pki.key_type(key) == pki.KeyType_rsa
+    rsa = pki.generate(pki.KeyType_rsa)
+    @test pki.key_type(rsa) == pki.KeyType_rsa
 
-    key2 = pki.generate(pki.KeyType_ed25519)
-    @test !pki.key_cmp(key, key2, pki.KeyCmp_Public)
-    @test pki.key_cmp(key, key, pki.KeyCmp_Private)
+    ed = pki.generate(pki.KeyType_ed25519)
+    @test !pki.key_cmp(rsa, ed, pki.KeyCmp_Public)
+    @test pki.key_cmp(rsa, rsa, pki.KeyCmp_Private)
+
+    # The default hash type should be SHA256 and it should not give any warnings
+    sha256_hash = @test_nowarn pki.get_publickey_hash(ed)
+    @test length(sha256_hash) == 32
+
+    # But using SHA1 or MD5 should show a warning
+    sha1_hash = @test_logs (:warn,) pki.get_publickey_hash(ed, pki.HashType_Sha1)
+    @test length(sha1_hash) == 20
+    md5_hash = @test_logs (:warn,) pki.get_publickey_hash(ed, pki.HashType_Md5)
+    @test length(md5_hash) == 16
+
+    # We should be able to get fingerprints for all hashes without needing to
+    # specify the hash type.
+    @test startswith(pki.get_fingerprint_hash(sha256_hash), "SHA256:")
+    @test startswith(pki.get_fingerprint_hash(sha1_hash), "SHA1:")
+    @test startswith(pki.get_fingerprint_hash(md5_hash), "MD5:")
+
+    # But not a fingerprint for a hash with an invalid length
+    @test_throws ArgumentError pki.get_fingerprint_hash(rand(UInt8, 33))
+
+    # Test converting the hash buffer to a hex string
+    @test replace(ssh.get_hexa(sha256_hash), ":" => "") == bytes2hex(sha256_hash)
+end
+
+@testset "Examples" begin
+    Literate.markdown(joinpath(@__DIR__, "examples.jl"),
+                      joinpath(dirname(@__DIR__), "docs/src");
+                      execute=true,
+                      flavor=Literate.DocumenterFlavor())
+    @test true
 end
 
 @testset "Aqua.jl" begin

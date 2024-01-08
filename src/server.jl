@@ -5,67 +5,64 @@ import .Callbacks: ServerCallbacks
 $(TYPEDEF)
 $(TYPEDFIELDS)
 
-This object wraps a `lib.ssh_event`.
+This object wraps a `lib.ssh_event`, but it's designed to only allow adding a
+single session to it. Use this in a server to poll the session.
 """
-mutable struct SshEvent
+mutable struct SessionEvent
     ptr::Union{lib.ssh_event, Nothing}
+    session::Session
 
     @doc """
     $(TYPEDSIGNATURES)
 
-    Create an empty `SshEvent`.
+    Create an empty `SessionEvent`.
     """
-    function SshEvent()
+    function SessionEvent(session::Session)
         ptr = lib.ssh_event_new()
         if ptr == C_NULL
             throw(LibSSHException("Could not allocate ssh_event"))
         end
 
-        self = new(ptr)
+        ret = lib.ssh_event_add_session(ptr, session.ptr)
+        if ret != SSH_OK
+            lib.ssh_event_free(ptr)
+            throw(LibSSHException("Could not add Session to SessionEvent: $(ret)"))
+        end
+
+        self = new(ptr, session)
         finalizer(close, self)
     end
 end
 
-"""
-$(TYPEDSIGNATURES)
-
-Wrapper around [`lib.ssh_event_add_session()`](@ref). The session should
-be removed from the event before the event is closed!
-"""
-function event_add_session(event::SshEvent, session::Session)
-    ret = lib.ssh_event_add_session(event.ptr, session.ptr)
-    if ret != SSH_OK
-        throw(LibSSHException("Could not add Session to SshEvent: $(ret)"))
+function _finalizer(event::SessionEvent)
+    try
+        close(event)
+    catch ex
+        Threads.@spawn @error "Exception when finalizing SessionEvent" exception=(ex, catch_backtrace())
     end
 end
 
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around [`lib.ssh_event_remove_session()`](@ref).
-"""
-function event_remove_session(event::SshEvent, session::Session)
-    ret = lib.ssh_event_remove_session(event.ptr, session.ptr)
-    if ret != SSH_OK
-        throw(LibSSHException("Could not remove Session from SshEvent: $(ret)"))
-    end
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Non-blocking wrapper around [`lib.ssh_event_dopoll()`](@ref), only to be used for
-events that have a single session added to them (i.e. a [`SshEvent`](@ref)). All
-of the channel locks passed in `sshchan_locks` will be locked while
-[`lib.ssh_event_dopoll()`](@ref) executes (but will be unlocked while waiting).
+Non-blocking wrapper around [`lib.ssh_event_dopoll()`](@ref). This may trigger
+callbacks on the session and its channels.
 
 Returns either `SSH_OK` or `SSH_ERROR`.
 """
-function event_dopoll(event::SshEvent, session::Session, sshchan_locks...)
-    ret = _session_trywait(session) do
-        lock.(sshchan_locks)
+function event_dopoll(event::SessionEvent)
+    ret = _session_trywait(event.session) do
+        # Lock the channels while polling, otherwise close(::SshChannel) may be
+        # called in the meantime by the callbacks, which can cause segfaults.
+        for sshchan in event.session.channels
+            lock(sshchan.close_lock)
+        end
+
         ret = lib.ssh_event_dopoll(event.ptr, 0)
-        unlock.(sshchan_locks)
+
+        for sshchan in event.session.channels
+            unlock(sshchan.close_lock)
+        end
 
         return ret
     end
@@ -79,12 +76,18 @@ $(TYPEDSIGNATURES)
 Removes the [`Session`](@ref) from the underlying `ssh_event` and frees the
 event memory. This function may be safely called multiple times, and the event
 will be unusable afterwards.
-
-If removing the session fails a `LibSSH.LibSSHException` will be thrown, which
-could happen if the session is closed before the event is.
 """
-function Base.close(event::SshEvent)
+function Base.close(event::SessionEvent)
+    # Developer note: this function is called by the finalizer so we can't do
+    # any task switches, including print statements.
+
     if !isnothing(event.ptr)
+        # Attempt to remove the session. Note that we don't bother checking the
+        # return code because some other callback may have already removed the
+        # session, which will cause this to return SSH_ERROR.
+        lib.ssh_event_remove_session(event.ptr, event.session.ptr)
+
+        # Free the ssh_event
         lib.ssh_event_free(event.ptr)
         event.ptr = nothing
     end
@@ -720,31 +723,7 @@ end
 
 """
 $(TYPEDEF)
-
-Fields:
 $(TYPEDFIELDS)
-
-The `DemoServer` is an extremely simple and limited implementation of an SSH
-server using the libssh server API. It's so limited in fact that for the sake of
-simplicity it only supports a single 'operation' per instance after
-authentication (e.g. running one command or forwarding one port). It's sole
-reason for existence is to be used in test suites to test client code. Do
-**not** expose this publicly! See the constructors docstrings for examples of
-how to use it (the LibSSH.jl test suite may also be informative).
-
-Supported features:
-- Password authentication: only the password is checked, not the username.
-- Keyboard-interactive authentication: the server will give two prompts for a
-  `Password:` and `Token:` and expect `foo` and `bar` as answers, respectively.
-- Command execution: note that requested environment variables from the client
-  are currently ignored, and the command output will only be sent back to the
-  client after the command has finished.
-- Direct port forwarding
-
-Unsupported features (that may be implemented in the future):
-- Public key authentication
-- GSSAPI authentication
-- Reverse port forwarding
 """
 @kwdef mutable struct DemoServer
     bind::Bind
@@ -903,10 +882,9 @@ function handle_session(session, ds::DemoServer)
         return
     end
 
-    event = ssh.SshEvent()
-    ssh.event_add_session(event, session)
+    event = ssh.SessionEvent(session)
     while isnothing(ds.sshchan)
-        ret = ssh.event_dopoll(event, session)
+        ret = ssh.event_dopoll(event)
 
         if ret != ssh.SSH_OK
             break
@@ -916,7 +894,7 @@ function handle_session(session, ds::DemoServer)
     if !isnothing(ds.sshchan)
         ssh.set_channel_callbacks(ds.sshchan, ds.channel_callbacks)
         # Loop while the session is open
-        while ssh.event_dopoll(event, session, ds.sshchan.close_lock) == ssh.SSH_OK
+        while ssh.event_dopoll(event) == ssh.SSH_OK
             continue
         end
 
@@ -937,14 +915,12 @@ function handle_session(session, ds::DemoServer)
     end
 
     try
-        ssh.event_remove_session(event, session)
+        close(event)
     catch ex
         # This is commented out because it doesn't seem to be a critical
         # error. Worth investigating in the future though.
-        # @error "Error removing session from event" exception=ex
+        @error "Error removing session from event" exception=ex
     end
-
-    close(event)
 end
 
 """

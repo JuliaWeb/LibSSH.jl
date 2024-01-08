@@ -13,10 +13,9 @@ but this package (currently) only attempts to provide a high-level client API. A
 demo SSH server is available, but it's only intended to be used for tests.
 
 !!! warning
-    LibSSH.jl is still under heavy development and may contain bugs,
-    **especially segfaults**. We strongly recommend testing your code as much as
-    possible. If you have found a bug, please [report
-    it](https://github.com/JamesWrigley/LibSSH.jl/issues/new).
+    LibSSH.jl is still under heavy development and may contain bugs. We strongly
+    recommend testing your code as much as possible. If you have found a bug,
+    please [report it](https://github.com/JamesWrigley/LibSSH.jl/issues/new).
 
 ## Installation
 
@@ -25,13 +24,10 @@ LibSSH.jl isn't registered yet, so for now you'll have to add it from Github:
 pkg> add https://github.com/JamesWrigley/LibSSH.jl
 ```
 
-The tests can be run with `] test` as usual, but you can also run them more
-interactively with [ReTest.jl](https://github.com/JuliaTesting/ReTest.jl) and
-[TestEnv.jl](https://github.com/JuliaTesting/TestEnv.jl):
-```julia-repl
-julia> using TestEnv; TestEnv.activate(); includet("test/LibSSHTests.jl")
-julia> LibSSHTests.runtests()
-```
+## Limitations
+
+- GSSAPI support is disabled on Windows and macOS due to `Kerberos_krb5_jll` not
+  being available on those platforms.
 
 ## FAQ
 
@@ -42,8 +38,7 @@ authorization is proper hard and there's lots of ways it could go wrong.
 
 #### Can I use this to create an SSH client?
 
-Yes. Just make sure you test it appropriately with the
-[Demo server](@ref).
+Yes. But make sure you test it appropriately with the [Demo server](@ref).
 
 #### Why isn't <beloved-feature> supported in the high-level API?
 

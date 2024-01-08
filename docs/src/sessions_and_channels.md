@@ -1,20 +1,28 @@
-# API reference
+```@meta
+CurrentModule = LibSSH
+```
 
-This documents the high-level API around libssh.
+# Sessions and Channels
+
+*The symbols documented on this page are intended to be safe. They may throw
+exceptions but they should never cause memory corruptions or segfaults.*
+
+This documents the high-level API around SSH sessions and channels, which is
+almost everything you need to care about to create a SSH client.
 
 ```@contents
-Pages = ["api.md"]
+Pages = ["sessions_and_channels.md"]
 Depth = 10
 ```
 
 ---
 
-```@meta
-CurrentModule = LibSSH
-```
-
 ```@docs
 AuthMethod
+AuthStatus
+LibSSHException
+KnownHosts
+HostVerificationException
 ```
 
 ## Sessions
@@ -33,6 +41,9 @@ Session(::lib.ssh_session)
 connect
 disconnect
 isconnected
+is_known_server
+get_server_publickey
+update_known_hosts
 userauth_list
 userauth_none
 userauth_password
@@ -80,6 +91,8 @@ Base.write(::SshChannel, ::Vector{UInt8})
 
 ### Channel operations
 
+You should prefer using these instead of more low-level methods, if you can.
+
 #### Command execution
 
 ```@docs
@@ -93,68 +106,4 @@ Forwarder
 Forwarder(::Session, ::Int, ::String, ::Int)
 Forwarder(::Function)
 Base.close(::Forwarder)
-```
-
-## Server support
-
-If you're writing a server and want to implement keyboard-interactive
-authentication, also see [`message_auth_interactive_request`](@ref).
-
-```@docs
-Bind
-listen
-wait_for_listener
-handle_key_exchange
-set_auth_methods(::Session, ::Vector{AuthMethod})
-set_auth_methods(::lib.ssh_message, ::Vector{AuthMethod})
-set_server_callbacks
-set_message_callback
-get_error(::Bind)
-Base.close(::Bind)
-Base.lock(::Bind)
-Base.unlock(::Bind)
-Base.isopen(::Bind)
-```
-
----
-
-Each [`Session`](@ref) accepted by a [`Bind`](@ref) must be polled for all the
-handlers to execute. This is possible through the [`SshEvent`](@ref) type.
-
-```@docs
-SshEvent
-SshEvent()
-event_add_session
-event_remove_session
-event_dopoll
-Base.close(::SshEvent)
-```
-
-### Demo server
-
-One might ask the question, why use a demo server for testing instead of
-something battle-hardened like `sshd`? Well, turns out that it's impossible to
-run `sshd` as a non-root user unless you disable password authentication
-(because `sshd` needs to read `/etc/passwd`), which is definitely something we
-want to test.
-
-Plus, having a custom server makes it simpler to set up in just the way we
-want.
-
-```@autodocs
-Modules = [LibSSH.Demo]
-```
-
-## Messages
-
-```@docs
-message_type
-message_subtype
-message_auth_interactive_request
-```
-
-## PKI
-
-```@autodocs
-Modules = [LibSSH.PKI]
 ```

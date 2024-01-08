@@ -13,18 +13,6 @@ can be closed with [`close(::SshChannel)`](@ref).
 
 The type is named `SshChannel` to avoid confusion with Julia's own `Channel`
 type.
-
-!!! warning
-    Make sure that [`close(::SshChannel)`](@ref) isn't called during the execution of
-    [`event_dopoll()`](@ref), or you will get deeply mystifying segfaults. The best
-    way to prevent this is by passing in the `SshChannel.close_lock` of each
-    channel like so:
-    ```julia
-    ssh.event_dopoll(event, session, sshchan1.close_lock, sshchan2.close_lock)
-    ```
-
-    This will lock the channels during the execution of any channel callbacks by
-    [`event_dopoll()`](@ref).
 """
 mutable struct SshChannel
     ptr::Union{lib.ssh_channel, Nothing}
@@ -266,7 +254,7 @@ end
 $(TYPEDSIGNATURES)
 
 Wrapper around [`lib.ssh_set_channel_callbacks()`](@ref). Will throw a
-`LibSSHException` if setting the callbacks failed.
+[`LibSSHException`](@ref) if setting the callbacks failed.
 """
 function set_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.ChannelCallbacks)
     ret = lib.ssh_set_channel_callbacks(sshchan.ptr, Ref(callbacks.cb_struct))
@@ -442,7 +430,7 @@ function execute(session::Session, command::AbstractString; verbose=false)
             throw(LibSSHException("Error while reading data from channel: $(ret)"))
         end
 
-        return (userdata[:exit_code], string(cmd_output...))
+        return (userdata[:exit_code]::Union{Int, Nothing}, string(cmd_output...))
     end
 end
 
@@ -563,7 +551,8 @@ mutable struct Forwarder
     @doc """
     $(TYPEDSIGNATURES)
 
-    Create a `Forwarder` object. This will handle an internal [`SshChannel`](@ref)
+    Create a `Forwarder` object to forward data from `localport` to
+    `remotehost:remoteport`. This will handle an internal [`SshChannel`](@ref)
     for forwarding.
     """
     function Forwarder(session::Session, localport::Int, remotehost::String, remoteport::Int; verbose=false)
@@ -587,7 +576,8 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Do-constructor for a `Forwarder`. All arguments are forwarded to the other constructor.
+Do-constructor for a `Forwarder`. All arguments are forwarded to the
+[`Forwarder(::Session, ::Int, ::String, ::Int)`](@ref) constructor.
 """
 function Forwarder(f::Function, args...; kwargs...)
     forwarder = Forwarder(args...; kwargs...)

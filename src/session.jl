@@ -89,6 +89,14 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Check if the `Session` holds a valid pointer to a `lib.ssh_session`. This will
+be `false` if the session has been closed.
+"""
+Base.isassigned(session::Session) = !isnothing(session.ptr)
+
+"""
+$(TYPEDSIGNATURES)
+
 Closes a session, which will be unusable afterwards. It's safe to call this
 multiple times.
 """
@@ -233,7 +241,7 @@ end
 $(TYPEDSIGNATURES)
 
 Wrapper around [`lib.ssh_connect()`](@ref). This will throw an exception if
-connecting fails, otherwise it will return nothing.
+connecting fails.
 """
 function connect(session::Session)
     while true
@@ -280,14 +288,77 @@ $(TYPEDSIGNATURES)
 Wrapper around [`lib.ssh_is_connected()`](@ref).
 """
 function isconnected(session::Session)
-    isnothing(session.ptr) ? false : lib.ssh_is_connected(session.ptr) == 1
+    isassigned(session) ? lib.ssh_is_connected(session.ptr) == 1 : false
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Wrapper around [`lib.ssh_session_is_known_server()`](@ref). If the `throw`
+argument is `true` (the default) it will throw a
+[`HostVerificationException`](@ref) if the verification fails, otherwise it will
+just return the verification status.
+"""
+function is_known_server(session::Session; throw_on_failure=true)
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot check the servers public key"))
+    end
+
+    status = KnownHosts(Int(lib.ssh_session_is_known_server(session.ptr)))
+    if throw_on_failure && status != KnownHosts_Ok
+        throw(HostVerificationException(status))
+    end
+
+    return status
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the public key from server of a connected session. This will throw an
+exception if the session isn't connected or the public key couldn't be
+retrieved.
+
+Wrapper around [`lib.ssh_get_server_publickey()`](@ref).
+"""
+function get_server_publickey(session::Session)
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot get the servers public key"))
+    end
+
+    key_ref = Ref{lib.ssh_key}()
+    ret = lib.ssh_get_server_publickey(session.ptr, key_ref)
+    if ret != SSH_OK
+        throw(LibSSHException("Error when getting servers public key: $(ret)"))
+    end
+
+    return PKI.SshKey(key_ref[])
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Update the users known hosts file with the sessions server key. This will throw
+if the session isn't connected.
+
+Wrapper around [`lib.ssh_session_update_known_hosts()`](@ref).
+"""
+function update_known_hosts(session::Session)
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot get the servers public key to update the known hosts file"))
+    end
+
+    ret = lib.ssh_session_update_known_hosts(session.ptr)
+    if ret != SSH_OK
+        throw(LibSSHException("Could not update the users known hosts file: $(ret)"))
+    end
 end
 
 """
 $(TYPEDSIGNATURES)
 
 Wrapper around [`lib.ssh_userauth_none()`](@ref). It will throw a
-`LibSSHException` if an error occurs.
+[`LibSSHException`](@ref) if an error occurs.
 """
 function userauth_none(session::Session)
     while true
@@ -307,8 +378,8 @@ end
 $(TYPEDSIGNATURES)
 
 Wrapper around [`lib.ssh_userauth_list()`](@ref). It will throw a
-`LibSSHException` if the SSH server supports `AuthMethod_None` or if another
-error occurred.
+[`LibSSHException`](@ref) if the SSH server supports `AuthMethod_None` or if
+another error occurred.
 
 This wrapper will automatically call [`userauth_none()`](@ref) beforehand.
 """
@@ -335,7 +406,7 @@ end
 $(TYPEDSIGNATURES)
 
 Wrapper around [`lib.ssh_userauth_password()`](@ref). This will throw a
-`LibSSHException` if an error is returned by the underlying library.
+[`LibSSHException`](@ref) if an error is returned by the underlying library.
 """
 function userauth_password(session::Session, password::String)
     while true
