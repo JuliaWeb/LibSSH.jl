@@ -5,7 +5,8 @@ CurrentModule = LibSSH
 # Utilities
 
 *The symbols documented on this page are intended to be safe. They may throw
-exceptions but they should never cause memory corruptions or segfaults.*
+exceptions but they should never cause memory corruptions or segfaults if used
+correctly.*
 
 This documents the various other parts of the libssh API that aren't
 strictly connected to client or server support.

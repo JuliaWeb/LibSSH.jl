@@ -4,10 +4,12 @@ $(TYPEDFIELDS)
 
 Represents an SSH session. Note that some properties such as the host and port are
 implemented in `getproperty()`/`setproperty!()` by using the internal values of
-the `ssh_session`, i.e. they aren't simply fields of the struct.
+the `ssh_session`, i.e. they aren't simply fields of the struct. A `Session` may
+be owning or non-owning of its internal pointer to a `lib.ssh_session`.
 """
 mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
+    owning::Bool
     log_verbosity::Int
     channels::Vector{Any}
 
@@ -24,11 +26,11 @@ mutable struct Session
         non-owning Sessions are created. You can still set the logging level
         explicitly with `session.log_verbosity` if necessary.
     """
-    function Session(ptr::lib.ssh_session; log_verbosity=nothing, own=true)
+    function Session(ptr::lib.ssh_session; log_verbosity=nothing, own::Bool=true)
         # Set to non-blocking mode
         lib.ssh_set_blocking(ptr, 0)
 
-        session = new(ptr, -1, [])
+        session = new(ptr, own, -1, [])
         if !isnothing(log_verbosity)
             session.log_verbosity = log_verbosity
         end
@@ -101,6 +103,10 @@ Closes a session, which will be unusable afterwards. It's safe to call this
 multiple times.
 """
 function Base.close(session::Session)
+    if !session.owning
+        throw(ArgumentError("Calling close() on a non-owning Session is not allowed to avoid accidental double-frees, see the docs for more information."))
+    end
+
     if isopen(session)
         disconnect(session)
         lib.ssh_free(session.ptr)
@@ -139,7 +145,7 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
 const SAVED_PROPERTIES = (:log_verbosity,)
 
 function Base.propertynames(::Session, private::Bool=false)
-    (:host, :port, :user, :log_verbosity, (private ? (:ptr, :channels) : ())...)
+    (:host, :port, :user, :log_verbosity, :owning, (private ? (:ptr, :channels) : ())...)
 end
 
 function Base.getproperty(session::Session, name::Symbol)
@@ -148,7 +154,7 @@ function Base.getproperty(session::Session, name::Symbol)
     end
 
     # If it's a property that we save, then we return the saved value
-    if name == :ptr || name == :channels || name in SAVED_PROPERTIES
+    if name in fieldnames(Session) || name in SAVED_PROPERTIES
         return getfield(session, name)
     end
 

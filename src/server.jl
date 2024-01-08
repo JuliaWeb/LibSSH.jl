@@ -698,14 +698,13 @@ function on_fwd_channel_eof(session, sshchan, demo_server)::Nothing
     _add_log_event!(demo_server, :fwd_channel_eof, true)
 end
 
-function on_fwd_channel_data(session, sshchan, data_ptr, n_bytes, is_stderr, demo_server)::Int
-    _add_log_event!(demo_server, :fwd_channel_data, n_bytes)
+function on_fwd_channel_data(session, sshchan, data, is_stderr, demo_server)::Int
+    _add_log_event!(demo_server, :fwd_channel_data, length(data))
 
     # When we receive data from the channel, write it to the forwarding socket
-    data = unsafe_wrap(Array, Ptr{UInt8}(data_ptr), n_bytes)
     write(demo_server.fwd_socket, data)
 
-    return n_bytes
+    return length(data)
 end
 
 function on_fwd_channel_close(session, sshchan, demo_server)::Nothing
@@ -782,24 +781,24 @@ function DemoServer(port::Int; verbose::Bool=false, password::Union{String, Noth
 
     ssh.set_message_callback(on_message, bind, demo_server)
     demo_server.server_callbacks = ServerCallbacks(demo_server;
-                                                   auth_password_function=on_auth_password,
-                                                   auth_none_function=on_auth_none,
-                                                   service_request_function=on_service_request,
-                                                   channel_open_request_session_function=on_channel_open)
+                                                   on_auth_password=on_auth_password,
+                                                   on_auth_none=on_auth_none,
+                                                   on_service_request=on_service_request,
+                                                   on_channel_open_request_session=on_channel_open)
     demo_server.channel_callbacks = ChannelCallbacks(demo_server;
-                                                     channel_eof_function=on_channel_eof,
-                                                     channel_close_function=on_channel_close,
-                                                     channel_pty_request_function=on_channel_pty_request,
-                                                     channel_exec_request_function=on_channel_exec_request,
-                                                     channel_env_request_function=on_channel_env_request,
-                                                     channel_write_wontblock_function=on_channel_write_wontblock)
+                                                     on_eof=on_channel_eof,
+                                                     on_close=on_channel_close,
+                                                     on_pty_request=on_channel_pty_request,
+                                                     on_exec_request=on_channel_exec_request,
+                                                     on_env_request=on_channel_env_request,
+                                                     on_write_wontblock=on_channel_write_wontblock)
 
     demo_server.fwd_channel_cb = ChannelCallbacks(demo_server;
-                                                  channel_eof_function=on_fwd_channel_eof,
-                                                  channel_close_function=on_fwd_channel_close,
-                                                  channel_data_function=on_fwd_channel_data,
-                                                  channel_exit_status_function=on_fwd_channel_exit_status,
-                                                  channel_write_wontblock_function=on_fwd_channel_write_wontblock)
+                                                  on_eof=on_fwd_channel_eof,
+                                                  on_close=on_fwd_channel_close,
+                                                  on_data=on_fwd_channel_data,
+                                                  on_exit_status=on_fwd_channel_exit_status,
+                                                  on_write_wontblock=on_fwd_channel_write_wontblock)
 
     return demo_server
 end

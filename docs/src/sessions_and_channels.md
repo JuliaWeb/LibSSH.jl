@@ -5,7 +5,8 @@ CurrentModule = LibSSH
 # Sessions and Channels
 
 *The symbols documented on this page are intended to be safe. They may throw
-exceptions but they should never cause memory corruptions or segfaults.*
+exceptions but they should never cause memory corruptions or segfaults if used
+correctly.*
 
 This documents the high-level API around SSH sessions and channels, which is
 almost everything you need to care about to create a SSH client.
@@ -75,6 +76,8 @@ SshChannel(::Session)
 SshChannel(::Function, ::Session)
 SshChannel(::lib.ssh_channel, Any)
 
+Callbacks.ChannelCallbacks
+Callbacks.ChannelCallbacks()
 set_channel_callbacks
 channel_send_eof
 channel_request_send_exit_status

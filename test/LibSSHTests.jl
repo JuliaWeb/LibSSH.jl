@@ -173,6 +173,10 @@ end
 
     session = ssh.Session("localhost"; log_verbosity=lib.SSH_LOG_NOLOG)
 
+    # We shouldn't be able to close a non-owning session
+    non_owning_session = ssh.Session(session.ptr; own=false)
+    @test_throws ArgumentError close(non_owning_session)
+
     @testset "Setting options" begin
         # Test initial settings
         @test session.user == username()

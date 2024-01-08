@@ -343,15 +343,14 @@ function _log(msg, userdata)
     end
 end
 
-function _on_channel_data(session, sshchan, data_ptr::Ptr{Cvoid}, nbytes, is_stderr, userdata)
+function _on_channel_data(session, sshchan, data, is_stderr, userdata)
     is_stderr = Bool(is_stderr)
     fd_msg = is_stderr ? "stderr" : "stdout"
-    _log("channel_data $nbytes bytes from $fd_msg", userdata)
+    _log("channel_data $(length(data)) bytes from $fd_msg", userdata)
 
-    data = unsafe_wrap(Array, Ptr{UInt8}(data_ptr), nbytes)
     put!(userdata[:channel], copy(data))
 
-    return nbytes
+    return length(data)
 end
 
 function _on_channel_eof(session, sshchan, userdata)
@@ -380,10 +379,10 @@ function execute(session::Session, command::AbstractString; verbose=false)
                                  :exit_code => nothing,
                                  :verbose => verbose)
     callbacks = Callbacks.ChannelCallbacks(userdata;
-                                           channel_eof_function=_on_channel_eof,
-                                           channel_close_function=_on_channel_close,
-                                           channel_data_function=_on_channel_data,
-                                           channel_exit_status_function=_on_channel_exit_status)
+                                           on_eof=_on_channel_eof,
+                                           on_close=_on_channel_close,
+                                           on_data=_on_channel_data,
+                                           on_exit_status=_on_channel_exit_status)
 
     SshChannel(session) do sshchan
         set_channel_callbacks(sshchan, callbacks)
@@ -437,13 +436,12 @@ end
 ## Direct port forwarding
 
 # Handler for receiving data from the server
-function _on_client_channel_data(session, sshchan, data_ptr, n_bytes, is_stderr, client)
-    _logcb(client, "Received $n_bytes bytes from server")
+function _on_client_channel_data(session, sshchan, data, is_stderr, client)
+    _logcb(client, "Received $(length(data)) bytes from server")
 
-    data = unsafe_wrap(Array, Ptr{UInt8}(data_ptr), n_bytes)
     write(client.sock, data)
 
-    return n_bytes
+    return length(data)
 end
 
 function _on_client_channel_eof(session, sshchan, client)
@@ -641,9 +639,9 @@ function _fwd_listen(forwarder::Forwarder)
 
         # Set callbacks for the channel
         callbacks = Callbacks.ChannelCallbacks(nothing;
-                                               channel_data_function=_on_client_channel_data,
-                                               channel_eof_function=_on_client_channel_eof,
-                                               channel_close_function=_on_client_channel_close)
+                                               on_data=_on_client_channel_data,
+                                               on_eof=_on_client_channel_eof,
+                                               on_close=_on_client_channel_close)
         set_channel_callbacks(sshchan, callbacks)
 
         # Create a client and set the callbacks userdata to the new client object

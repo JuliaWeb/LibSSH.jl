@@ -81,7 +81,9 @@ end
 $(TYPEDEF)
 $(TYPEDFIELDS)
 
-Use [`PKI.generate`](@ref) to create a key rather than calling the constructors.
+Use [`PKI.generate`](@ref) to create a key rather than calling the
+constructors. A `SshKey` can be owning or non-owning of its pointer to the
+`lib.ssh_key`.
 
 !!! warning
     Adding a `SshKey` to a [`ssh.Bind`](@ref) will cause the key to be free'd
@@ -91,23 +93,17 @@ Use [`PKI.generate`](@ref) to create a key rather than calling the constructors.
 """
 mutable struct SshKey
     ptr::Union{lib.ssh_key, Nothing}
+    owning::Bool
 
-    function SshKey()
-        ptr = lib.ssh_key_new()
-        if ptr == C_NULL
-            throw(ssh.LibSSHException("Could not allocate SshKey"))
-        end
-
-        return SshKey(ptr)
-    end
-
-    function SshKey(ptr::lib.ssh_key)
+    function SshKey(ptr::lib.ssh_key; own=true)
         if ptr == C_NULL
             throw(ssh.LibSSHException("SshKey pointer is null"))
         end
 
-        self = new(ptr)
-        finalizer(_finalizer, self)
+        self = new(ptr, own)
+        if own
+            finalizer(_finalizer, self)
+        end
     end
 end
 

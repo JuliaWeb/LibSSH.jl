@@ -34,6 +34,7 @@ pkg> add https://github.com/JamesWrigley/LibSSH.jl
 
 - GSSAPI support is disabled on Windows and macOS due to `Kerberos_krb5_jll` not
   being available on those platforms.
+- Many features don't have high-level wrappers (see [Contributing](@ref)).
 
 ## FAQ
 

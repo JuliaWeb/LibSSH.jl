@@ -62,7 +62,7 @@ fingerprint = pki.get_fingerprint_hash(sha256_hash)
 ````
 
 ````
-"SHA256:M0nQH/REk6/1+eg2fjRFXi++pyWuu31/FZN3+6+xaRQ"
+"SHA256:WN8fr1TEIIiYSGXji65UX4Yhyuuf2pS5/4i6QrxgFQs"
 ````
 
 Or convert it to a hex string with [`get_hexa()`](@ref):
@@ -72,7 +72,7 @@ hex = ssh.get_hexa(sha256_hash)
 ````
 
 ````
-"33:49:d0:1f:f4:44:93:af:f5:f9:e8:36:7e:34:45:5e:2f:be:a7:25:ae:bb:7d:7f:15:93:77:fb:af:b1:69:14"
+"58:df:1f:af:54:c4:20:88:98:48:65:e3:8b:ae:54:5f:86:21:ca:eb:9f:da:94:b9:ff:88:ba:42:bc:60:15:0b"
 ````
 
 Since this is a dummy key from the demo server we don't really want to add it

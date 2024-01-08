@@ -5,11 +5,18 @@ CurrentModule = LibSSH
 # Server support
 
 *The symbols documented on this page are intended to be safe. They may throw
-exceptions but they should never cause memory corruptions or segfaults.*
+exceptions but they should never cause memory corruptions or segfaults if used
+correctly.*
 
 ```@contents
 Pages = ["server_support.md"]
 Depth = 10
+```
+
+---
+
+```@docs
+RequestType
 ```
 
 ## SSH Binds
@@ -38,6 +45,8 @@ wait_for_listener
 handle_key_exchange
 set_auth_methods(::Session, ::Vector{AuthMethod})
 set_auth_methods(::lib.ssh_message, ::Vector{AuthMethod})
+Callbacks.ServerCallbacks
+Callbacks.ServerCallbacks()
 set_server_callbacks
 set_message_callback
 get_error(::Bind)
