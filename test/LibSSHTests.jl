@@ -6,8 +6,11 @@ import Sockets
 
 import Aqua
 import Literate
+import Documenter
+import Documenter: DocMeta
 import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_logs
 
+import LibSSH
 import LibSSH as ssh
 import LibSSH.PKI as pki
 import LibSSH: lib
@@ -166,6 +169,8 @@ end
 end
 
 @testset "Session" begin
+    @test ssh.lib_version() isa VersionNumber
+
     session = ssh.Session("localhost"; log_verbosity=lib.SSH_LOG_NOLOG)
 
     @testset "Setting options" begin
@@ -356,10 +361,13 @@ end
 end
 
 @testset "Examples" begin
+    # Test and generate the examples
     Literate.markdown(joinpath(@__DIR__, "examples.jl"),
                       joinpath(dirname(@__DIR__), "docs/src");
                       execute=true,
                       flavor=Literate.DocumenterFlavor())
+
+    # Dummy test
     @test true
 end
 

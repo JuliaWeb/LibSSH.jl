@@ -294,27 +294,6 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around [`lib.ssh_session_is_known_server()`](@ref). If the `throw`
-argument is `true` (the default) it will throw a
-[`HostVerificationException`](@ref) if the verification fails, otherwise it will
-just return the verification status.
-"""
-function is_known_server(session::Session; throw_on_failure=true)
-    if !isconnected(session)
-        throw(ArgumentError("Session is disconnected, cannot check the servers public key"))
-    end
-
-    status = KnownHosts(Int(lib.ssh_session_is_known_server(session.ptr)))
-    if throw_on_failure && status != KnownHosts_Ok
-        throw(HostVerificationException(status))
-    end
-
-    return status
-end
-
-"""
-$(TYPEDSIGNATURES)
-
 Get the public key from server of a connected session. This will throw an
 exception if the session isn't connected or the public key couldn't be
 retrieved.
@@ -333,6 +312,27 @@ function get_server_publickey(session::Session)
     end
 
     return PKI.SshKey(key_ref[])
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Wrapper around [`lib.ssh_session_is_known_server()`](@ref). If the `throw`
+argument is `true` (the default) it will throw a
+[`HostVerificationException`](@ref) if the verification fails, otherwise it will
+just return the verification status.
+"""
+function is_known_server(session::Session; throw_on_failure=true)
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot check the servers public key"))
+    end
+
+    status = KnownHosts(Int(lib.ssh_session_is_known_server(session.ptr)))
+    if throw_on_failure && status != KnownHosts_Ok
+        throw(HostVerificationException(status))
+    end
+
+    return status
 end
 
 """

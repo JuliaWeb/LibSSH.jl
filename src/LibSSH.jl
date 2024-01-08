@@ -115,6 +115,28 @@ function HostVerificationException(status::KnownHosts)
     HostVerificationException("Host verification of server failed", status)
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Convert a buffer to a colon-separated hex string. This is identical to
+`bytes2hex()`, except that each byte will be separated by a colon.
+
+Wrapper around [`lib.ssh_get_hexa()`](@ref). foo
+
+## Examples
+
+```jldoctest
+julia> import LibSSH as ssh
+
+julia> buffer = collect(UInt8, 1:10);
+
+julia> ssh.get_hexa(buffer)
+"01:02:03:04:05:06:07:08:09:0a"
+
+julia> bytes2hex(buffer)
+"0102030405060708090a"
+```
+"""
 function get_hexa(buffer::Vector{UInt8})
     ret = lib.ssh_get_hexa(Ptr{Cuchar}(pointer(buffer)), length(buffer))
     if ret == C_NULL
@@ -125,6 +147,15 @@ function get_hexa(buffer::Vector{UInt8})
     lib.ssh_string_free_char(ret)
 
     return hex_str
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the version of the libssh library that's used.
+"""
+function lib_version()
+    VersionNumber(lib.LIBSSH_VERSION_MAJOR, lib.LIBSSH_VERSION_MINOR, lib.LIBSSH_VERSION_MICRO)
 end
 
 include("pki.jl")

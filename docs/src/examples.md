@@ -15,7 +15,7 @@ import LibSSH as ssh
 ````
 
 Sadly there aren't many publicly available SSH servers out there so we'll
-start our own [Demo server](@ref) locally with a simple password:
+start our own [Demo server](@ref) locally with a Very Secure™ password:
 
 ````julia
 import LibSSH.Demo as demo
@@ -34,8 +34,57 @@ ssh.connect(session)
 ````
 
 And we have a connection! That means that the key exchange between us and the
-server has finished and we can communicate securely. Next step is
-authentication *of the server*, which means checking its host key.
+server has finished and we can communicate securely. But we still don't know
+that the server is who it says it is so the next step is authentication *of
+the server*, which means checking its host key. The easiest way to do this is
+by checking the server key against the users known hosts file:
+
+````julia
+ssh.is_known_server(session; throw_on_failure=false)
+````
+
+````
+KnownHosts_Unknown::KnownHosts = 0
+````
+
+Ok, we got back a `KnownHosts_Unknown` response. That's because the demo
+server automatically creates a dummy key to use, and that definitely won't be
+in the known hosts file. If host verification fails a good client should
+prompt the user with the key fingerprint and ask them what to do. We can get
+the key from the session, hash it, and compute a fingerprint:
+
+````julia
+import LibSSH.PKI as pki
+
+host_key = ssh.get_server_publickey(session)
+sha256_hash = pki.get_publickey_hash(host_key)
+fingerprint = pki.get_fingerprint_hash(sha256_hash)
+````
+
+````
+"SHA256:M0nQH/REk6/1+eg2fjRFXi++pyWuu31/FZN3+6+xaRQ"
+````
+
+Or convert it to a hex string with [`get_hexa()`](@ref):
+
+````julia
+hex = ssh.get_hexa(sha256_hash)
+````
+
+````
+"33:49:d0:1f:f4:44:93:af:f5:f9:e8:36:7e:34:45:5e:2f:be:a7:25:ae:bb:7d:7f:15:93:77:fb:af:b1:69:14"
+````
+
+Since this is a dummy key from the demo server we don't really want to add it
+to our known hosts file, but if this was asked to the user and they said yes,
+it should be added to the known hosts using
+[`update_known_hosts()`](@ref). But since it's a dummy key let's just trust it
+and continue with authenticating ourselves to the server.
+
+!!! danger
+    Don't skip host verification when implementing a client. It's the only
+    part of the protocol that libssh doesn't handle for you, and security
+    cannot be guaranteed without it.
 
 Since we created the server we already know that it supports password
 authentication, but a good client should check anyway:
@@ -76,7 +125,7 @@ What we get back is a tuple of the return code and the output from the
 command.
 
 The demo server is very limited and can only do one operation per-instance, so
-now we have to disconnect from it:
+now we have to disconnect our client from it:
 
 ````julia
 close(session)

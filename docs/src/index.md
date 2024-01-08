@@ -12,6 +12,12 @@ The upstream libssh library has implementations for both a client and server,
 but this package (currently) only attempts to provide a high-level client API. A
 demo SSH server is available, but it's only intended to be used for tests.
 
+These docs were generated against this upstream libssh version:
+```@repl
+import LibSSH as ssh
+ssh.lib_version()
+```
+
 !!! warning
     LibSSH.jl is still under heavy development and may contain bugs. We strongly
     recommend testing your code as much as possible. If you have found a bug,

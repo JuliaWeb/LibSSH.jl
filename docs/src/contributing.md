@@ -48,4 +48,27 @@ julia> include("docs/make.jl")
 
 Note that the examples are generated from `test/examples.jl`, so to update that
 you should edit `test/examples.jl` and re-run the tests (the `Examples` testset
-in particular).
+in particular). Some of the examples include non-deterministic output from
+things like public keys, but you don't need to commit those changes.
+
+### Updating the bindings
+
+If there's a new upstream release of libssh, here's how to update everything:
+1. Update the
+   [`build_tarballs.jl`](https://github.com/JuliaPackaging/Yggdrasil/blob/master/L/libssh/build_tarballs.jl)
+   script to build the new version, and submit a PR to Yggdrasil to update
+   `libssh_jll`. When testing it's often useful to deploy it locally first:
+   ```bash
+   $ julia --project=@project-with-binary-builder build_tarballs.jl --deploy=local
+   ```
+1. Update the generated bindings:
+   ```julia-repl
+   pkg> activate gen
+   julia> include("gen/gen.jl")
+   ```
+
+   If you've build and deployed `libssh_jll` locally make sure to `pkg> dev
+   libssh_jll` first, or `] up` if the JLL has already been updated in
+   Yggdrasil.
+1. Run the tests to make sure everything works, then bump the LibSSH.jl version
+   number and release \o/
