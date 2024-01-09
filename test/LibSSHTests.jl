@@ -6,8 +6,8 @@ import Sockets
 
 import Aqua
 import Literate
-import Documenter
-import Documenter: DocMeta
+import CURL_jll: curl
+import OpenSSH_jll
 import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_logs
 
 import LibSSH
@@ -83,8 +83,12 @@ end
         @test server.ptr == nothing
     end
 
-    # Helper function to set up an `ssh` command
-    ssh_cmd(cmd::Cmd) = ignorestatus(`sshpass -p bar ssh -o NoHostAuthenticationForLocalhost=yes $cmd`)
+    # Helper function to set up an `ssh` command. Slightly ugly workaround to
+    # set the necessary environment variables comes from:
+    # https://github.com/JuliaLang/julia/issues/39282
+    # Also note that we set `-F none` to disabling reading user config files.
+    openssh_cmd = OpenSSH_jll.ssh()
+    ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`sshpass -p bar $(openssh_cmd.exec) -F none -o NoHostAuthenticationForLocalhost=yes $cmd`; env=openssh_cmd.env))
 
     @testset "Password authentication and session channels" begin
         # More complicated test, where we run a command and check the output
@@ -118,7 +122,7 @@ end
     @testset "Direct port forwarding" begin
         # Test the dummy HTTP server we'll use later
         http_server(9090) do
-            @test run(`curl localhost:9090`).exitcode == 0
+            @test run(`$(curl()) localhost:9090`).exitcode == 0
         end
 
         # Test direct port forwarding
@@ -139,7 +143,7 @@ end
                 # on the listening port, so we only need the HTTP server running
                 # while we're making the request.
                 http_server(9090) do
-                    curl_process = run(ignorestatus(`curl localhost:8080`))
+                    curl_process = run(ignorestatus(`$(curl()) localhost:8080`))
                     @test curl_process.exitcode == 0
                 end
 
@@ -319,7 +323,7 @@ end
         demo_server_with_session(2222) do session
             ssh.Forwarder(session, 8080, "localhost", 9090) do forwarder
                 http_server(9090) do
-                    curl_proc = run(ignorestatus(`curl localhost:8080`); wait=false)
+                    curl_proc = run(ignorestatus(`$(curl()) localhost:8080`); wait=false)
                     try
                         wait(curl_proc)
                     finally

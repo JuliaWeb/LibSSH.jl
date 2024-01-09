@@ -1,6 +1,8 @@
 [deps]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+CURL_jll = "b21e61f3-bafc-59ac-ab14-4c5c62d6588d"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
+OpenSSH_jll = "9bd350c2-7e96-507f-8002-3f2e150b4e1b"
 ReTest = "e0db7c4e-2690-44b9-bad6-7687da720f89"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
