@@ -73,5 +73,4 @@ makedocs(;
          modules = [LibSSH],
          warnonly = :missing_docs
          )
-deploydocs(; repo="github.com/JamesWrigley/LibSSH.jl.git",
-           versions=["v#.#"])
+deploydocs(; repo="github.com/JamesWrigley/LibSSH.jl.git")
