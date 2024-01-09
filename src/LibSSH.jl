@@ -121,7 +121,7 @@ $(TYPEDSIGNATURES)
 Convert a buffer to a colon-separated hex string. This is identical to
 `bytes2hex()`, except that each byte will be separated by a colon.
 
-Wrapper around [`lib.ssh_get_hexa()`](@ref). foo
+Wrapper around [`lib.ssh_get_hexa()`](@ref).
 
 ## Examples
 
