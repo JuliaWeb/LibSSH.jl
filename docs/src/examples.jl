@@ -54,9 +54,9 @@ hex = ssh.get_hexa(sha256_hash)
 # and continue with authenticating ourselves to the server.
 
 # !!! danger
-#     Don't skip host verification when implementing a client. It's the only
-#     part of the protocol that libssh doesn't handle for you, and security
-#     cannot be guaranteed without it.
+#     Don't skip host verification. It's the only part of the protocol that
+#     libssh doesn't handle for you, and security cannot be guaranteed without
+#     it.
 
 # Since we created the server we already know that it supports password
 # authentication, but a good client should check anyway:

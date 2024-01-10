@@ -369,11 +369,13 @@ end
 end
 
 @testset "Examples" begin
-    # Test and generate the examples
-    Literate.markdown(joinpath(@__DIR__, "examples.jl"),
-                      joinpath(dirname(@__DIR__), "docs/src");
-                      execute=true,
-                      flavor=Literate.DocumenterFlavor())
+    mktempdir() do tempdir
+        # Test and generate the examples
+        Literate.markdown(joinpath(@__DIR__, "../docs/src/examples.jl"),
+                          tempdir;
+                          execute=true,
+                          flavor=Literate.DocumenterFlavor())
+    end
 
     # Dummy test
     @test true

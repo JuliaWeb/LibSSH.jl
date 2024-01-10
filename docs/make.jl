@@ -1,6 +1,9 @@
 import Revise
-using Documenter
-using LibSSH
+import Literate
+import Documenter
+import Documenter: Remotes, makedocs, deploydocs
+
+import LibSSH
 
 include("../doc_utils.jl")
 import .DocUtils: read_tags, get_url
@@ -54,6 +57,13 @@ end
 # working with servedocs().
 Revise.revise()
 
+# Build the examples
+Literate.markdown(joinpath(@__DIR__, "src/examples.jl"),
+                  joinpath(@__DIR__, "src");
+                  execute=true,
+                  flavor=Literate.DocumenterFlavor())
+
+# Build and deploy the docs
 makedocs(;
          repo = Remotes.GitHub("JamesWrigley", "LibSSH.jl"),
          sitename = "LibSSH",

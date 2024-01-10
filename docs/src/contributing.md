@@ -46,10 +46,7 @@ pkg> activate docs
 julia> include("docs/make.jl")
 ```
 
-Note that the examples are generated from `test/examples.jl`, so to update that
-you should edit `test/examples.jl` and re-run the tests (the `Examples` testset
-in particular). Some of the examples include non-deterministic output from
-things like public keys, but you don't need to commit those changes.
+Note that the examples are generated automatically from `docs/src/examples.jl`.
 
 ### Updating the bindings
 
