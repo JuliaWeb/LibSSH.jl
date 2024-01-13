@@ -100,6 +100,10 @@ function SshChannel(f::Function, session::Session)
     end
 end
 
+function Base.show(io::IO, sshchan::SshChannel)
+    print(io, SshChannel, "(ptr=$(sshchan.ptr), owning=$(sshchan.owning))")
+end
+
 """
 $(TYPEDSIGNATURES)
 
