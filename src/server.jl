@@ -53,14 +53,26 @@ Returns either `SSH_OK` or `SSH_ERROR`.
 function event_dopoll(event::SessionEvent)
     ret = _session_trywait(event.session) do
         # Lock the channels while polling, otherwise close(::SshChannel) may be
-        # called in the meantime by the callbacks, which can cause segfaults.
+        # called in the meantime by the callbacks, which can cause segfaults. We
+        # store the locked channels in an array so we can unlock only these
+        # channels after polling. This is necessary in case a channel is added
+        # during the poll, trying to unlock an unlocked channel will cause an
+        # error.
+        locked_channels = SshChannel[]
         for sshchan in event.session.channels
             lock(sshchan.close_lock)
+            push!(locked_channels, sshchan)
         end
 
-        ret = lib.ssh_event_dopoll(event.ptr, 0)
+        # Always check if the event is still assigned within the loop since it
+        # may be closed at any time.
+        ret = if isassigned(event)
+            lib.ssh_event_dopoll(event.ptr, 0)
+        else
+            SSH_ERROR
+        end
 
-        for sshchan in event.session.channels
+        for sshchan in locked_channels
             unlock(sshchan.close_lock)
         end
 
@@ -81,11 +93,13 @@ function Base.close(event::SessionEvent)
     # Developer note: this function is called by the finalizer so we can't do
     # any task switches, including print statements.
 
-    if !isnothing(event.ptr)
+    if isassigned(event)
         # Attempt to remove the session. Note that we don't bother checking the
         # return code because some other callback may have already removed the
         # session, which will cause this to return SSH_ERROR.
-        lib.ssh_event_remove_session(event.ptr, event.session.ptr)
+        if isassigned(event.session)
+            lib.ssh_event_remove_session(event.ptr, event.session.ptr)
+        end
 
         # Free the ssh_event
         lib.ssh_event_free(event.ptr)
@@ -93,6 +107,12 @@ function Base.close(event::SessionEvent)
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Check if a `SessionEvent` holds a valid pointer to a `lib.ssh_event`.
+"""
+Base.isassigned(event::SessionEvent) = !isnothing(event.ptr)
 
 """
 $(TYPEDEF)
@@ -498,67 +518,39 @@ import ..Bind
 import ..Callbacks: ServerCallbacks, ChannelCallbacks
 
 
-function exec_command(command, demo_server)
-    sshchan = demo_server.sshchan
-    cmd_stdout = IOBuffer()
-    cmd_stderr = IOBuffer()
+function on_auth_password(session, user, password, client)::ssh.AuthStatus
+    _add_log_event!(client, :auth_password, (user, password))
+    client.authenticated = password == client.password
 
-    # Start the process and wait for it
-    proc = run(pipeline(ignorestatus(`sh -c $command`); stdout=cmd_stdout, stderr=cmd_stderr)
-               ; wait=false)
-    demo_server.exec_proc = proc
-    wait(proc)
-
-    # Write the output to the channel. We first check if the channel is open in
-    # case it's been killed suddenly in the meantime.
-    if isopen(sshchan)
-        write(sshchan, String(take!(cmd_stdout)))
-        write(sshchan, String(take!(cmd_stderr)); stderr=true)
-
-        # Clean up
-        ssh.channel_request_send_exit_status(sshchan, proc.exitcode)
-        ssh.channel_send_eof(sshchan)
-    end
-
-    close(sshchan)
+    return client.authenticated ? ssh.AuthStatus_Success : ssh.AuthStatus_Denied
 end
 
-function on_auth_password(session, user, password, demo_server)::ssh.AuthStatus
-    _add_log_event!(demo_server, :auth_password, (user, password))
-    demo_server.authenticated = password == demo_server.password
-
-    return demo_server.authenticated ? ssh.AuthStatus_Success : ssh.AuthStatus_Denied
-end
-
-function on_auth_none(session, user, demo_server)::ssh.AuthStatus
-    _add_log_event!(demo_server, :auth_none, true)
+function on_auth_none(session, user, client)::ssh.AuthStatus
+    _add_log_event!(client, :auth_none, true)
     return ssh.AuthStatus_Denied
 end
 
-function on_service_request(session, service, demo_server)::Bool
-    _add_log_event!(demo_server, :service_request, service)
+function on_service_request(session, service, client)::Bool
+    _add_log_event!(client, :service_request, service)
     return true
 end
 
-function on_channel_open(session, demo_server)::Union{ssh.SshChannel, Nothing}
-    _add_log_event!(demo_server, :channel_open, true)
-    sshchan = ssh.SshChannel(session)
-    demo_server.sshchan = sshchan
+function on_channel_open(session, client)::Union{ssh.SshChannel, Nothing}
+    _add_log_event!(client, :channel_open, true)
+    sshchan = ssh.SshChannel(client.session)
+    ssh.set_channel_callbacks(sshchan, client.channel_callbacks)
+    push!(client.unclaimed_channels, sshchan)
+
     return sshchan
 end
 
-function on_channel_write_wontblock(session, sshchan, n_bytes, demo_server)::Int
-    _add_log_event!(demo_server, :channel_write_wontblock, n_bytes)
-    return 0
-end
-
-function on_channel_env_request(session, sshchan, name, value, demo_server)::Bool
-    _add_log_event!(demo_server, :channel_env_request, (name, value))
+function on_channel_env_request(session, sshchan, name, value, client)::Bool
+    _add_log_event!(client, :channel_env_request, (name, value))
     return true
 end
 
-function on_channel_exec_request(session, sshchan, command, demo_server)::Bool
-    _add_log_event!(demo_server, :channel_exec_request, command)
+function on_channel_exec_request(session, sshchan, command, client)::Bool
+    _add_log_event!(client, :channel_exec_request, command)
 
     # Note that we ignore the `sshchan` argument in favour of
     # `demo_server.sshchan`. That's extremely important! `sshchan` is a
@@ -572,89 +564,74 @@ function on_channel_exec_request(session, sshchan, command, demo_server)::Bool
     # would cause a double-free later when we close
     # `demo_server.sshchan`. That's why close()'ing non-owning SshChannels is
     # forbidden.
-    demo_server.exec_task = Threads.@spawn try
-        exec_command(command, demo_server)
-    catch ex
-        @error "Error when running command" exception=(ex, catch_backtrace())
+    idx = findfirst(x -> x.ptr == sshchan.ptr, client.unclaimed_channels)
+    if isnothing(idx)
+        @error "Couldn't find the requested SshChannel in the client"
+        return false
     end
+
+    owning_sshchan = popat!(client.unclaimed_channels, idx)
+    push!(client.channel_operations, CommandExecutor(command, owning_sshchan))
 
     return true
 end
 
-function on_channel_eof(session, sshchan, demo_server)::Nothing
-    _add_log_event!(demo_server, :channel_eof, true)
+function on_channel_eof(session, sshchan, client)::Nothing
+    _add_log_event!(client, :channel_eof, true)
     return nothing
 end
 
-function on_channel_close(session, sshchan, demo_server)::Nothing
-    _add_log_event!(demo_server, :channel_close, true)
-    close(demo_server.sshchan)
+function on_channel_close(session, sshchan, client)::Nothing
+    _add_log_event!(client, :channel_close, true)
+
+    all_channels = copy(client.unclaimed_channels)
+    for op in client.channel_operations
+        append!(all_channels, getchannels(op))
+    end
+
+    # It's ok if we don't find a matching channel, that just means that we've
+    # already closed it from our side.
+    idx = findfirst(x -> x.ptr == sshchan.ptr, all_channels)
+    if !isnothing(idx)
+        close(all_channels[idx])
+    end
 end
 
-function on_channel_pty_request(session, sshchan, term, width, height, pxwidth, pxheight, demo_server)::Bool
-    _add_log_event!(demo_server, :channel_pty_request, (term, width, height, pxwidth, pxheight))
+function on_channel_pty_request(session, sshchan, term, width, height, pxwidth, pxheight, client)::Bool
+    _add_log_event!(client, :channel_pty_request, (term, width, height, pxwidth, pxheight))
     return false
 end
 
 function on_message(session, msg::lib.ssh_message, demo_server)::Bool
+    # Find the client to which the session belongs
+    idx = findfirst(client -> client.session.ptr == session.ptr, demo_server.clients)
+    if isnothing(idx)
+        @warn "Couldn't find a client for session $(session.ptr)"
+        return true
+    end
+    client = demo_server.clients[idx]
+
     msg_type = ssh.message_type(msg)
     msg_subtype = ssh.message_subtype(msg)
-    _add_log_event!(demo_server, :message_request, (msg_type, msg_subtype))
+    _add_log_event!(client, :message_request, (msg_type, msg_subtype))
 
     # Handle direct port forwarding requests
     if msg_type == ssh.RequestType_ChannelOpen && msg_subtype == lib.SSH_CHANNEL_DIRECT_TCPIP
         hostname = unsafe_string(lib.ssh_message_channel_request_open_destination(msg))
         port = lib.ssh_message_channel_request_open_destination_port(msg)
 
-        # Set up the listener socket. Restrict ourselves to IPv4 for simplicity
-        # since the test HTTP servers bind to the IPv4 loopback interface (and
-        # you're not using this in production, right?).
-        demo_server.fwd_socket = Sockets.connect(getaddrinfo(hostname, IPv4), port)
-
-        # Create a task to read data from the socket and write it to the SSH channel
-        demo_server.fwd_socket_task = Threads.@spawn try
-            sock = demo_server.fwd_socket
-
-            # Loop while the connection is open
-            while isopen(sock)
-                # Read some data
-                data = readavailable(sock)
-
-                if !isempty(data) && isopen(demo_server.fwd_sshchan)
-                    # If we got something, write it to the channel
-                    _add_log_event!(demo_server, :fwd_socket_data, length(data))
-                    write(demo_server.fwd_sshchan, data)
-                elseif isempty(data) && eof(sock)
-                    # Otherwise it means the remote closed the connection and we
-                    # can shutdown the port forward if it's still open.
-                    close(sock)
-                    if isopen(demo_server.fwd_sshchan)
-                        ssh.channel_send_eof(demo_server.fwd_sshchan)
-                        close(demo_server.fwd_sshchan)
-                    end
-                elseif eof(demo_server.fwd_sshchan)
-                    # Or if the client closed the connection we also shutdown
-                    # the port.
-                    close(sock)
-                end
-            end
-        catch ex
-            @error "Error in port fowarding socket handler!" exception=(ex, catch_backtrace())
-        end
-
         # Create a channel for the port forward
         channel_ptr = lib.ssh_message_channel_request_open_reply_accept(msg)
-        sshchan = ssh.SshChannel(channel_ptr, session)
-        ssh.set_channel_callbacks(sshchan, demo_server.fwd_channel_cb)
-        demo_server.fwd_sshchan = sshchan
+        sshchan = ssh.SshChannel(channel_ptr, client.session)
+        push!(client.channel_operations, Forwarder(client, sshchan, hostname, port))
 
         return false
     end
 
     # Handle keyboard-interactive authentication
     if msg_type == ssh.RequestType_Auth && msg_subtype == lib.SSH_AUTH_METHOD_INTERACTIVE
-        if demo_server.authenticated
-            _add_log_event!(demo_server, :auth_kbdint, "already authenticated")
+        if client.authenticated
+            _add_log_event!(client, :auth_kbdint, "already authenticated")
             lib.message_auth_reply_success(msg, Int(false))
             return false
         end
@@ -662,7 +639,7 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
         if !lib.message_auth_kbdint_is_response(msg)
             # This means the user is requesting authentication
             user = lib.message_auth_user(msg)
-            _add_log_event!(demo_server, :auth_kbdint, user)
+            _add_log_event!(client, :auth_kbdint, user)
             ssh.message_auth_interactive_request(msg, "Demo server login", "Enter your details.",
                                                  ["Password: ", "Token: "], [true, true])
             return false
@@ -672,7 +649,7 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
 
             # If they didn't return the correct number of answers, deny the request
             if n_answers != 2
-                _add_log_event!(demo_server, :auth_kbdint, "denied")
+                _add_log_event!(client, :auth_kbdint, "denied")
                 lib.message_reply_default(msg)
                 return false
             end
@@ -681,9 +658,9 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
             password = lib.userauth_kbdint_getanswer(session.ptr, 0)
             token = lib.userauth_kbdint_getanswer(session.ptr, 1)
             if password == "foo" && token == "bar"
-                _add_log_event!(demo_server, :auth_kbdint, "accepted with '$password' and '$token'")
+                _add_log_event!(client, :auth_kbdint, "accepted with '$password' and '$token'")
                 lib.message_auth_reply_success(msg, Int(false))
-                demo_server.authenticated = true
+                client.authenticated = true
                 return false
             end
 
@@ -694,30 +671,33 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
     return true
 end
 
-function on_fwd_channel_eof(session, sshchan, demo_server)::Nothing
-    _add_log_event!(demo_server, :fwd_channel_eof, true)
+@kwdef mutable struct Client
+    id::Int
+    session::ssh.Session
+    verbose::Bool
+    password::Union{String, Nothing}
+    authenticated::Bool = false
+
+    session_event::Union{ssh.SessionEvent, Nothing} = nothing
+    server_callbacks::ServerCallbacks = ServerCallbacks()
+    channel_callbacks::ChannelCallbacks = ChannelCallbacks()
+    unclaimed_channels::Vector{ssh.SshChannel} = ssh.SshChannel[]
+    channel_operations::Vector{Any} = []
+
+    task::Union{Task, Nothing} = nothing
+    log_timeline::Vector = []
+    log_lock::ReentrantLock = ReentrantLock()
+    log_id::Int = 1
+    callback_log::Dict{Symbol, Vector} = Dict{Symbol, Vector}()
 end
 
-function on_fwd_channel_data(session, sshchan, data, is_stderr, demo_server)::Int
-    _add_log_event!(demo_server, :fwd_channel_data, length(data))
+function Base.close(client::Client)
+    for op in client.channel_operations
+        close(op)
+    end
 
-    # When we receive data from the channel, write it to the forwarding socket
-    write(demo_server.fwd_socket, data)
-
-    return length(data)
-end
-
-function on_fwd_channel_close(session, sshchan, demo_server)::Nothing
-    _add_log_event!(demo_server, :fwd_channel_close, true)
-end
-
-function on_fwd_channel_exit_status(session, sshchan, exitcode, demo_server)::Nothing
-    _add_log_event!(demo_server, :fwd_channel_exit_status, exitcode)
-end
-
-function on_fwd_channel_write_wontblock(session, sshchan, n_bytes, demo_server)::Int
-    _add_log_event!(demo_server, :fwd_channel_write_wontblock, n_bytes)
-    return 0
+    close(client.session_event)
+    wait(client.task)
 end
 
 """
@@ -726,26 +706,12 @@ $(TYPEDFIELDS)
 """
 @kwdef mutable struct DemoServer
     bind::Bind
-    server_callbacks::ServerCallbacks = ServerCallbacks()
-    channel_callbacks::ChannelCallbacks = ChannelCallbacks()
     listener_task::Union{Task, Nothing} = nothing
     sshchan::Union{ssh.SshChannel, Nothing} = nothing
     verbose::Bool = false
     password::Union{String, Nothing} = nothing
-    authenticated::Bool = false
 
-    exec_task::Union{Task, Nothing} = nothing
-    exec_proc::Union{Base.Process, Nothing} = nothing
-
-    fwd_sshchan::Union{ssh.SshChannel, Nothing} = nothing
-    fwd_channel_cb::ChannelCallbacks = ChannelCallbacks()
-    fwd_socket::Sockets.TCPSocket = Sockets.TCPSocket()
-    fwd_socket_task::Union{Task, Nothing} = nothing
-
-    callback_log::Dict{Symbol, Vector} = Dict{Symbol, Vector}()
-    log_timeline::Vector = []
-    log_lock::ReentrantLock = ReentrantLock()
-    log_id::Int = 1
+    clients::Vector{Client} = Client[]
 end
 
 """
@@ -780,25 +746,6 @@ function DemoServer(port::Int; verbose::Bool=false, password::Union{String, Noth
     demo_server = DemoServer(; bind, verbose, password)
 
     ssh.set_message_callback(on_message, bind, demo_server)
-    demo_server.server_callbacks = ServerCallbacks(demo_server;
-                                                   on_auth_password=on_auth_password,
-                                                   on_auth_none=on_auth_none,
-                                                   on_service_request=on_service_request,
-                                                   on_channel_open_request_session=on_channel_open)
-    demo_server.channel_callbacks = ChannelCallbacks(demo_server;
-                                                     on_eof=on_channel_eof,
-                                                     on_close=on_channel_close,
-                                                     on_pty_request=on_channel_pty_request,
-                                                     on_exec_request=on_channel_exec_request,
-                                                     on_env_request=on_channel_env_request,
-                                                     on_write_wontblock=on_channel_write_wontblock)
-
-    demo_server.fwd_channel_cb = ChannelCallbacks(demo_server;
-                                                  on_eof=on_fwd_channel_eof,
-                                                  on_close=on_fwd_channel_close,
-                                                  on_data=on_fwd_channel_data,
-                                                  on_exit_status=on_fwd_channel_exit_status,
-                                                  on_write_wontblock=on_fwd_channel_write_wontblock)
 
     return demo_server
 end
@@ -863,7 +810,7 @@ function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
     # If there was a timeout we throw an exception, otherwise we wait() on
     # the task, which will cause any exeption thrown by f() to bubble up.
     if !isnothing(kill_failed)
-        kill_failed_msg = kill_failed ? " (failed to kill function after $(kill_timeout)s, it's still running)" : ""
+        kill_failed_msg = (kill_failed && !istaskdone(t)) ? " (failed to kill function after $(kill_timeout)s, it's still running)" : ""
         error("DemoServer function timed out after $(timeout)s" * kill_failed_msg)
     else
         wait(t)
@@ -872,54 +819,41 @@ function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
     return demo_server
 end
 
-function handle_session(session, ds::DemoServer)
-    empty!(ds.callback_log)
+function _handle_client(session::ssh.Session, ds::DemoServer)
+    client = Client(; id=length(ds.clients) + 1,
+                     session,
+                     password=ds.password,
+                     verbose=ds.verbose)
+    client.server_callbacks = ServerCallbacks(client;
+                                              on_auth_password=on_auth_password,
+                                              on_auth_none=on_auth_none,
+                                              on_service_request=on_service_request,
+                                              on_channel_open_request_session=on_channel_open)
+    client.channel_callbacks = ChannelCallbacks(client;
+                                                on_eof=on_channel_eof,
+                                                on_close=on_channel_close,
+                                                on_pty_request=on_channel_pty_request,
+                                                on_exec_request=on_channel_exec_request,
+                                                on_env_request=on_channel_env_request)
+    client.task = current_task()
 
-    ssh.set_server_callbacks(session, ds.server_callbacks)
+    ssh.set_server_callbacks(session, client.server_callbacks)
     if !ssh.handle_key_exchange(session)
         @error "Key exchange failed"
         return
     end
 
-    event = ssh.SessionEvent(session)
-    while isnothing(ds.sshchan)
-        ret = ssh.event_dopoll(event)
+    push!(ds.clients, client)
 
+    client.session_event = ssh.SessionEvent(session)
+    while true
+        ret = ssh.event_dopoll(client.session_event)
         if ret != ssh.SSH_OK
             break
         end
     end
 
-    if !isnothing(ds.sshchan)
-        ssh.set_channel_callbacks(ds.sshchan, ds.channel_callbacks)
-        # Loop while the session is open
-        while ssh.event_dopoll(event) == ssh.SSH_OK
-            continue
-        end
-
-        # Wait for everything that might still be using the channel
-        if !isnothing(ds.exec_task)
-            wait(ds.exec_task)
-        end
-        if !isnothing(ds.fwd_sshchan)
-            close(ds.fwd_sshchan)
-            close(ds.fwd_socket)
-        end
-        if !isnothing(ds.fwd_socket_task)
-            wait(ds.fwd_socket_task)
-        end
-
-        # And then close it
-        close(ds.sshchan)
-    end
-
-    try
-        close(event)
-    catch ex
-        # This is commented out because it doesn't seem to be a critical
-        # error. Worth investigating in the future though.
-        @error "Error removing session from event" exception=ex
-    end
+    close(client.session_event)
 end
 
 """
@@ -929,9 +863,8 @@ Start a [`DemoServer`](@ref), which means bind to a port and start the
 [`ssh.listen`](@ref) loop.
 """
 function start(demo_server::DemoServer)
-    handle_wrapper = session -> handle_session(session, demo_server)
     demo_server.listener_task = Threads.@spawn try
-        ssh.listen(handle_wrapper, demo_server.bind)
+        ssh.listen(session -> _handle_client(session, demo_server), demo_server.bind)
     catch ex
         @error "Error during listen()" exception=(ex, catch_backtrace())
     end
@@ -944,9 +877,8 @@ $(TYPEDSIGNATURES)
 Stop a [`DemoServer`](@ref).
 """
 function stop(demo_server::DemoServer)
-    if !isnothing(demo_server.exec_task)
-        kill(demo_server.exec_proc)
-        wait(demo_server.exec_task)
+    for client in demo_server.clients
+        close(client)
     end
 
     if !isnothing(demo_server.listener_task)
@@ -956,19 +888,19 @@ function stop(demo_server::DemoServer)
     end
 end
 
-function _add_log_event!(ds::DemoServer, callback_name::Symbol, event)
-    @lock ds.log_lock begin
-        if !haskey(ds.callback_log, callback_name)
-            ds.callback_log[callback_name] = []
+function _add_log_event!(client::Client, callback_name::Symbol, event)
+    @lock client.log_lock begin
+        if !haskey(client.callback_log, callback_name)
+            client.callback_log[callback_name] = []
         end
 
-        log_vector = ds.callback_log[callback_name]
+        log_vector = client.callback_log[callback_name]
         push!(log_vector, event)
-        push!(ds.log_timeline, (callback_name, lastindex(log_vector), time()))
+        push!(client.log_timeline, (callback_name, lastindex(log_vector), time()))
 
-        if ds.verbose
+        if client.verbose
             timestamp = Dates.format(Dates.now(), Dates.ISOTimeFormat)
-            @info "$timestamp DemoServer: $callback_name $event"
+            @info "$timestamp DemoServer client $(client.id): $callback_name $event"
             flush(stdout)
         end
     end
@@ -989,6 +921,155 @@ function print_timeline(ds::DemoServer)
                 id,
                 callback_name,
                 string(ds.callback_log[callback_name][log_idx]))
+    end
+end
+
+## Execute commands
+
+function exec_command(executor)
+    sshchan = executor.sshchan
+    cmd_stdout = IOBuffer()
+    cmd_stderr = IOBuffer()
+
+    # Start the process and wait for it
+    proc = run(pipeline(ignorestatus(`sh -c $(executor.command)`); stdout=cmd_stdout, stderr=cmd_stderr);
+               wait=false)
+    executor.process = proc
+    notify(executor._started_event)
+    wait(proc)
+
+    # Write the output to the channel. We first check if the channel is open in
+    # case it's been killed suddenly in the meantime.
+    if isopen(sshchan)
+        write(sshchan, String(take!(cmd_stdout)))
+        write(sshchan, String(take!(cmd_stderr)); stderr=true)
+
+        # Clean up
+        ssh.channel_request_send_exit_status(sshchan, proc.exitcode)
+        ssh.channel_send_eof(sshchan)
+    end
+
+    close(sshchan)
+end
+
+@kwdef mutable struct CommandExecutor
+    command::String
+    sshchan::ssh.SshChannel
+    task::Union{Task, Nothing} = nothing
+    process::Union{Base.Process, Nothing} = nothing
+
+    _started_event::Base.Event = Base.Event()
+end
+
+function CommandExecutor(command::String, sshchan::ssh.SshChannel)
+    if !sshchan.owning
+        throw(ArgumentError("The passed SshChannel is non-owning, CommandExecutor requires an owning SshChannel"))
+    end
+
+    executor = CommandExecutor(; command, sshchan)
+
+    executor.task = Threads.@spawn try
+        exec_command(executor)
+    catch ex
+        @error "Error when running command" exception=(ex, catch_backtrace())
+    end
+
+    return executor
+end
+
+function Base.close(executor::CommandExecutor)
+    wait(executor._started_event)
+    kill(executor.process)
+    wait(executor.task)
+end
+
+getchannels(executor::CommandExecutor) = [executor.sshchan]
+
+# Direct port forwarding
+
+function on_fwd_channel_eof(session, sshchan, forwarder)::Nothing
+    _add_log_event!(forwarder.client, :fwd_channel_eof, true)
+end
+
+function on_fwd_channel_data(session, sshchan, data, is_stderr, forwarder)::Int
+    _add_log_event!(forwarder.client, :fwd_channel_data, length(data))
+
+    # When we receive data from the channel, write it to the forwarding socket
+    write(forwarder.socket, data)
+
+    return length(data)
+end
+
+function on_fwd_channel_close(session, sshchan, forwarder)::Nothing
+    _add_log_event!(forwarder.client, :fwd_channel_close, true)
+end
+
+function on_fwd_channel_exit_status(session, sshchan, exitcode, forwarder)::Nothing
+    _add_log_event!(forwarder.client, :fwd_channel_exit_status, exitcode)
+end
+
+@kwdef mutable struct Forwarder
+    client::Client
+    sshchan::ssh.SshChannel
+    channel_callbacks::ChannelCallbacks = ChannelCallbacks()
+    socket::Sockets.TCPSocket = Sockets.TCPSocket()
+    task::Union{Task, Nothing} = nothing
+end
+
+function Forwarder(client::Client, sshchan::ssh.SshChannel, hostname::String, port::Integer)
+    self = Forwarder(; client, sshchan)
+    self.channel_callbacks = ChannelCallbacks(self;
+                                              on_eof=on_fwd_channel_eof,
+                                              on_close=on_fwd_channel_close,
+                                              on_data=on_fwd_channel_data,
+                                              on_exit_status=on_fwd_channel_exit_status)
+    ssh.set_channel_callbacks(sshchan, self.channel_callbacks)
+
+    # Set up the listener socket. Restrict ourselves to IPv4 for simplicity
+    # since the test HTTP servers bind to the IPv4 loopback interface (and
+    # you're not using this in production, right?).
+    self.socket = Sockets.connect(getaddrinfo(hostname, IPv4), port)
+    self.task = Threads.@spawn try
+        _forward_socket_data(self)
+    catch ex
+        @error "Error in port fowarding socket handler!" exception=(ex, catch_backtrace())
+    end
+
+    return self
+end
+
+getchannels(forwarder::Forwarder) = [forwarder.sshchan]
+
+function Base.close(forwarder::Forwarder)
+    close(forwarder.socket)
+    wait(forwarder.task)
+end
+
+function _forward_socket_data(forwarder::Forwarder)
+    sock = forwarder.socket
+
+    # Loop while the connection is open
+    while isopen(sock)
+        # Read some data
+        data = readavailable(sock)
+
+        if !isempty(data) && isopen(forwarder.sshchan)
+            # If we got something, write it to the channel
+            _add_log_event!(forwarder.client, :fwd_socket_data, length(data))
+            write(forwarder.sshchan, data)
+        elseif isempty(data) && eof(sock)
+            # Otherwise it means the remote closed the connection and we
+            # can shutdown the port forward if it's still open.
+            close(sock)
+            if isopen(forwarder.sshchan)
+                ssh.channel_send_eof(forwarder.sshchan)
+                close(forwarder.sshchan)
+            end
+        elseif eof(forwarder.sshchan)
+            # Or if the client closed the connection we also shutdown
+            # the port.
+            close(sock)
+        end
     end
 end
 

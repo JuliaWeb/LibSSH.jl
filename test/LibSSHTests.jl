@@ -13,7 +13,7 @@ import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_logs
 import LibSSH
 import LibSSH as ssh
 import LibSSH.PKI as pki
-import LibSSH: lib
+import LibSSH: Demo, lib
 import LibSSH.Demo: DemoServer
 
 
@@ -101,15 +101,16 @@ end
             @test strip(String(take!(cmd_out))) == username()
         end
 
-        logs = demo_server.callback_log
+        client = demo_server.clients[1]
+        logs = client.callback_log
 
         # Check that the authentication methods were called
         @test logs[:auth_none] == [true]
         @test logs[:auth_password] == [("foo", "bar")]
-        @test demo_server.authenticated
+        @test client.authenticated
 
-        # And a channel was created
-        @test !isnothing(demo_server.sshchan)
+        # And a command was executed
+        @test typeof.(client.channel_operations) == [Demo.CommandExecutor]
 
         # Make sure that it can handle errors too
         DemoServer(2222; password="bar") do
@@ -126,7 +127,7 @@ end
         end
 
         # Test direct port forwarding
-        demo_server = DemoServer(2222; password="bar", log_verbosity=ssh.SSH_LOG_NOLOG) do
+        demo_server = DemoServer(2222; password="bar") do
             mktempdir() do tmpdir
                 tmpfile = joinpath(tmpdir, "foo")
 
@@ -153,7 +154,8 @@ end
             end
         end
 
-        @test demo_server.callback_log[:message_request] == [(ssh.RequestType_ChannelOpen, lib.SSH_CHANNEL_DIRECT_TCPIP)]
+        client = demo_server.clients[1]
+        @test client.callback_log[:message_request] == [(ssh.RequestType_ChannelOpen, lib.SSH_CHANNEL_DIRECT_TCPIP)]
     end
 
     @testset "Keyboard-interactive authentication" begin
@@ -164,11 +166,21 @@ end
             wait(proc)
         end
 
+        client = demo_server.clients[1]
+
         # Check that authentication succeeded
-        @test demo_server.authenticated
+        @test client.authenticated
 
         # And the command was executed
-        @test demo_server.callback_log[:channel_exec_request] == ["whoami"]
+        @test client.callback_log[:channel_exec_request] == ["whoami"]
+    end
+
+    @testset "Multiple connections" begin
+        demo_server = DemoServer(2222; password="bar") do
+            run(ssh_cmd(`-p 2222 foo@localhost exit 0`))
+            run(ssh_cmd(`-p 2222 foo@localhost exit 0`))
+        end
+        @test length(demo_server.clients) == 2
     end
 end
 
