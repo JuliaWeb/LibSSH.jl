@@ -33,6 +33,8 @@ mutable struct SshChannel
             throw(ArgumentError("You must pass a session to an owning SshChannel"))
         elseif !own && !isnothing(session)
             throw(ArgumentError("Only owning SshChannels can be associated with a Session"))
+        elseif own && !isnothing(session) && !session.owning
+            throw(ArgumentError("Cannot create a SshChannel from a non-owning Session"))
         end
         self = new(ptr, own, session, ReentrantLock(), false)
 

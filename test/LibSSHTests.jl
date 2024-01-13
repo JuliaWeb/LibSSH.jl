@@ -291,6 +291,10 @@ end
             non_owning_sshchan = ssh.SshChannel(sshchan.ptr; own=false)
             @test_throws ArgumentError close(non_owning_sshchan)
 
+            # We shouldn't be able to create a channel from a non-owning session
+            non_owning_session = ssh.Session(session.ptr; own=false)
+            @test_throws ArgumentError ssh.SshChannel(non_owning_session)
+
             close(sshchan)
             @test isnothing(sshchan.ptr)
             @test isempty(session.channels)
