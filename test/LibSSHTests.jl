@@ -190,6 +190,9 @@ end
     session = ssh.Session("localhost"; auto_connect=false, log_verbosity=lib.SSH_LOG_NOLOG)
     @test !ssh.isconnected(session)
 
+    # Authenticating on an unconnected session should error
+    @test_throws ArgumentError ssh.userauth_none(session)
+
     # We shouldn't be able to close a non-owning session
     non_owning_session = ssh.Session(session.ptr; own=false)
     @test_throws ArgumentError close(non_owning_session)

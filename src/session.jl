@@ -377,6 +377,10 @@ Wrapper around [`lib.ssh_userauth_none()`](@ref). It will throw a
 [`LibSSHException`](@ref) if an error occurs.
 """
 function userauth_none(session::Session)
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+    end
+
     while true
         ret = AuthStatus(lib.ssh_userauth_none(session.ptr, C_NULL))
 
@@ -400,6 +404,10 @@ another error occurred.
 This wrapper will automatically call [`userauth_none()`](@ref) beforehand.
 """
 function userauth_list(session::Session)
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+    end
+
     # First we have to call ssh_userauth_none() for... some reason, according to
     # the docs.
     status = userauth_none(session)
@@ -425,6 +433,10 @@ Wrapper around [`lib.ssh_userauth_password()`](@ref). This will throw a
 [`LibSSHException`](@ref) if an error is returned by the underlying library.
 """
 function userauth_password(session::Session, password::String)
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+    end
+
     while true
         GC.@preserve password begin
             password_cstr = Base.unsafe_convert(Ptr{Cchar}, password)
@@ -447,6 +459,10 @@ $(TYPEDSIGNATURES)
 Wrapper around [`lib.ssh_userauth_kbdint`](@ref).
 """
 function userauth_kbdint(session::Session)
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+    end
+
     ret = _session_trywait(session) do
         lib.ssh_userauth_kbdint(session.ptr, C_NULL, C_NULL)
     end
@@ -465,6 +481,10 @@ Combination of [`lib.ssh_userauth_kbdint_getnprompts`](@ref) and
 lower-level functions.
 """
 function userauth_kbdint_getprompts(session::Session)
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+    end
+
     prompts = Tuple{String, Bool}[]
     n_prompts = lib.ssh_userauth_kbdint_getnprompts(session.ptr)
     for i in 0:n_prompts - 1
@@ -483,6 +503,10 @@ Sets answers for a keyboard-interactive auth session. Uses
 [`lib.ssh_userauth_kbdint_setanswer`](@ref) internally.
 """
 function userauth_kbdint_setanswers(session::Session, answers::Vector{String})
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+    end
+
     n_prompts = lib.ssh_userauth_kbdint_getnprompts(session.ptr)
     if n_prompts != length(answers)
         throw(ArgumentError("Server sent $(n_prompts) prompts, but was passed $(length(answers)) answers"))
