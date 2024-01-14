@@ -66,7 +66,7 @@ julia> session = ssh.Session("foo.org")
 julia> session = ssh.Session(ip"12.34.56.78", 2222)
 ```
 """
-function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22; log_verbosity=nothing)
+function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22; log_verbosity=nothing, auto_connect=true)
     session_ptr = lib.ssh_new()
     if session_ptr == C_NULL
         throw(LibSSHException("Could not initialize Session for host $(host)"))
@@ -83,6 +83,10 @@ function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22; log_verbo
     ret = ssh_options_set(session.ptr, SSH_OPTIONS_USER, C_NULL)
     if ret != 0
         throw(LibSSHException("Error when initializing user: $(ret)"))
+    end
+
+    if auto_connect
+        connect(session)
     end
 
     return session
@@ -250,6 +254,12 @@ Wrapper around [`lib.ssh_connect()`](@ref). This will throw an exception if
 connecting fails.
 """
 function connect(session::Session)
+    if !isassigned(session)
+        throw(ArgumentError("Session has been closed, cannot connect it to a server"))
+    elseif isconnected(session)
+        return
+    end
+
     while true
         ret = lib.ssh_connect(session.ptr)
 

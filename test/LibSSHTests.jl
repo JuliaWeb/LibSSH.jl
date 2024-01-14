@@ -187,7 +187,8 @@ end
 @testset "Session" begin
     @test ssh.lib_version() isa VersionNumber
 
-    session = ssh.Session("localhost"; log_verbosity=lib.SSH_LOG_NOLOG)
+    session = ssh.Session("localhost"; auto_connect=false, log_verbosity=lib.SSH_LOG_NOLOG)
+    @test !ssh.isconnected(session)
 
     # We shouldn't be able to close a non-owning session
     non_owning_session = ssh.Session(session.ptr; own=false)
@@ -210,8 +211,6 @@ end
         @test_throws ErrorException session.foo
     end
 
-    @test !ssh.isconnected(session)
-
     # Test the finalizer
     finalize(session)
     @test session.ptr == nothing
@@ -220,7 +219,6 @@ end
         # Test connecting to a server and doing password authentication
         DemoServer(2222; password="foo") do
             session = ssh.Session(Sockets.localhost, 2222)
-            ssh.connect(session)
 
             # The server uses a fake key so it should definitely fail verification
             @test_throws ssh.HostVerificationException ssh.is_known_server(session)
@@ -240,7 +238,6 @@ end
     @testset "Keyboard-interactive authentication" begin
         DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
             session = ssh.Session(Sockets.localhost, 2222)
-            ssh.connect(session)
             @test ssh.isconnected(session)
 
             @test ssh.userauth_kbdint(session) == ssh.AuthStatus_Info
@@ -274,7 +271,6 @@ function demo_server_with_session(f::Function, port, args...;
     demo_server = DemoServer(port, args...; password, timeout, kill_timeout, kwargs...) do
         # Create a session
         session = ssh.Session("127.0.0.1", port; log_verbosity)
-        ssh.connect(session)
         @test ssh.isconnected(session)
         @test ssh.userauth_password(session, password) == ssh.AuthStatus_Success
 
@@ -290,7 +286,9 @@ function demo_server_with_session(f::Function, port, args...;
 end
 
 @testset "SshChannel" begin
-    session = ssh.Session("localhost")
+    session = ssh.Session("localhost"; auto_connect=false)
+
+    # We shouldn't be able to create a channel on an unconnected session
     @test_throws ArgumentError ssh.SshChannel(session)
 
     @testset "Creating/closing channels" begin
