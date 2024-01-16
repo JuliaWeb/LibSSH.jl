@@ -16,15 +16,18 @@ mutable struct Session
     @doc """
     $(TYPEDSIGNATURES)
 
-    Inner constructor. This is only useful if you already have a `ssh_session`
-    (i.e. in a server). Do not use it if you want a client, use the other
-    constructor.
+    This is only useful if you already have a `ssh_session` (i.e. in a
+    server). Do not use it if you want a client, use the other constructor.
 
-    !!! warning
-        The `log_verbosity` argument will be ignored by the constructor if `own` is
-        `false` to avoid accidentally changing the logging level in callbacks when
-        non-owning Sessions are created. You can still set the logging level
-        explicitly with `session.log_verbosity` if necessary.
+    ## Parameters
+    - `ptr`: A pointer to the `lib.ssh_session` to wrap.
+    - `log_verbosity` (default: `nothing`): Set the log verbosity for the
+       session. This argument will be ignored if `own` is `false` to avoid
+       accidentally changing the logging level in callbacks when non-owning
+       Sessions are created. You can still set the logging level explicitly with
+       `session.log_verbosity` if necessary.
+    - `own` (default: `true`): Whether to take ownership of `ptr`, i.e. whether
+      to register a finalizer to free the memory.
     """
     function Session(ptr::lib.ssh_session; log_verbosity=nothing, own::Bool=true)
         # Set to non-blocking mode
@@ -57,6 +60,17 @@ $(TYPEDSIGNATURES)
 
 Constructor for creating a client session. Use this if you want to connect to a
 server.
+
+## Throws
+- [`LibSSHException`](@ref): if a session couldn't be created, or there was an
+  error initializing the `user` property.
+
+## Parameters
+- `host`: The host to connect to.
+- `port` (default: 22): foo.
+- `log_verbosity` (default: `nothing`): Set the log verbosity for the session.
+- `auto_connect` (default: `true`): Whether to automatically call
+  [`connect()`](@ref).
 
 ## Examples
 
@@ -105,6 +119,10 @@ $(TYPEDSIGNATURES)
 
 Closes a session, which will be unusable afterwards. It's safe to call this
 multiple times.
+
+## Throws
+- `ArgumentError`: If the session is non-owning. This is not allowed to prevent
+  accidental double-frees.
 """
 function Base.close(session::Session)
     if !session.owning
@@ -128,10 +146,15 @@ Base.isopen(session::Session) = !isnothing(session.ptr)
 """
 $(TYPEDSIGNATURES)
 
-Get the last error set by libssh. Wrapper around [`lib.ssh_get_error()`](@ref).
+Get the last error set by libssh.
+
+## Throws
+- `ArgumentError`: If the session has been closed.
+
+Wrapper around [`lib.ssh_get_error()`](@ref).
 """
 function get_error(session::Session)
-    if isnothing(session.ptr)
+    if !isassigned(session.ptr)
         throw(ArgumentError("Session has been free'd, cannot get its error"))
     end
 
@@ -250,8 +273,10 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around [`lib.ssh_connect()`](@ref). This will throw an exception if
-connecting fails.
+This will throw an exception if connecting fails. You shouldn't need this unless
+you've created a session with `Session(; auto_connect=false)`.
+
+Wrapper around [`lib.ssh_connect()`](@ref).
 """
 function connect(session::Session)
     if !isassigned(session)
@@ -310,9 +335,11 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Get the public key from server of a connected session. This will throw an
-exception if the session isn't connected or the public key couldn't be
-retrieved.
+Get the public key from server of a connected session.
+
+## Throws
+- `ArgumentError`: If the session isn't connected.
+- `LibSSHException`: If there was an internal error.
 
 Wrapper around [`lib.ssh_get_server_publickey()`](@ref).
 """
@@ -333,10 +360,20 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around [`lib.ssh_session_is_known_server()`](@ref). If the `throw`
-argument is `true` (the default) it will throw a
-[`HostVerificationException`](@ref) if the verification fails, otherwise it will
-just return the verification status.
+Check if the connected servers public key exists in the SSH known hosts
+file.
+
+## Throws
+- `ArgumentError`: If the session isn't connected.
+- [`HostVerificationException`](@ref): If verification failed and
+  `throw_on_failure` is `true`.
+
+## Parameters
+- `throw_on_failure` (default: `true`): Whether to throw a
+  [`HostVerificationException`](@ref) if the verification fails, otherwise the
+  function will just return the verification status.
+
+Wrapper around [`lib.ssh_session_is_known_server()`](@ref).
 """
 function is_known_server(session::Session; throw_on_failure=true)
     if !isconnected(session)
@@ -354,8 +391,12 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Update the users known hosts file with the sessions server key. This will throw
-if the session isn't connected.
+Update the users known hosts file with the sessions server key.
+
+
+## Throws
+- `ArgumentError`: If the session isn't connected.
+- `LibSSHException`: If there was an internal error.
 
 Wrapper around [`lib.ssh_session_update_known_hosts()`](@ref).
 """
@@ -373,8 +414,16 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around [`lib.ssh_userauth_none()`](@ref). It will throw a
-[`LibSSHException`](@ref) if an error occurs.
+Attempt to authenticate to the server without any credentials. This
+authentication method is always disabled in practice, but it's still useful to
+check which authentication methods the server supports (see
+[`userauth_list()`](@ref)).
+
+## Throws
+- `ArgumentError`: If the session isn't connected.
+- `LibSSHException`: If there was an internal error.
+
+Wrapper around [`lib.ssh_userauth_none()`](@ref).
 """
 function userauth_none(session::Session)
     if !isconnected(session)
@@ -397,11 +446,15 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around [`lib.ssh_userauth_list()`](@ref). It will throw a
-[`LibSSHException`](@ref) if the SSH server supports `AuthMethod_None` or if
-another error occurred.
+Get a list of support authentication methods from the server. This will
+automatically call [`userauth_none()`](@ref) beforehand.
 
-This wrapper will automatically call [`userauth_none()`](@ref) beforehand.
+## Throws
+- `ArgumentError`: If the session isn't connected.
+- `LibSSHException`: If there was an internal error, or if the server by some
+   miracle actually supports `userauth_none`.
+
+Wrapper around [`lib.ssh_userauth_list()`](@ref).
 """
 function userauth_list(session::Session)
     if !isconnected(session)
@@ -429,8 +482,15 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around [`lib.ssh_userauth_password()`](@ref). This will throw a
-[`LibSSHException`](@ref) if an error is returned by the underlying library.
+Authenticate by username and password. The username will be taken from
+`session.user`.
+
+## Throws
+- `ArgumentError`: If the session isn't connected.
+- `LibSSHException`: If there was an internal error, or if the server by some
+   miracle actually supports `userauth_none`.
+
+Wrapper around [`lib.ssh_userauth_password()`](@ref).
 """
 function userauth_password(session::Session, password::String)
     if !isconnected(session)
@@ -456,6 +516,11 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Attempt to authenticate with the keyboard-interactive method.
+
+## Throws
+- `ArgumentError`: If the session isn't connected.
+
 Wrapper around [`lib.ssh_userauth_kbdint`](@ref).
 """
 function userauth_kbdint(session::Session)
@@ -476,9 +541,12 @@ $(TYPEDSIGNATURES)
 Returns all the keyboard-interactive prompts from the server. You should have
 already called [`userauth_kbdint()`](@ref).
 
-Combination of [`lib.ssh_userauth_kbdint_getnprompts`](@ref) and
-[`lib.userauth_kbdint_getprompt`](@ref). This should be preferred over the
+This is a combination of [`lib.ssh_userauth_kbdint_getnprompts`](@ref) and
+[`lib.userauth_kbdint_getprompt`](@ref). It should be preferred over the
 lower-level functions.
+
+## Throws
+- `ArgumentError`: If the session isn't connected.
 """
 function userauth_kbdint_getprompts(session::Session)
     if !isconnected(session)
@@ -501,6 +569,9 @@ $(TYPEDSIGNATURES)
 
 Sets answers for a keyboard-interactive auth session. Uses
 [`lib.ssh_userauth_kbdint_setanswer`](@ref) internally.
+
+## Throws
+- `ArgumentError`: If the session isn't connected.
 """
 function userauth_kbdint_setanswers(session::Session, answers::Vector{String})
     if !isconnected(session)

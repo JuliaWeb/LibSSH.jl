@@ -65,6 +65,7 @@ handlers to execute. This is possible through the [`SessionEvent`](@ref) type.
 SessionEvent
 SessionEvent(::Session)
 event_dopoll
+Base.isassigned(::SessionEvent)
 Base.close(::SessionEvent)
 ```
 
@@ -72,13 +73,10 @@ Base.close(::SessionEvent)
 
 The `DemoServer` is an extremely simple and limited implementation of an SSH
 server using the libssh [server
-API](https://api.libssh.org/stable/group__libssh__server.html). It's so limited
-in fact that for the sake of simplicity it only supports a single 'operation'
-per instance after authentication (e.g. running one command or forwarding one
-port). It's sole reason for existence is to be used in test suites to test
-client code. Do **not** expose this publicly! See the constructors docstrings
-for examples of how to use it (the LibSSH.jl test suite may also be
-informative).
+API](https://api.libssh.org/stable/group__libssh__server.html). It's sole reason
+for existence is to be used in test suites to test client code. Do **not**
+expose this publicly! See the constructors docstrings for examples of how to use
+it (the LibSSH.jl test suite may also be informative).
 
 Supported features:
 - Password authentication: only the password is checked, not the username.
