@@ -79,8 +79,7 @@ ssh.execute(session, "echo 'Hello world!'")
 # What we get back is a tuple of the return code and the output from the
 # command.
 
-# The demo server is very limited and can only do one operation per-instance, so
-# now we have to disconnect our client from it:
+# Now we can disconnect our client session:
 
 close(session)
 
