@@ -67,7 +67,9 @@ server.
 
 ## Parameters
 - `host`: The host to connect to.
-- `port` (default: 22): foo.
+- `port` (default: 22): The port to connect to.
+- `user` (default: `nothing`): Set the user to connect as. If unset the current
+   username will be used.
 - `log_verbosity` (default: `nothing`): Set the log verbosity for the session.
 - `auto_connect` (default: `true`): Whether to automatically call
   [`connect()`](@ref).
@@ -80,7 +82,8 @@ julia> session = ssh.Session("foo.org")
 julia> session = ssh.Session(ip"12.34.56.78", 2222)
 ```
 """
-function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22; log_verbosity=nothing, auto_connect=true)
+function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
+                 user=nothing, log_verbosity=nothing, auto_connect=true)
     session_ptr = lib.ssh_new()
     if session_ptr == C_NULL
         throw(LibSSHException("Could not initialize Session for host $(host)"))
@@ -92,11 +95,15 @@ function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22; log_verbo
     session.host = host_str
     session.port = port
 
-    # Explicitly initialize the user, otherwise an error will be thrown when
-    # retrieving it. Passing null will set it to the current user (see docs).
-    ret = ssh_options_set(session.ptr, SSH_OPTIONS_USER, C_NULL)
-    if ret != 0
-        throw(LibSSHException("Error when initializing user: $(ret)"))
+    if isnothing(user)
+        # Explicitly initialize the user, otherwise an error will be thrown when
+        # retrieving it. Passing null will set it to the current user (see docs).
+        ret = ssh_options_set(session.ptr, SSH_OPTIONS_USER, C_NULL)
+        if ret != 0
+            throw(LibSSHException("Error when initializing user: $(ret)"))
+        end
+    else
+        session.user = user
     end
 
     if auto_connect

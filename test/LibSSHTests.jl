@@ -212,6 +212,10 @@ end
         session.host = "quux"
         @test session.host == "quux"
         @test_throws ErrorException session.foo
+
+        # Test setting an initial user
+        session2 = ssh.Session("localhost"; user="foo", auto_connect=false)
+        @test session2.user == "foo"
     end
 
     # Test the finalizer
