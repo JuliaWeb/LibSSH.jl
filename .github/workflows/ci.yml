@@ -16,6 +16,9 @@ concurrency:
 jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    permissions:
+      actions: write
+      contents: read
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.allow_failure }}
     strategy:
