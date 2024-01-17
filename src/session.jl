@@ -237,9 +237,20 @@ function Base.setproperty!(session::Session, name::Symbol, value)
     # here to handle them.
     option, ctype = SESSION_PROPERTY_OPTIONS[name]
     is_string = ctype == Cstring
-    GC.@preserve value begin
-        cvalue = is_string ? Base.unsafe_convert(ctype, value) : Base.cconvert(ctype, value)
-        ret = ssh_options_set(session.ptr, option, is_string ? Ptr{Cvoid}(cvalue) : Ref(cvalue))
+
+    # Always convert string values to String, types like SubString cannot be
+    # converted to Cstring.
+    if is_string
+        value_str = String(value)
+        GC.@preserve value_str begin
+            cvalue = Base.unsafe_convert(ctype, value_str)
+            ret = ssh_options_set(session.ptr, option, Ptr{Cvoid}(cvalue))
+        end
+    else
+        GC.@preserve value begin
+            cvalue = Base.cconvert(ctype, value)
+            ret = ssh_options_set(session.ptr, option, Ref(cvalue))
+        end
     end
 
     if ret != 0
