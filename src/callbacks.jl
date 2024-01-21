@@ -150,7 +150,7 @@ mutable struct ServerCallbacks
         around memory that may be free'd unpredictably, which will result in
         dangling pointers and sadness.
 
-    ## Parameters
+    # Arguments
     - `userdata`: An arbitrary object that will be passed to each callback.
     - [`on_auth_password`](@ref lib.ssh_auth_password_callback): `f(::Session, ::String, ::String, userdata)::AuthStatus`
     - [`on_auth_none`](@ref lib.ssh_auth_none_callback): `f(::Session, ::String, userdata)::AuthStatus`
@@ -258,7 +258,7 @@ mutable struct ChannelCallbacks
         around memory that may be free'd unpredictably, which will result in
         dangling pointers and sadness.
 
-    ## Parameters
+    # Arguments
     - `userdata`: An arbitrary object that will be passed to each callback
        function.
     - [`on_data`](@ref lib.ssh_channel_data_callback): `f(::Session, ::SshChannel, ::Vector{UInt8}, Int, userdata)::Int`

@@ -1432,14 +1432,14 @@ end
 """
 SSH authentication callback for password and publickey auth.
 
-### Parameters
+# Arguments
 * `prompt`: Prompt to be displayed.
 * `buf`: Buffer to save the password. You should null-terminate it.
 * `len`: Length of the buffer.
 * `echo`: Enable or disable the echo of what you type.
 * `verify`: Should the password be verified?
 * `userdata`: Userdata to be passed to the callback function. Useful for GUI applications.
-### Returns
+# Returns
 0 on success, < 0 on error.
 """
 const ssh_auth_callback = Ptr{Cvoid}
@@ -2703,11 +2703,11 @@ Creates a new sftp session.
 
 This function creates a new sftp session and allocates a new sftp channel with the server inside of the provided ssh session. This function call is usually followed by the [`sftp_init`](@ref)(), which initializes SFTP protocol itself.
 
-### Parameters
+# Arguments
 * `session`: The ssh session to use.
-### Returns
+# Returns
 A new sftp session or NULL on error.
-### See also
+# See also
 [`sftp_free`](@ref)(), [`sftp_init`](@ref)()
 """
 function sftp_new(session)
@@ -2719,12 +2719,12 @@ end
 
 Start a new sftp session with an existing channel.
 
-### Parameters
+# Arguments
 * `session`: The ssh session to use.
 * `channel`:	An open session channel with subsystem already allocated
-### Returns
+# Returns
 A new sftp session or NULL on error.
-### See also
+# See also
 [`sftp_free`](@ref)()
 """
 function sftp_new_channel(session, channel)
@@ -2736,7 +2736,7 @@ end
 
 Close and deallocate a sftp session.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle to free.
 """
 function sftp_free(sftp)
@@ -2750,11 +2750,11 @@ Initialize the sftp protocol with the server.
 
 This function involves the SFTP protocol initialization (as described in the SFTP specification), including the version and extensions negotiation.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session to initialize.
-### Returns
+# Returns
 0 on success, < 0 on error with ssh error set.
-### See also
+# See also
 [`sftp_new`](@ref)()
 """
 function sftp_init(sftp)
@@ -2768,11 +2768,11 @@ Get the last sftp error.
 
 Use this function to get the latest error set by a posix like sftp function.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session where the error is saved.
-### Returns
+# Returns
 The saved error (see server responses), < 0 if an error in the function occurred.
-### See also
+# See also
 Server responses
 """
 function sftp_get_error(sftp)
@@ -2784,9 +2784,9 @@ end
 
 Get the count of extensions provided by the server.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session to use.
-### Returns
+# Returns
 The count of extensions provided by the server, 0 on error or not available.
 """
 function sftp_extensions_get_count(sftp)
@@ -2798,10 +2798,10 @@ end
 
 Get the name of the extension provided by the server.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session to use.
 * `indexn`: The index number of the extension name you want.
-### Returns
+# Returns
 The name of the extension.
 """
 function sftp_extensions_get_name(sftp, indexn)
@@ -2815,10 +2815,10 @@ Get the data of the extension provided by the server.
 
 This is normally the version number of the extension.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session to use.
 * `indexn`: The index number of the extension data you want.
-### Returns
+# Returns
 The data of the extension.
 """
 function sftp_extensions_get_data(sftp, indexn)
@@ -2836,11 +2836,11 @@ Example:
  sftp_extension_supported(sftp, "statvfs@openssh.com", "2");
 ```
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session to use.
 * `name`: The name of the extension.
 * `data`: The data of the extension.
-### Returns
+# Returns
 1 if supported, 0 if not.
 """
 function sftp_extension_supported(sftp, name, data)
@@ -2852,12 +2852,12 @@ end
 
 Open a directory used to obtain directory entries.
 
-### Parameters
+# Arguments
 * `session`: The sftp session handle to open the directory.
 * `path`: The path of the directory to open.
-### Returns
+# Returns
 A sftp directory handle or NULL on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_readdir`](@ref), [`sftp_closedir`](@ref)
 """
 function sftp_opendir(session, path)
@@ -2869,12 +2869,12 @@ end
 
 Get a single file attributes structure of a directory.
 
-### Parameters
+# Arguments
 * `session`: The sftp session handle to read the directory entry.
 * `dir`: The opened sftp directory handle to read from.
-### Returns
+# Returns
 A file attribute structure or NULL at the end of the directory.
-### See also
+# See also
 [`sftp_opendir`](@ref)(), sftp\\_attribute\\_free(), [`sftp_closedir`](@ref)()
 """
 function sftp_readdir(session, dir)
@@ -2886,11 +2886,11 @@ end
 
 Tell if the directory has reached EOF (End Of File).
 
-### Parameters
+# Arguments
 * `dir`: The sftp directory handle.
-### Returns
+# Returns
 1 if the directory is EOF, 0 if not.
-### See also
+# See also
 [`sftp_readdir`](@ref)()
 """
 function sftp_dir_eof(dir)
@@ -2902,12 +2902,12 @@ end
 
 Get information about a file or directory.
 
-### Parameters
+# Arguments
 * `session`: The sftp session handle.
 * `path`: The path to the file or directory to obtain the information.
-### Returns
+# Returns
 The sftp attributes structure of the file or directory, NULL on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_stat(session, path)
@@ -2921,12 +2921,12 @@ Get information about a file or directory.
 
 Identical to [`sftp_stat`](@ref), but if the file or directory is a symbolic link, then the link itself is stated, not the file that it refers to.
 
-### Parameters
+# Arguments
 * `session`: The sftp session handle.
 * `path`: The path to the file or directory to obtain the information.
-### Returns
+# Returns
 The sftp attributes structure of the file or directory, NULL on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_lstat(session, path)
@@ -2938,11 +2938,11 @@ end
 
 Get information about a file or directory from a file handle.
 
-### Parameters
+# Arguments
 * `file`: The sftp file handle to get the stat information.
-### Returns
+# Returns
 The sftp attributes structure of the file or directory, NULL on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_fstat(file)
@@ -2954,7 +2954,7 @@ end
 
 Free a sftp attribute structure.
 
-### Parameters
+# Arguments
 * `file`: The sftp attribute structure to free.
 """
 function sftp_attributes_free(file)
@@ -2966,9 +2966,9 @@ end
 
 Close a directory handle opened by [`sftp_opendir`](@ref)().
 
-### Parameters
+# Arguments
 * `dir`: The sftp directory handle to close.
-### Returns
+# Returns
 Returns SSH\\_NO\\_ERROR or [`SSH_ERROR`](@ref) if an error occurred.
 """
 function sftp_closedir(dir)
@@ -2980,11 +2980,11 @@ end
 
 Close an open file handle.
 
-### Parameters
+# Arguments
 * `file`: The open sftp file handle to close.
-### Returns
+# Returns
 Returns SSH\\_NO\\_ERROR or [`SSH_ERROR`](@ref) if an error occurred.
-### See also
+# See also
 [`sftp_open`](@ref)()
 """
 function sftp_close(file)
@@ -2996,14 +2996,14 @@ end
 
 Open a file on the server.
 
-### Parameters
+# Arguments
 * `session`: The sftp session handle.
 * `file`: The file to be opened.
 * `accesstype`: Is one of O\\_RDONLY, O\\_WRONLY or O\\_RDWR which request opening the file read-only,write-only or read/write. Acesss may also be bitwise-or'd with one or more of the following: O\\_CREAT - If the file does not exist it will be created. O\\_EXCL - When used with O\\_CREAT, if the file already exists it is an error and the open will fail. O\\_TRUNC - If the file already exists it will be truncated.
 * `mode`: Mode specifies the permissions to use if a new file is created. It is modified by the process's umask in the usual way: The permissions of the created file are (mode & ~umask)
-### Returns
+# Returns
 A sftp file handle, NULL on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_open(session, file, accesstype, mode)
@@ -3015,7 +3015,7 @@ end
 
 Make the sftp communication for this file handle non blocking.
 
-### Parameters
+# Arguments
 * `handle`:\\[in\\] The file handle to set non blocking.
 """
 function sftp_file_set_nonblocking(handle)
@@ -3027,7 +3027,7 @@ end
 
 Make the sftp communication for this file handle blocking.
 
-### Parameters
+# Arguments
 * `handle`:\\[in\\] The file handle to set blocking.
 """
 function sftp_file_set_blocking(handle)
@@ -3039,13 +3039,13 @@ end
 
 Read from a file using an opened sftp file handle.
 
-### Parameters
+# Arguments
 * `file`: The opened sftp file handle to be read from.
 * `buf`: Pointer to buffer to receive read data.
 * `count`: Size of the buffer in bytes.
-### Returns
+# Returns
 Number of bytes written, < 0 on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_read(file, buf, count)
@@ -3071,12 +3071,12 @@ The first step is to call [`sftp_async_read_begin`](@ref)(). This function retur
 
     A call to [`sftp_async_read_begin`](@ref)() sends a request to the server. When the server answers, libssh allocates memory to store it until [`sftp_async_read`](@ref)() is called. Not calling [`sftp_async_read`](@ref)() will lead to memory leaks.
 
-### Parameters
+# Arguments
 * `file`: The opened sftp file handle to be read from.
 * `len`: Size to read in bytes.
-### Returns
+# Returns
 An identifier corresponding to the sent request, < 0 on error.
-### See also
+# See also
 [`sftp_async_read`](@ref)(), [`sftp_open`](@ref)()
 """
 function sftp_async_read_begin(file, len)
@@ -3092,14 +3092,14 @@ Wait for an asynchronous read to complete and save the data.
 
     A call to this function with an invalid identifier will never return.
 
-### Parameters
+# Arguments
 * `file`: The opened sftp file handle to be read from.
 * `data`: Pointer to buffer to receive read data.
 * `len`: Size of the buffer in bytes. It should be bigger or equal to the length parameter of the [`sftp_async_read_begin`](@ref)() call.
 * `id`: The identifier returned by the [`sftp_async_read_begin`](@ref)() function.
-### Returns
+# Returns
 Number of bytes read, 0 on EOF, [`SSH_ERROR`](@ref) if an error occurred, [`SSH_AGAIN`](@ref) if the file is opened in nonblocking mode and the request hasn't been executed yet.
-### See also
+# See also
 [`sftp_async_read_begin`](@ref)()
 """
 function sftp_async_read(file, data, len, id)
@@ -3111,13 +3111,13 @@ end
 
 Write to a file using an opened sftp file handle.
 
-### Parameters
+# Arguments
 * `file`: Open sftp file handle to write to.
 * `buf`: Pointer to buffer to write data.
 * `count`: Size of buffer in bytes.
-### Returns
+# Returns
 Number of bytes written, < 0 on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_open`](@ref)(), [`sftp_read`](@ref)(), [`sftp_close`](@ref)()
 """
 function sftp_write(file, buf, count)
@@ -3129,10 +3129,10 @@ end
 
 Seek to a specific location in a file.
 
-### Parameters
+# Arguments
 * `file`: Open sftp file handle to seek in.
 * `new_offset`: Offset in bytes to seek.
-### Returns
+# Returns
 0 on success, < 0 on error.
 """
 function sftp_seek(file, new_offset)
@@ -3144,10 +3144,10 @@ end
 
 Seek to a specific location in a file. This is the 64bit version.
 
-### Parameters
+# Arguments
 * `file`: Open sftp file handle to seek in.
 * `new_offset`: Offset in bytes to seek.
-### Returns
+# Returns
 0 on success, < 0 on error.
 """
 function sftp_seek64(file, new_offset)
@@ -3159,9 +3159,9 @@ end
 
 Report current byte position in file.
 
-### Parameters
+# Arguments
 * `file`: Open sftp file handle.
-### Returns
+# Returns
 The offset of the current byte relative to the beginning of the file associated with the file descriptor. < 0 on error.
 """
 function sftp_tell(file)
@@ -3173,9 +3173,9 @@ end
 
 Report current byte position in file.
 
-### Parameters
+# Arguments
 * `file`: Open sftp file handle.
-### Returns
+# Returns
 The offset of the current byte relative to the beginning of the file associated with the file descriptor. < 0 on error.
 """
 function sftp_tell64(file)
@@ -3187,7 +3187,7 @@ end
 
 Rewinds the position of the file pointer to the beginning of the file.
 
-### Parameters
+# Arguments
 * `file`: Open sftp file handle.
 """
 function sftp_rewind(file)
@@ -3199,12 +3199,12 @@ end
 
 Unlink (delete) a file.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `file`: The file to unlink/delete.
-### Returns
+# Returns
 0 on success, < 0 on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_unlink(sftp, file)
@@ -3216,12 +3216,12 @@ end
 
 Remove a directory.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `directory`: The directory to remove.
-### Returns
+# Returns
 0 on success, < 0 on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_rmdir(sftp, directory)
@@ -3233,13 +3233,13 @@ end
 
 Create a directory.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `directory`: The directory to create.
 * `mode`: Specifies the permissions to use. It is modified by the process's umask in the usual way: The permissions of the created file are (mode & ~umask)
-### Returns
+# Returns
 0 on success, < 0 on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_mkdir(sftp, directory, mode)
@@ -3251,13 +3251,13 @@ end
 
 Rename or move a file or directory.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `original`: The original url (source url) of file or directory to be moved.
 * `newname`: The new url (destination url) of the file or directory after the move.
-### Returns
+# Returns
 0 on success, < 0 on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_rename(sftp, original, newname)
@@ -3271,13 +3271,13 @@ Set file attributes on a file, directory or symbolic link.
 
 Note, that this function can only set time values using 32 bit values due to the restrictions in the SFTP protocol version 3 implemented by libssh. The support for 64 bit time values was introduced in SFTP version 5, which is not implemented by libssh nor any major SFTP servers.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `file`: The file which attributes should be changed.
 * `attr`: The file attributes structure with the attributes set which should be changed.
-### Returns
+# Returns
 0 on success, < 0 on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_setstat(sftp, file, attr)
@@ -3289,14 +3289,14 @@ end
 
 Change the file owner and group
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `file`: The file which owner and group should be changed.
 * `owner`: The new owner which should be set.
 * `group`: The new group which should be set.
-### Returns
+# Returns
 0 on success, < 0 on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_chown(sftp, file, owner, group)
@@ -3308,13 +3308,13 @@ end
 
 Change permissions of a file
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `file`: The file which owner and group should be changed.
 * `mode`: Specifies the permissions to use. It is modified by the process's umask in the usual way: The permissions of the created file are (mode & ~umask)
-### Returns
+# Returns
 0 on success, < 0 on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_chmod(sftp, file, mode)
@@ -3326,13 +3326,13 @@ end
 
 Change the last modification and access time of a file.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `file`: The file which owner and group should be changed.
 * `times`: A timeval structure which contains the desired access and modification time.
-### Returns
+# Returns
 0 on success, < 0 on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_utimes(sftp, file, times)
@@ -3344,13 +3344,13 @@ end
 
 Create a symbolic link.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `target`: Specifies the target of the symlink.
 * `dest`: Specifies the path name of the symlink to be created.
-### Returns
+# Returns
 0 on success, < 0 on error with ssh and sftp error set.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_symlink(sftp, target, dest)
@@ -3362,12 +3362,12 @@ end
 
 Read the value of a symbolic link.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `path`: Specifies the path name of the symlink to be read.
-### Returns
+# Returns
 The target of the link, NULL on error. The caller needs to free the memory using [`ssh_string_free_char`](@ref)().
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_readlink(sftp, path)
@@ -3379,12 +3379,12 @@ end
 
 Get information about a mounted file system.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `path`: The pathname of any file within the mounted file system.
-### Returns
+# Returns
 A statvfs structure or NULL on error.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_statvfs(sftp, path)
@@ -3396,11 +3396,11 @@ end
 
 Get information about a mounted file system.
 
-### Parameters
+# Arguments
 * `file`: An opened file.
-### Returns
+# Returns
 A statvfs structure or NULL on error.
-### See also
+# See also
 [`sftp_get_error`](@ref)()
 """
 function sftp_fstatvfs(file)
@@ -3412,7 +3412,7 @@ end
 
 Free the memory of an allocated statvfs.
 
-### Parameters
+# Arguments
 * `statvfs_o`: The statvfs to free.
 """
 function sftp_statvfs_free(statvfs_o)
@@ -3430,9 +3430,9 @@ This calls the "fsync@openssh.com" extension. You should check if the extensions
  int supported = sftp_extension_supported(sftp, "fsync@openssh.com", "1");
 ```
 
-### Parameters
+# Arguments
 * `file`: The opened sftp file handle to sync
-### Returns
+# Returns
 0 on success, < 0 on error with ssh and sftp error set.
 """
 function sftp_fsync(file)
@@ -3444,10 +3444,10 @@ end
 
 Canonicalize a sftp path.
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
 * `path`: The path to be canonicalized.
-### Returns
+# Returns
 A pointer to the newly allocated canonicalized path, NULL on error. The caller needs to free the memory using [`ssh_string_free_char`](@ref)().
 """
 function sftp_canonicalize_path(sftp, path)
@@ -3459,9 +3459,9 @@ end
 
 Get the version of the SFTP protocol supported by the server
 
-### Parameters
+# Arguments
 * `sftp`: The sftp session handle.
-### Returns
+# Returns
 The server version.
 """
 function sftp_server_version(sftp)
@@ -3580,7 +3580,7 @@ const ssh_bind = Ptr{ssh_bind_struct}
 """
 Incoming connection callback. This callback is called when a [`ssh_bind`](@ref) has a new incoming connection.
 
-### Parameters
+# Arguments
 * `sshbind`: Current sshbind session handler
 * `userdata`: Userdata to be passed to the callback function.
 """
@@ -3608,7 +3608,7 @@ const ssh_bind_callbacks = Ptr{ssh_bind_callbacks_struct}
 
 Creates a new SSH server bind.
 
-### Returns
+# Returns
 A newly allocated [`ssh_bind`](@ref) session pointer.
 """
 function ssh_bind_new()
@@ -3638,9 +3638,9 @@ end
 
 Start listening to the socket.
 
-### Parameters
+# Arguments
 * `ssh_bind_o`: The ssh server bind to use.
-### Returns
+# Returns
 0 on success, < 0 on error.
 """
 function ssh_bind_listen(ssh_bind_o)
@@ -3661,11 +3661,11 @@ Set the callback for this bind.
      ssh_bind_set_callbacks(session, &cb);
 ```
 
-### Parameters
+# Arguments
 * `sshbind`:\\[in\\] The bind to set the callback on.
 * `callbacks`:\\[in\\] An already set up [`ssh_bind_callbacks`](@ref) instance.
 * `userdata`:\\[in\\] A pointer to private data to pass to the callbacks.
-### Returns
+# Returns
 [`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) if an error occurred.
 """
 function ssh_bind_set_callbacks(sshbind, callbacks, userdata)
@@ -3677,7 +3677,7 @@ end
 
 Set the session to blocking/nonblocking mode.
 
-### Parameters
+# Arguments
 * `ssh_bind_o`: The ssh server bind to use.
 * `blocking`: Zero for nonblocking mode.
 """
@@ -3690,9 +3690,9 @@ end
 
 Recover the file descriptor from the session.
 
-### Parameters
+# Arguments
 * `ssh_bind_o`: The ssh server bind to get the fd from.
-### Returns
+# Returns
 The file descriptor.
 """
 function ssh_bind_get_fd(ssh_bind_o)
@@ -3704,7 +3704,7 @@ end
 
 Set the file descriptor for a session.
 
-### Parameters
+# Arguments
 * `ssh_bind_o`: The ssh server bind to set the fd.
 * `fd`: The file descriptssh\\_bind B
 """
@@ -3717,7 +3717,7 @@ end
 
 Allow the file descriptor to accept new sessions.
 
-### Parameters
+# Arguments
 * `ssh_bind_o`: The ssh server bind to use.
 """
 function ssh_bind_fd_toaccept(ssh_bind_o)
@@ -3729,12 +3729,12 @@ end
 
 Accept an incoming ssh connection and initialize the session.
 
-### Parameters
+# Arguments
 * `ssh_bind_o`: The ssh server bind to accept a connection.
 * `session`:	A preallocated ssh session
-### Returns
+# Returns
 [`SSH_OK`](@ref) when a connection is established
-### See also
+# See also
 [`ssh_new`](@ref)
 """
 function ssh_bind_accept(ssh_bind_o, session)
@@ -3746,13 +3746,13 @@ end
 
 Accept an incoming ssh connection on the given file descriptor and initialize the session.
 
-### Parameters
+# Arguments
 * `ssh_bind_o`: The ssh server bind to accept a connection.
 * `session`: A preallocated ssh session
 * `fd`: A file descriptor of an already established TCP inbound connection
-### Returns
+# Returns
 [`SSH_OK`](@ref) when a connection is established
-### See also
+# See also
 [`ssh_new`](@ref), [`ssh_bind_accept`](@ref)
 """
 function ssh_bind_accept_fd(ssh_bind_o, session, fd)
@@ -3773,11 +3773,11 @@ end
 
 Handles the key exchange and set up encryption
 
-### Parameters
+# Arguments
 * `session`:	A connected ssh session
-### Returns
+# Returns
 [`SSH_OK`](@ref) if the key exchange was successful
-### See also
+# See also
 [`ssh_bind_accept`](@ref)
 """
 function ssh_handle_key_exchange(session)
@@ -3791,11 +3791,11 @@ Initialize the set of key exchange, hostkey, ciphers, MACs, and compression algo
 
 The selection of algorithms and keys used are determined by the options that are currently set in the given [`ssh_session`](@ref) structure. May only be called before the initial key exchange has begun.
 
-### Parameters
+# Arguments
 * `session`: The session structure to initialize.
-### Returns
+# Returns
 [`SSH_OK`](@ref) if initialization succeeds.
-### See also
+# See also
 [`ssh_handle_key_exchange`](@ref), [`ssh_options_set`](@ref)
 """
 function ssh_server_init_kex(session)
@@ -3807,7 +3807,7 @@ end
 
 Free a ssh servers bind.
 
-### Parameters
+# Arguments
 * `ssh_bind_o`: The ssh server bind to free.
 """
 function ssh_bind_free(ssh_bind_o)
@@ -3823,7 +3823,7 @@ Supported methods are:
 
 [`SSH_AUTH_METHOD_PASSWORD`](@ref) [`SSH_AUTH_METHOD_PUBLICKEY`](@ref) [`SSH_AUTH_METHOD_HOSTBASED`](@ref) [`SSH_AUTH_METHOD_INTERACTIVE`](@ref) [`SSH_AUTH_METHOD_GSSAPI_MIC`](@ref)
 
-### Parameters
+# Arguments
 * `session`:\\[in\\] The server session
 * `auth_methods`:\\[in\\] The authentication methods we will support, which can be bitwise-or'd.
 """
@@ -3836,10 +3836,10 @@ end
 
 Send the server's issue-banner to client.
 
-### Parameters
+# Arguments
 * `session`:\\[in\\] The server session.
 * `banner`:\\[in\\] The server's banner.
-### Returns
+# Returns
 [`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
 """
 function ssh_send_issue_banner(session, banner)
@@ -3857,11 +3857,11 @@ Reply with a standard reject message.
 
 Use this function if you don't know what to respond or if you want to reject a request.
 
-### Parameters
+# Arguments
 * `msg`:\\[in\\] The message to use for the reply.
-### Returns
+# Returns
 0 on success, -1 on error.
-### See also
+# See also
 [`ssh_message_get`](@ref)()
 """
 function message_reply_default(msg)
@@ -3880,11 +3880,11 @@ Auto-generated wrapper around `ssh_message_auth_user`. Original upstream documen
 
 Get the name of the authenticated user.
 
-### Parameters
+# Arguments
 * `msg`:\\[in\\] The message to get the username from.
-### Returns
+# Returns
 The username or NULL if an error occurred.
-### See also
+# See also
 [`ssh_message_get`](@ref)(), [`ssh_message_type`](@ref)()
 """
 function message_auth_user(msg)::String
@@ -3909,11 +3909,11 @@ Get the password of the authenticated user.
 
     This function should not be used anymore as there is a callback based server implementation now auth\\_password\\_function.
 
-### Parameters
+# Arguments
 * `msg`:\\[in\\] The message to get the password from.
-### Returns
+# Returns
 The username or NULL if an error occurred.
-### See also
+# See also
 [`ssh_message_get`](@ref)(), [`ssh_message_type`](@ref)()
 """
 function message_auth_password(msg)::String
@@ -3936,11 +3936,11 @@ If you need the key for later user you should duplicate it.
 
     This function should not be used anymore as there is a callback based server implementation auth\\_pubkey\\_function.
 
-### Parameters
+# Arguments
 * `msg`:\\[in\\] The message to get the public key from.
-### Returns
+# Returns
 The public key or NULL.
-### See also
+# See also
 [`ssh_key_dup`](@ref)(), [`ssh_key_cmp`](@ref)(), [`ssh_message_get`](@ref)(), [`ssh_message_type`](@ref)()
 """
 function ssh_message_auth_pubkey(msg)
@@ -3964,7 +3964,7 @@ end
 
     This function should not be used anymore as there is a callback based server implementation auth\\_pubkey\\_function
 
-### Parameters
+# Arguments
 * `msg`:\\[in\\] The message to get the public key state from.
 """
 function ssh_message_auth_publickey_state(msg)
@@ -4229,7 +4229,7 @@ const ssh_channel_callback_data = Ptr{Cvoid}
 """
 SSH log callback. All logging messages will go through this callback
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `priority`: Priority of the log, the smaller being the more important
 * `message`: the actual message
@@ -4243,7 +4243,7 @@ SSH log callback.
 
 All logging messages will go through this callback.
 
-### Parameters
+# Arguments
 * `priority`: Priority of the log, the smaller being the more important.
 * `function`: The function name calling the logging functions.
 * `buffer`: The actual message
@@ -4255,7 +4255,7 @@ const ssh_logging_callback = Ptr{Cvoid}
 """
 SSH Connection status callback.
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `status`: Percentage of connection status, going from 0.0 to 1.0 once connection is done.
 * `userdata`: Userdata to be passed to the callback function.
@@ -4266,7 +4266,7 @@ const ssh_status_callback = Ptr{Cvoid}
 """
 SSH global request callback. All global request will go through this callback.
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `message`: the actual message
 * `userdata`: Userdata to be passed to the callback function.
@@ -4281,12 +4281,12 @@ Handles an SSH new channel open X11 request. This happens when the server sends 
 
     The channel pointer returned by this callback must be closed by the application.
 
-### Parameters
+# Arguments
 * `session`: current session handler
 * `userdata`: Userdata to be passed to the callback function.
 * `originator_address`: IP address of the machine who sent the request
 * `originator_port`: port number of the machine who sent the request
-### Returns
+# Returns
 NULL if the request should not be allowed
 """
 const ssh_channel_open_request_x11_callback = Ptr{Cvoid}
@@ -4299,10 +4299,10 @@ Handles an SSH new channel open "auth-agent" request. This happens when the serv
 
     The channel pointer returned by this callback must be closed by the application.
 
-### Parameters
+# Arguments
 * `session`: current session handler
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 NULL if the request should not be allowed
 """
 const ssh_channel_open_request_auth_agent_callback = Ptr{Cvoid}
@@ -4329,12 +4329,12 @@ const ssh_callbacks = Ptr{ssh_callbacks_struct}
 """
 SSH authentication callback.
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `user`: User that wants to authenticate
 * `password`: Password used for authentication
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 SSH\\_AUTH\\_DENIED Authentication failed.
 """
 const ssh_auth_password_callback = Ptr{Cvoid}
@@ -4343,11 +4343,11 @@ const ssh_auth_password_callback = Ptr{Cvoid}
 """
 SSH authentication callback. Tries to authenticates user with the "none" method which is anonymous or passwordless.
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `user`: User that wants to authenticate
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 SSH\\_AUTH\\_DENIED Authentication failed.
 """
 const ssh_auth_none_callback = Ptr{Cvoid}
@@ -4360,12 +4360,12 @@ SSH authentication callback. Tries to authenticates user with the "gssapi-with-m
 
     Implementations should verify that parameter user matches in some way the principal. user and principal can be different. Only the latter is guaranteed to be safe.
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `user`: Username of the user (can be spoofed)
 * `principal`: Authenticated principal of the user, including realm.
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 SSH\\_AUTH\\_DENIED Authentication failed.
 """
 const ssh_auth_gssapi_mic_callback = Ptr{Cvoid}
@@ -4374,13 +4374,13 @@ const ssh_auth_gssapi_mic_callback = Ptr{Cvoid}
 """
 SSH authentication callback.
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `user`: User that wants to authenticate
 * `pubkey`: public key used for authentication
 * `signature_state`: SSH\\_PUBLICKEY\\_STATE\\_NONE if the key is not signed (simple public key probe),	SSH\\_PUBLICKEY\\_STATE\\_VALID if the signature is valid. Others values should be	replied with a SSH\\_AUTH\\_DENIED.
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 SSH\\_AUTH\\_DENIED Authentication failed.
 """
 const ssh_auth_pubkey_callback = Ptr{Cvoid}
@@ -4389,11 +4389,11 @@ const ssh_auth_pubkey_callback = Ptr{Cvoid}
 """
 Handles an SSH service request
 
-### Parameters
+# Arguments
 * `session`: current session handler
 * `service`: name of the service (e.g. "ssh-userauth") requested
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 -1 if the request should not be allowed
 """
 const ssh_service_request_callback = Ptr{Cvoid}
@@ -4406,10 +4406,10 @@ Handles an SSH new channel open session request
 
     The channel pointer returned by this callback must be closed by the application.
 
-### Parameters
+# Arguments
 * `session`: current session handler
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 NULL if the request should not be allowed
 """
 const ssh_channel_open_request_session_callback = Ptr{Cvoid}
@@ -4462,10 +4462,10 @@ Note, that the structure is not copied to the session structure so it needs to b
  ssh_set_server_callbacks(session, &cb);
 ```
 
-### Parameters
+# Arguments
 * `session`: The session to set the callback structure.
 * `cb`: The callback structure itself.
-### Returns
+# Returns
 [`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
 """
 function ssh_set_server_callbacks(session, cb)
@@ -4491,12 +4491,12 @@ const ssh_socket_callbacks = Ptr{ssh_socket_callbacks_struct}
 """
 Prototype for a packet callback, to be called when a new packet arrives
 
-### Parameters
+# Arguments
 * `session`: The current session of the packet
 * `type`: packet type (see ssh2.h)
 * `packet`: buffer containing the packet, excluding size, type and padding fields
 * `user`: user argument to the callback and are called each time a packet shows up
-### Returns
+# Returns
 [`SSH_PACKET_NOT_USED`](@ref) Packet was not used or understood, processing must continue
 """
 const ssh_packet_callback = Ptr{Cvoid}
@@ -4528,10 +4528,10 @@ Note, that the callback structure is not copied into the session so it needs to 
  ssh_set_callbacks(session, &cb);
 ```
 
-### Parameters
+# Arguments
 * `session`: The session to set the callback structure.
 * `cb`: The callback structure itself.
-### Returns
+# Returns
 [`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
 """
 function ssh_set_callbacks(session, cb)
@@ -4542,14 +4542,14 @@ end
 """
 SSH channel data callback. Called when data is available on a channel
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `channel`: the actual channel
 * `data`: the data that has been read on the channel
 * `len`: the length of the data
 * `is_stderr`: is 0 for stdout or 1 for stderr
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 number of bytes processed by the callee. The remaining bytes will be sent in the next callback message, when more data is available.
 """
 const ssh_channel_data_callback = Ptr{Cvoid}
@@ -4558,7 +4558,7 @@ const ssh_channel_data_callback = Ptr{Cvoid}
 """
 SSH channel eof callback. Called when a channel receives EOF
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `channel`: the actual channel
 * `userdata`: Userdata to be passed to the callback function.
@@ -4569,7 +4569,7 @@ const ssh_channel_eof_callback = Ptr{Cvoid}
 """
 SSH channel close callback. Called when a channel is closed by remote peer
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `channel`: the actual channel
 * `userdata`: Userdata to be passed to the callback function.
@@ -4580,7 +4580,7 @@ const ssh_channel_close_callback = Ptr{Cvoid}
 """
 SSH channel signal callback. Called when a channel has received a signal
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `channel`: the actual channel
 * `signal`: the signal name (without the SIG prefix)
@@ -4592,7 +4592,7 @@ const ssh_channel_signal_callback = Ptr{Cvoid}
 """
 SSH channel exit status callback. Called when a channel has received an exit status
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `channel`: the actual channel
 * `exit_status`: Exit status of the ran command
@@ -4604,7 +4604,7 @@ const ssh_channel_exit_status_callback = Ptr{Cvoid}
 """
 SSH channel exit signal callback. Called when a channel has received an exit signal
 
-### Parameters
+# Arguments
 * `session`: Current session handler
 * `channel`: the actual channel
 * `signal`: the signal name (without the SIG prefix)
@@ -4619,7 +4619,7 @@ const ssh_channel_exit_signal_callback = Ptr{Cvoid}
 """
 SSH channel PTY request from a client.
 
-### Parameters
+# Arguments
 * `session`: the session
 * `channel`: the channel
 * `term`: The type of terminal emulation
@@ -4628,7 +4628,7 @@ SSH channel PTY request from a client.
 * `pxwidth`: width of the terminal, in pixels
 * `pwheight`: height of the terminal, in pixels
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 -1 if the request is denied
 """
 const ssh_channel_pty_request_callback = Ptr{Cvoid}
@@ -4637,11 +4637,11 @@ const ssh_channel_pty_request_callback = Ptr{Cvoid}
 """
 SSH channel Shell request from a client.
 
-### Parameters
+# Arguments
 * `session`: the session
 * `channel`: the channel
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 1 if the request is denied
 """
 const ssh_channel_shell_request_callback = Ptr{Cvoid}
@@ -4650,7 +4650,7 @@ const ssh_channel_shell_request_callback = Ptr{Cvoid}
 """
 SSH auth-agent-request from the client. This request is sent by a client when agent forwarding is available. Server is free to ignore this callback, no answer is expected.
 
-### Parameters
+# Arguments
 * `session`: the session
 * `channel`: the channel
 * `userdata`: Userdata to be passed to the callback function.
@@ -4661,7 +4661,7 @@ const ssh_channel_auth_agent_req_callback = Ptr{Cvoid}
 """
 SSH X11 request from the client. This request is sent by a client when X11 forwarding is requested(and available). Server is free to ignore this callback, no answer is expected.
 
-### Parameters
+# Arguments
 * `session`: the session
 * `channel`: the channel
 * `single_connection`: If true, only one channel should be forwarded
@@ -4676,7 +4676,7 @@ const ssh_channel_x11_req_callback = Ptr{Cvoid}
 """
 SSH channel PTY windows change (terminal size) from a client.
 
-### Parameters
+# Arguments
 * `session`: the session
 * `channel`: the channel
 * `width`: width of the terminal, in characters
@@ -4684,7 +4684,7 @@ SSH channel PTY windows change (terminal size) from a client.
 * `pxwidth`: width of the terminal, in pixels
 * `pwheight`: height of the terminal, in pixels
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 -1 if the request is denied
 """
 const ssh_channel_pty_window_change_callback = Ptr{Cvoid}
@@ -4693,12 +4693,12 @@ const ssh_channel_pty_window_change_callback = Ptr{Cvoid}
 """
 SSH channel Exec request from a client.
 
-### Parameters
+# Arguments
 * `session`: the session
 * `channel`: the channel
 * `command`: the shell command to be executed
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 1 if the request is denied
 """
 const ssh_channel_exec_request_callback = Ptr{Cvoid}
@@ -4711,13 +4711,13 @@ SSH channel environment request from a client.
 
     some environment variables can be dangerous if changed (e.g. LD\\_PRELOAD) and should not be fulfilled.
 
-### Parameters
+# Arguments
 * `session`: the session
 * `channel`: the channel
 * `env_name`: name of the environment value to be set
 * `env_value`: value of the environment value to be set
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 1 if the request is denied
 """
 const ssh_channel_env_request_callback = Ptr{Cvoid}
@@ -4726,12 +4726,12 @@ const ssh_channel_env_request_callback = Ptr{Cvoid}
 """
 SSH channel subsystem request from a client.
 
-### Parameters
+# Arguments
 * `session`: the session
 * `channel`: the channel
 * `subsystem`: the subsystem required
 * `userdata`: Userdata to be passed to the callback function.
-### Returns
+# Returns
 1 if the request is denied
 """
 const ssh_channel_subsystem_request_callback = Ptr{Cvoid}
@@ -4740,12 +4740,12 @@ const ssh_channel_subsystem_request_callback = Ptr{Cvoid}
 """
 SSH channel write will not block (flow control).
 
-### Parameters
+# Arguments
 * `session`: the session
 * `channel`: the channel
 * `bytes`:\\[in\\] size of the remote window in bytes. Writing as much data will not block.
 * `userdata`:\\[in\\] Userdata to be passed to the callback function.
-### Returns
+# Returns
 0 default return value (other return codes may be added in future).
 """
 const ssh_channel_write_wontblock_callback = Ptr{Cvoid}
@@ -4794,10 +4794,10 @@ Note, that the structure is not copied to the channel structure so it needs to b
 
     this function will not replace existing callbacks but set the new one atop of them.
 
-### Parameters
+# Arguments
 * `channel`: The channel to set the callback structure.
 * `cb`: The callback structure itself.
-### Returns
+# Returns
 [`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
 """
 function ssh_set_channel_callbacks(channel, cb)
@@ -4811,12 +4811,12 @@ Add channel callback functions
 
 This function will add channel callback functions to the channel callback list. Callbacks missing from a callback structure will be probed in the next on the list.
 
-### Parameters
+# Arguments
 * `channel`: The channel to set the callback structure.
 * `cb`: The callback structure itself.
-### Returns
+# Returns
 [`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
-### See also
+# See also
 [`ssh_set_channel_callbacks`](@ref)
 """
 function ssh_add_channel_callbacks(channel, cb)
@@ -4830,10 +4830,10 @@ Remove a channel callback.
 
 The channel has been added with [`ssh_add_channel_callbacks`](@ref) or [`ssh_set_channel_callbacks`](@ref) in this case.
 
-### Parameters
+# Arguments
 * `channel`: The channel to remove the callback structure from.
 * `cb`: The callback structure to remove
-### Returns
+# Returns
 [`SSH_OK`](@ref) on success, [`SSH_ERROR`](@ref) on error.
 """
 function ssh_remove_channel_callbacks(channel, cb)
@@ -4876,11 +4876,11 @@ This is necessary if your program is using libssh in a multithreaded fashion. Th
 
     libgcrypt 1.6 and bigger backend does not support custom callback. Using anything else than pthreads here will fail.
 
-### Parameters
+# Arguments
 * `cb`:\\[in\\] A pointer to a [`ssh_threads_callbacks_struct`](@ref) structure, which contains the different callbacks to be set.
-### Returns
+# Returns
 Always returns [`SSH_OK`](@ref).
-### See also
+# See also
 [`ssh_threads_callbacks_struct`](@ref), SSH\\_THREADS\\_PTHREAD
 """
 function ssh_threads_set_callbacks(cb)
@@ -4892,9 +4892,9 @@ end
 
 Returns a pointer to the appropriate callbacks structure for the environment, to be used with [`ssh_threads_set_callbacks`](@ref).
 
-### Returns
+# Returns
 A pointer to a [`ssh_threads_callbacks_struct`](@ref) to be used with [`ssh_threads_set_callbacks`](@ref).
-### See also
+# See also
 [`ssh_threads_set_callbacks`](@ref)
 """
 function ssh_threads_get_default()
@@ -4906,7 +4906,7 @@ end
 
 Returns a pointer on the pthread threads callbacks, to be used with [`ssh_threads_set_callbacks`](@ref).
 
-### See also
+# See also
 [`ssh_threads_set_callbacks`](@ref)
 """
 function ssh_threads_get_pthread()
@@ -4920,9 +4920,9 @@ Get the noop threads callbacks structure
 
 This can be used with [`ssh_threads_set_callbacks`](@ref). These callbacks do nothing and are being used by default.
 
-### Returns
+# Returns
 Always returns a valid pointer to the noop callbacks structure.
-### See also
+# See also
 [`ssh_threads_set_callbacks`](@ref)
 """
 function ssh_threads_get_noop()
@@ -4934,9 +4934,9 @@ end
 
 Set the logging callback function.
 
-### Parameters
+# Arguments
 * `cb`:\\[in\\] The callback to set.
-### Returns
+# Returns
 0 on success, < 0 on error.
 """
 function ssh_set_log_callback(cb)
@@ -4948,7 +4948,7 @@ end
 
 Get the pointer to the logging callback function.
 
-### Returns
+# Returns
 The pointer the the callback or NULL if none set.
 """
 function ssh_get_log_callback()

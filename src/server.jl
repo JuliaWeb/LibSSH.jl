@@ -719,17 +719,17 @@ $(TYPEDSIGNATURES)
 
 Creates a [`DemoServer`](@ref).
 
-## Parameters
+# Arguments
 
 - `port`: The port to listen to.
-- `verbose`: This verbosity doesn't refer to the log messages from libssh but
+- `verbose=false`: This verbosity doesn't refer to the log messages from libssh but
   from the `DemoServer`. If this is `true` it print messages on events like
   authentication etc. Useful for high-level debugging. The events can always be
   printed afterwards with [`Demo.print_timeline`](@ref).
-- `password`: The password to use if password authentication is enabled.
-- `auth_methods`: A list of authentication methods to enable. See
-  [`ssh.AuthMethod`](@ref).
-- `log_verbosity`: Controls the logging of libssh itself. This could be
+- `password=nothing`: The password to use if password authentication is enabled.
+- `auth_methods=[AuthMethod_None, AuthMethod_Password]`: A list of
+  authentication methods to enable. See [`ssh.AuthMethod`](@ref).
+- `log_verbosity=nothing`: Controls the logging of libssh itself. This could be
   e.g. `lib.SSH_LOG_WARNING` (see the [upstream
   documentation](https://api.libssh.org/stable/group__libssh__log.html#ga06fc87d81c62e9abb8790b6e5713c55b)).
 """
@@ -764,7 +764,7 @@ it safely cleaned up afterwards. There are two keyword arguments to be aware of:
 
 `args` and `kwargs` will all be passed to [`DemoServer(::Int)`](@ref).
 
-## Examples
+# Examples
 
 ```julia-repl
 julia> import LibSSH.Demo: DemoServer

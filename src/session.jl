@@ -19,14 +19,14 @@ mutable struct Session
     This is only useful if you already have a `ssh_session` (i.e. in a
     server). Do not use it if you want a client, use the other constructor.
 
-    ## Parameters
+    # Arguments
     - `ptr`: A pointer to the `lib.ssh_session` to wrap.
-    - `log_verbosity` (default: `nothing`): Set the log verbosity for the
+    - `log_verbosity=nothing`: Set the log verbosity for the
        session. This argument will be ignored if `own` is `false` to avoid
        accidentally changing the logging level in callbacks when non-owning
        Sessions are created. You can still set the logging level explicitly with
        `session.log_verbosity` if necessary.
-    - `own` (default: `true`): Whether to take ownership of `ptr`, i.e. whether
+    - `own=true`: Whether to take ownership of `ptr`, i.e. whether
       to register a finalizer to free the memory.
     """
     function Session(ptr::lib.ssh_session; log_verbosity=nothing, own::Bool=true)
@@ -61,20 +61,20 @@ $(TYPEDSIGNATURES)
 Constructor for creating a client session. Use this if you want to connect to a
 server.
 
-## Throws
+# Throws
 - [`LibSSHException`](@ref): if a session couldn't be created, or there was an
   error initializing the `user` property.
 
-## Parameters
+# Arguments
 - `host`: The host to connect to.
-- `port` (default: 22): The port to connect to.
-- `user` (default: `nothing`): Set the user to connect as. If unset the current
+- `port=22`: The port to connect to.
+- `user=nothing`: Set the user to connect as. If unset the current
    username will be used.
-- `log_verbosity` (default: `nothing`): Set the log verbosity for the session.
-- `auto_connect` (default: `true`): Whether to automatically call
+- `log_verbosity=nothing`: Set the log verbosity for the session.
+- `auto_connect=true`: Whether to automatically call
   [`connect()`](@ref).
 
-## Examples
+# Examples
 
 ```julia-repl
 julia> import LibSSH as ssh
@@ -127,7 +127,7 @@ $(TYPEDSIGNATURES)
 Closes a session, which will be unusable afterwards. It's safe to call this
 multiple times.
 
-## Throws
+# Throws
 - `ArgumentError`: If the session is non-owning. This is not allowed to prevent
   accidental double-frees.
 """
@@ -155,7 +155,7 @@ $(TYPEDSIGNATURES)
 
 Get the last error set by libssh.
 
-## Throws
+# Throws
 - `ArgumentError`: If the session has been closed.
 
 Wrapper around [`lib.ssh_get_error()`](@ref).
@@ -355,7 +355,7 @@ $(TYPEDSIGNATURES)
 
 Get the public key from server of a connected session.
 
-## Throws
+# Throws
 - `ArgumentError`: If the session isn't connected.
 - `LibSSHException`: If there was an internal error.
 
@@ -381,13 +381,13 @@ $(TYPEDSIGNATURES)
 Check if the connected servers public key exists in the SSH known hosts
 file.
 
-## Throws
+# Throws
 - `ArgumentError`: If the session isn't connected.
 - [`HostVerificationException`](@ref): If verification failed and
   `throw_on_failure` is `true`.
 
-## Parameters
-- `throw_on_failure` (default: `true`): Whether to throw a
+# Arguments
+- `throw_on_failure=true`: Whether to throw a
   [`HostVerificationException`](@ref) if the verification fails, otherwise the
   function will just return the verification status.
 
@@ -411,8 +411,7 @@ $(TYPEDSIGNATURES)
 
 Update the users known hosts file with the sessions server key.
 
-
-## Throws
+# Throws
 - `ArgumentError`: If the session isn't connected.
 - `LibSSHException`: If there was an internal error.
 
@@ -437,7 +436,7 @@ authentication method is always disabled in practice, but it's still useful to
 check which authentication methods the server supports (see
 [`userauth_list()`](@ref)).
 
-## Throws
+# Throws
 - `ArgumentError`: If the session isn't connected.
 - `LibSSHException`: If there was an internal error.
 
@@ -467,7 +466,7 @@ $(TYPEDSIGNATURES)
 Get a list of support authentication methods from the server. This will
 automatically call [`userauth_none()`](@ref) beforehand.
 
-## Throws
+# Throws
 - `ArgumentError`: If the session isn't connected.
 - `LibSSHException`: If there was an internal error, or if the server by some
    miracle actually supports `userauth_none`.
@@ -503,7 +502,7 @@ $(TYPEDSIGNATURES)
 Authenticate by username and password. The username will be taken from
 `session.user`.
 
-## Throws
+# Throws
 - `ArgumentError`: If the session isn't connected.
 - `LibSSHException`: If there was an internal error, or if the server by some
    miracle actually supports `userauth_none`.
@@ -536,7 +535,7 @@ $(TYPEDSIGNATURES)
 
 Attempt to authenticate with the keyboard-interactive method.
 
-## Throws
+# Throws
 - `ArgumentError`: If the session isn't connected.
 
 Wrapper around [`lib.ssh_userauth_kbdint`](@ref).
@@ -563,7 +562,7 @@ This is a combination of [`lib.ssh_userauth_kbdint_getnprompts`](@ref) and
 [`lib.userauth_kbdint_getprompt`](@ref). It should be preferred over the
 lower-level functions.
 
-## Throws
+# Throws
 - `ArgumentError`: If the session isn't connected.
 """
 function userauth_kbdint_getprompts(session::Session)
@@ -588,7 +587,7 @@ $(TYPEDSIGNATURES)
 Sets answers for a keyboard-interactive auth session. Uses
 [`lib.ssh_userauth_kbdint_setanswer`](@ref) internally.
 
-## Throws
+# Throws
 - `ArgumentError`: If the session isn't connected.
 """
 function userauth_kbdint_setanswers(session::Session, answers::Vector{String})
