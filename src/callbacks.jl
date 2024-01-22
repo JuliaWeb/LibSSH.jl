@@ -67,6 +67,14 @@ function _callback_wrapper(key::Symbol, args...)
         @error "Exception in $(key) callback!" exception=(ex, catch_backtrace())
     end
 
+    # Unset the pointers in any non-owning wrappers to ensure that they aren't
+    # used outside of the callback.
+    for arg in converted_args
+        if arg isa ssh.Session || arg isa ssh.SshChannel || arg isa ssh.PKI.SshKey
+            arg.ptr = nothing
+        end
+    end
+
     # Attempt to convert the result to a C-compatible type
     try
         c_result = jl2c(jl_result)
@@ -146,9 +154,8 @@ mutable struct ServerCallbacks
 
     !!! warning
         Do not use [`ssh.Session`](@ref) or [`ssh.PKI.SshKey`](@ref) arguments
-        outside the callback functions. They are temporary non-owning wrappers
-        around memory that may be free'd unpredictably, which will result in
-        dangling pointers and sadness.
+        outside the callback functions. They are temporary non-owning wrappers,
+        and they will be unusable after the callback has been executed.
 
     # Arguments
     - `userdata`: An arbitrary object that will be passed to each callback.
@@ -254,9 +261,8 @@ mutable struct ChannelCallbacks
 
     !!! warning
         Do not use [`ssh.Session`](@ref) or [`ssh.SshChannel`](@ref) arguments
-        outside the callback functions. They are temporary non-owning wrappers
-        around memory that may be free'd unpredictably, which will result in
-        dangling pointers and sadness.
+        outside the callback functions. They are temporary non-owning wrappers,
+        and they will be unusable after the callback has been executed.
 
     # Arguments
     - `userdata`: An arbitrary object that will be passed to each callback
