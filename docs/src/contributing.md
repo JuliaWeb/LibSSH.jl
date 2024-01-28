@@ -34,9 +34,9 @@ Here's a suggested workflow if you're writing documentation:
 ```julia-repl
 pkg> activate docs
 julia> using LiveServer
-# Skip monitoring examples.md because that's generated automatically, otherwise
-# we'd get into an infinite loop.
-julia> servedocs(; include_dirs=["src"], skip_files=["docs/src/examples.md"])
+# Note that we ignore automatically generated files, otherwise we'd end up in an
+# infinite loop.
+julia> servedocs(; include_dirs=["src"], skip_files=["docs/src/examples.md", "docs/src/generated_changelog.md"])
 ```
 
 This will start a server with

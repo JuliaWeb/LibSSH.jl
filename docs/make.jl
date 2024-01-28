@@ -1,5 +1,6 @@
 import Revise
 import Literate
+import Changelog
 import Documenter
 import Documenter: Remotes, makedocs, deploydocs
 
@@ -63,6 +64,14 @@ Literate.markdown(joinpath(@__DIR__, "src/examples.jl"),
                   execute=true,
                   flavor=Literate.DocumenterFlavor())
 
+# Build the changelog
+Changelog.generate(
+    Changelog.Documenter(),
+    joinpath(@__DIR__, "src/changelog.md"),
+    joinpath(@__DIR__, "src/generated_changelog.md"),
+    repo="JamesWrigley/LibSSH.jl"
+)
+
 # Build and deploy the docs
 makedocs(;
          repo = Remotes.GitHub("JamesWrigley", "LibSSH.jl"),
@@ -78,6 +87,7 @@ makedocs(;
              "server_support.md",
              "utilities.md",
              "bindings.md",
+             "generated_changelog.md",
              "contributing.md"
          ],
          modules = [LibSSH],

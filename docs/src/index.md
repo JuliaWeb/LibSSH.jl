@@ -25,9 +25,9 @@ ssh.lib_version()
 
 ## Installation
 
-LibSSH.jl isn't registered yet, so for now you'll have to add it from Github:
+LibSSH.jl is available in the general registry:
 ```julia-repl
-pkg> add https://github.com/JamesWrigley/LibSSH.jl
+pkg> add LibSSH
 ```
 
 ## Limitations
