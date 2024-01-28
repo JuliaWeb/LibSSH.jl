@@ -20,7 +20,6 @@ demo.start(demo_server)
 # [`Session`](@ref) to connect to the server:
 
 session = ssh.Session("127.0.0.1", 2222)
-ssh.connect(session)
 @assert ssh.isconnected(session)
 
 # And we have a connection! That means that the key exchange between us and the
