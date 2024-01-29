@@ -21,7 +21,7 @@ ssh.lib_version()
 !!! warning
     LibSSH.jl is still under heavy development and may contain bugs. We strongly
     recommend testing your code as much as possible. If you have found a bug,
-    please [report it](https://github.com/JamesWrigley/LibSSH.jl/issues/new).
+    please [report it](https://github.com/JuliaWeb/LibSSH.jl/issues/new).
 
 ## Installation
 

@@ -69,12 +69,12 @@ Changelog.generate(
     Changelog.Documenter(),
     joinpath(@__DIR__, "src/changelog.md"),
     joinpath(@__DIR__, "src/generated_changelog.md"),
-    repo="JamesWrigley/LibSSH.jl"
+    repo="JuliaWeb/LibSSH.jl"
 )
 
 # Build and deploy the docs
 makedocs(;
-         repo = Remotes.GitHub("JamesWrigley", "LibSSH.jl"),
+         repo = Remotes.GitHub("JuliaWeb", "LibSSH.jl"),
          sitename = "LibSSH",
          format = Documenter.HTML(
              prettyurls=get(ENV, "CI", "false") == "true",
@@ -93,4 +93,4 @@ makedocs(;
          modules = [LibSSH],
          warnonly = :missing_docs
          )
-deploydocs(; repo="github.com/JamesWrigley/LibSSH.jl.git")
+deploydocs(; repo="github.com/JuliaWeb/LibSSH.jl.git")
