@@ -64,6 +64,7 @@ jobs:
   docs:
     name: Documentation
     permissions:
+      actions: write
       contents: write
       statuses: write
     runs-on: ubuntu-latest
