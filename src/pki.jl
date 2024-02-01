@@ -173,7 +173,7 @@ Wrapper around [`lib.ssh_get_publickey_hash()`](@ref).
 """
 function get_publickey_hash(key::SshKey, hash_type::HashType=HashType_Sha256)
     if !isassigned(key)
-        throw(ArgumentError("SshKey has been free'd, can't get its public key has"))
+        throw(ArgumentError("SshKey has been free'd, can't get its public key hash"))
     end
 
     if hash_type == HashType_Md5 || hash_type == HashType_Sha1
