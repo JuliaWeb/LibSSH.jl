@@ -47,6 +47,14 @@ mutable struct Session
     end
 end
 
+function Base.show(io::IO, session::Session)
+    if isopen(session)
+        print(io, Session, "(host=$(session.host), port=$(session.port), user=$(session.user), connected=$(isconnected(session)))")
+    else
+        print(io, Session, "()")
+    end
+end
+
 # Non-throwing finalizer for Session objects
 function _finalizer(session::Session)
     try

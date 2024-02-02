@@ -193,6 +193,10 @@ mutable struct Bind
     end
 end
 
+function Base.show(io::IO, bind::Bind)
+    print(io, Bind, "(addr=$(bind.addr), port=$(bind.port))")
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -712,6 +716,10 @@ $(TYPEDFIELDS)
     password::Union{String, Nothing} = nothing
 
     clients::Vector{Client} = Client[]
+end
+
+function Base.show(io::IO, ds::DemoServer)
+    print(io, DemoServer, "(bind.port=$(ds.bind.port))")
 end
 
 """
