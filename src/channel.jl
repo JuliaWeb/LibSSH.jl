@@ -20,6 +20,7 @@ mutable struct SshChannel
     session::Union{Session, Nothing}
     close_lock::ReentrantLock
     local_eof::Bool
+    callbacks::Union{Callbacks.ChannelCallbacks, Nothing}
 
     @doc """
     $(TYPEDSIGNATURES)
@@ -36,7 +37,7 @@ mutable struct SshChannel
         elseif own && !isnothing(session) && !session.owning
             throw(ArgumentError("Cannot create a SshChannel from a non-owning Session"))
         end
-        self = new(ptr, own, session, ReentrantLock(), false)
+        self = new(ptr, own, session, ReentrantLock(), false, nothing)
 
         if own
             push!(session.channels, self)
@@ -267,6 +268,7 @@ function set_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.Channel
     if ret != SSH_OK
         throw(LibSSHException("Error when setting channel callbacks: $(ret)"))
     end
+    sshchan.callbacks = callbacks
 end
 
 """

@@ -12,6 +12,7 @@ mutable struct Session
     owning::Bool
     log_verbosity::Int
     channels::Vector{Any}
+    server_callbacks::Union{Callbacks.ServerCallbacks, Nothing}
 
     @doc """
     $(TYPEDSIGNATURES)
@@ -33,7 +34,7 @@ mutable struct Session
         # Set to non-blocking mode
         lib.ssh_set_blocking(ptr, 0)
 
-        session = new(ptr, own, -1, [])
+        session = new(ptr, own, -1, [], nothing)
         if !isnothing(log_verbosity)
             session.log_verbosity = log_verbosity
         end
@@ -179,7 +180,7 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
 const SAVED_PROPERTIES = (:log_verbosity,)
 
 function Base.propertynames(::Session, private::Bool=false)
-    (:host, :port, :user, :log_verbosity, :owning, (private ? (:ptr, :channels) : ())...)
+    (:host, :port, :user, :log_verbosity, :owning, (private ? (:ptr, :channels, :server_callbacks) : ())...)
 end
 
 function Base.getproperty(session::Session, name::Symbol)
@@ -229,7 +230,7 @@ function Base.setproperty!(session::Session, name::Symbol, value)
         error("type Session has no field $(name)")
     end
 
-    if name == :ptr
+    if name == :ptr || name == :server_callbacks
         return setfield!(session, name, value)
     end
 

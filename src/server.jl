@@ -473,6 +473,7 @@ function set_server_callbacks(session::Session, callbacks::ServerCallbacks)
     if ret != SSH_OK
         throw(LibSSHException("Error setting server callbacks: $(ret)"))
     end
+    session.server_callbacks = callbacks
 end
 
 """
@@ -679,7 +680,6 @@ end
     authenticated::Bool = false
 
     session_event::Union{ssh.SessionEvent, Nothing} = nothing
-    server_callbacks::ServerCallbacks = ServerCallbacks()
     channel_callbacks::ChannelCallbacks = ChannelCallbacks()
     unclaimed_channels::Vector{ssh.SshChannel} = ssh.SshChannel[]
     channel_operations::Vector{Any} = []
@@ -824,11 +824,11 @@ function _handle_client(session::ssh.Session, ds::DemoServer)
                      session,
                      password=ds.password,
                      verbose=ds.verbose)
-    client.server_callbacks = ServerCallbacks(client;
-                                              on_auth_password=on_auth_password,
-                                              on_auth_none=on_auth_none,
-                                              on_service_request=on_service_request,
-                                              on_channel_open_request_session=on_channel_open)
+    server_callbacks = ServerCallbacks(client;
+                                       on_auth_password=on_auth_password,
+                                       on_auth_none=on_auth_none,
+                                       on_service_request=on_service_request,
+                                       on_channel_open_request_session=on_channel_open)
     client.channel_callbacks = ChannelCallbacks(client;
                                                 on_eof=on_channel_eof,
                                                 on_close=on_channel_close,
@@ -837,7 +837,7 @@ function _handle_client(session::ssh.Session, ds::DemoServer)
                                                 on_env_request=on_channel_env_request)
     client.task = current_task()
 
-    ssh.set_server_callbacks(session, client.server_callbacks)
+    ssh.set_server_callbacks(session, server_callbacks)
     if !ssh.handle_key_exchange(session)
         @error "Key exchange failed"
         return
@@ -1011,19 +1011,18 @@ end
 @kwdef mutable struct Forwarder
     client::Client
     sshchan::ssh.SshChannel
-    channel_callbacks::ChannelCallbacks = ChannelCallbacks()
     socket::Sockets.TCPSocket = Sockets.TCPSocket()
     task::Union{Task, Nothing} = nothing
 end
 
 function Forwarder(client::Client, sshchan::ssh.SshChannel, hostname::String, port::Integer)
     self = Forwarder(; client, sshchan)
-    self.channel_callbacks = ChannelCallbacks(self;
-                                              on_eof=on_fwd_channel_eof,
-                                              on_close=on_fwd_channel_close,
-                                              on_data=on_fwd_channel_data,
-                                              on_exit_status=on_fwd_channel_exit_status)
-    ssh.set_channel_callbacks(sshchan, self.channel_callbacks)
+    channel_callbacks = ChannelCallbacks(self;
+                                         on_eof=on_fwd_channel_eof,
+                                         on_close=on_fwd_channel_close,
+                                         on_data=on_fwd_channel_data,
+                                         on_exit_status=on_fwd_channel_exit_status)
+    ssh.set_channel_callbacks(sshchan, channel_callbacks)
 
     # Set up the listener socket. Restrict ourselves to IPv4 for simplicity
     # since the test HTTP servers bind to the IPv4 loopback interface (and

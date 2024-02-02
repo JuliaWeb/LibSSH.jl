@@ -159,8 +159,8 @@ function lib_version()
 end
 
 include("pki.jl")
-include("session.jl")
 include("callbacks.jl")
+include("session.jl")
 include("channel.jl")
 include("message.jl")
 include("server.jl")
