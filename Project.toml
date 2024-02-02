@@ -1,7 +1,7 @@
 name = "LibSSH"
 uuid = "00483490-30f8-4353-8aba-35b82f51f4d0"
 authors = ["James Wrigley <james@puiterwijk.org> and contributors"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 CEnum = "fa961155-64e5-5f13-b03f-caf6b980ea82"
