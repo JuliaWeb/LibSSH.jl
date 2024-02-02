@@ -193,6 +193,10 @@ mutable struct Bind
     end
 end
 
+function Base.show(io::IO, bind::Bind)
+    print(io, Bind, "(addr=$(bind.addr), port=$(bind.port))")
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -334,8 +338,8 @@ doesn't matter much. It'll only control how frequently the listen loop wakes up
 to check if the bind has been closed yet.
 """
 function listen(handler::Function, bind::Bind; poll_timeout=0.1)
-    if poll_timeout < 0
-        throw(ArgumentError("poll_timeout cannot be negative!"))
+    if poll_timeout <= 0
+        throw(ArgumentError("poll_timeout=$(poll_timeout), it must be greater than 0"))
     end
 
     ret = lib.ssh_bind_listen(bind.ptr)
@@ -357,20 +361,11 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
             notify(bind._listener_event)
         end
 
-        # Wait for new connection attempts. Note that there's a race condition
-        # between the loop condition evaluation and this line, so we wrap
-        # poll_fd() in a try-catch in case the bind (and thus the file
-        # descriptor) has been closed in the meantime, which would cause
-        # poll_fd() to throw an IOError.
-        local poll_result
-        try
-            poll_result = FileWatching.poll_fd(fd, poll_timeout; readable=true)
-        catch ex
-            if ex isa Base.IOError
-                continue
-            else
-                rethrow()
-            end
+        poll_result = _safe_poll_fd(fd, poll_timeout; readable=true)
+        if isnothing(poll_result)
+            # This means the session's file descriptor has been closed (see the
+            # comments for _safe_poll_fd()).
+            continue
         end
 
         # The first thing we do is check if the Bind has been closed, because
@@ -473,6 +468,7 @@ function set_server_callbacks(session::Session, callbacks::ServerCallbacks)
     if ret != SSH_OK
         throw(LibSSHException("Error setting server callbacks: $(ret)"))
     end
+    session.server_callbacks = callbacks
 end
 
 """
@@ -679,7 +675,6 @@ end
     authenticated::Bool = false
 
     session_event::Union{ssh.SessionEvent, Nothing} = nothing
-    server_callbacks::ServerCallbacks = ServerCallbacks()
     channel_callbacks::ChannelCallbacks = ChannelCallbacks()
     unclaimed_channels::Vector{ssh.SshChannel} = ssh.SshChannel[]
     channel_operations::Vector{Any} = []
@@ -697,6 +692,7 @@ function Base.close(client::Client)
     end
 
     close(client.session_event)
+    close(client.session)
     wait(client.task)
 end
 
@@ -712,6 +708,10 @@ $(TYPEDFIELDS)
     password::Union{String, Nothing} = nothing
 
     clients::Vector{Client} = Client[]
+end
+
+function Base.show(io::IO, ds::DemoServer)
+    print(io, DemoServer, "(bind.port=$(ds.bind.port))")
 end
 
 """
@@ -824,11 +824,11 @@ function _handle_client(session::ssh.Session, ds::DemoServer)
                      session,
                      password=ds.password,
                      verbose=ds.verbose)
-    client.server_callbacks = ServerCallbacks(client;
-                                              on_auth_password=on_auth_password,
-                                              on_auth_none=on_auth_none,
-                                              on_service_request=on_service_request,
-                                              on_channel_open_request_session=on_channel_open)
+    server_callbacks = ServerCallbacks(client;
+                                       on_auth_password=on_auth_password,
+                                       on_auth_none=on_auth_none,
+                                       on_service_request=on_service_request,
+                                       on_channel_open_request_session=on_channel_open)
     client.channel_callbacks = ChannelCallbacks(client;
                                                 on_eof=on_channel_eof,
                                                 on_close=on_channel_close,
@@ -837,7 +837,7 @@ function _handle_client(session::ssh.Session, ds::DemoServer)
                                                 on_env_request=on_channel_env_request)
     client.task = current_task()
 
-    ssh.set_server_callbacks(session, client.server_callbacks)
+    ssh.set_server_callbacks(session, server_callbacks)
     if !ssh.handle_key_exchange(session)
         @error "Key exchange failed"
         return
@@ -877,12 +877,13 @@ $(TYPEDSIGNATURES)
 Stop a [`DemoServer`](@ref).
 """
 function stop(demo_server::DemoServer)
-    for client in demo_server.clients
-        close(client)
-    end
-
     if !isnothing(demo_server.listener_task)
         close(demo_server.bind)
+
+        for client in demo_server.clients
+            close(client)
+        end
+
         wait(demo_server.listener_task)
         demo_server.listener_task = nothing
     end
@@ -1011,19 +1012,18 @@ end
 @kwdef mutable struct Forwarder
     client::Client
     sshchan::ssh.SshChannel
-    channel_callbacks::ChannelCallbacks = ChannelCallbacks()
     socket::Sockets.TCPSocket = Sockets.TCPSocket()
     task::Union{Task, Nothing} = nothing
 end
 
 function Forwarder(client::Client, sshchan::ssh.SshChannel, hostname::String, port::Integer)
     self = Forwarder(; client, sshchan)
-    self.channel_callbacks = ChannelCallbacks(self;
-                                              on_eof=on_fwd_channel_eof,
-                                              on_close=on_fwd_channel_close,
-                                              on_data=on_fwd_channel_data,
-                                              on_exit_status=on_fwd_channel_exit_status)
-    ssh.set_channel_callbacks(sshchan, self.channel_callbacks)
+    channel_callbacks = ChannelCallbacks(self;
+                                         on_eof=on_fwd_channel_eof,
+                                         on_close=on_fwd_channel_close,
+                                         on_data=on_fwd_channel_data,
+                                         on_exit_status=on_fwd_channel_exit_status)
+    ssh.set_channel_callbacks(sshchan, channel_callbacks)
 
     # Set up the listener socket. Restrict ourselves to IPv4 for simplicity
     # since the test HTTP servers bind to the IPv4 loopback interface (and

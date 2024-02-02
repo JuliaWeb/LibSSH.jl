@@ -20,6 +20,7 @@ mutable struct SshChannel
     session::Union{Session, Nothing}
     close_lock::ReentrantLock
     local_eof::Bool
+    callbacks::Union{Callbacks.ChannelCallbacks, Nothing}
 
     @doc """
     $(TYPEDSIGNATURES)
@@ -36,7 +37,7 @@ mutable struct SshChannel
         elseif own && !isnothing(session) && !session.owning
             throw(ArgumentError("Cannot create a SshChannel from a non-owning Session"))
         end
-        self = new(ptr, own, session, ReentrantLock(), false)
+        self = new(ptr, own, session, ReentrantLock(), false, nothing)
 
         if own
             push!(session.channels, self)
@@ -267,6 +268,7 @@ function set_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.Channel
     if ret != SSH_OK
         throw(LibSSHException("Error when setting channel callbacks: $(ret)"))
     end
+    sshchan.callbacks = callbacks
 end
 
 """
@@ -343,101 +345,252 @@ end
 
 ## execute()
 
-function _log(msg, userdata)
-    if userdata[:verbose]
+function _log(msg, process)
+    if process._verbose
         @info "execute(): $(msg)"
     end
 end
 
-function _on_channel_data(session, sshchan, data, is_stderr, userdata)
+function _on_channel_data(session, sshchan, data, is_stderr, process)
     is_stderr = Bool(is_stderr)
     fd_msg = is_stderr ? "stderr" : "stdout"
-    _log("channel_data $(length(data)) bytes from $fd_msg", userdata)
+    _log("channel_data $(length(data)) bytes from $fd_msg", process)
 
-    put!(userdata[:channel], copy(data))
+    append!(is_stderr ? process.err : process.out, data)
 
     return length(data)
 end
 
-function _on_channel_eof(session, sshchan, userdata)
-    _log("channel_eof", userdata)
+function _on_channel_eof(session, sshchan, process)
+    _log("channel_eof", process)
 end
 
-function _on_channel_close(session, sshchan, userdata)
-    _log("channel_close", userdata)
+function _on_channel_close(session, sshchan, process)
+    _log("channel_close", process)
 end
 
-function _on_channel_exit_status(session, sshchan, ret, userdata)
-    _log("exit_status $ret", userdata)
-    userdata[:exit_code] = Int(ret)
+function _on_channel_exit_status(session, sshchan, ret, process)
+    _log("exit_status $ret", process)
+    process.exitcode = Int(ret)
+end
+
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+
+This is analogous to `Base.Process`, it represents a command running over an
+SSH session. The stdout and stderr output are stored as byte arrays in
+`SshProcess.out` and `SshProcess.err` respectively. They can be converted to
+strings using e.g. `String(process.out)`.
+"""
+@kwdef mutable struct SshProcess
+    out::Vector{UInt8} = Vector{UInt8}()
+    err::Vector{UInt8} = Vector{UInt8}()
+
+    cmd::Union{Cmd, Nothing} = nothing
+    exitcode::Int = typemin(Int)
+
+    _sshchan::Union{SshChannel, Nothing} = nothing
+    _task::Union{Task, Nothing} = nothing
+    _verbose::Bool = false
+end
+
+function Base.show(io::IO, process::SshProcess)
+    status = process_running(process) ? "ProcessRunning" : "ProcessExited($(process.exitcode))"
+    print(io, SshProcess, "(cmd=$(process.cmd), $status)")
+end
+
+Base.process_running(process::SshProcess) = !istaskdone(process._task)
+Base.process_exited(process::SshProcess) = istaskdone(process._task)
+
+"""
+$(TYPEDSIGNATURES)
+
+Check if the process succeeded.
+"""
+Base.success(process::SshProcess) = process_exited(process) && process.exitcode == 0
+
+"""
+$(TYPEDSIGNATURES)
+
+# Throws
+- [`SshProcessFailedException`](@ref): if `ignorestatus()` wasn't used.
+"""
+function Base.wait(process::SshProcess)
+    try
+        wait(process._task)
+    catch ex
+        if !process.cmd.ignorestatus
+            rethrow()
+        end
+    end
+end
+
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+
+This is analogous to `ProcessFailedException`.
+"""
+struct SshProcessFailedException <: Exception
+    process::SshProcess
+end
+
+function _exec_command(process::SshProcess)
+    sshchan = process._sshchan
+    session = sshchan.session
+    cmd_str = join(process.cmd.exec, " ")
+
+    # Open the session channel
+    ret = _session_trywait(session) do
+        lib.ssh_channel_open_session(sshchan.ptr)
+    end
+    if ret != SSH_OK
+        throw(LibSSHException("Failed to open a session channel: $(ret)"))
+    end
+
+    # Make the request
+    ret = _session_trywait(session) do
+        GC.@preserve cmd_str begin
+            lib.ssh_channel_request_exec(sshchan.ptr, Base.unsafe_convert(Ptr{Cchar}, cmd_str))
+        end
+    end
+    if ret != SSH_OK
+        err = get_error(session)
+        throw(LibSSHException("Error from lib.ssh_channel_request_exec, could not execute command: $(err)"))
+    end
+
+    # Wait for data to be read
+    ret = poll_loop(sshchan)
+
+    # Close the channel
+    lib.ssh_channel_send_eof(sshchan.ptr)
+    close(sshchan)
+
+    # Check the result of the read for an error
+    if ret == SSH_ERROR
+        throw(LibSSHException("Error while reading data from channel: $(ret)"))
+    end
+
+    if !process.cmd.ignorestatus && process.exitcode != 0
+        throw(SshProcessFailedException(process))
+    end
 end
 
 """
 $(TYPEDSIGNATURES)
 
-Execute `command` remotely. This will return a tuple of
-`(return_code::Union{Int, Nothing}, output::String)`. The `return_code` may be
-`nothing` if it wasn't sent by the server (which would point to an incorrect
-server implementation).
+Run a command on the remote host over an SSH session. Things that aren't
+supported compared to `run()`:
+- Pipelined commands (use a regular pipe like `foo | bar` instead).
+- Setting the directory to execute the command in.
+- Setting environment variables (support is possible, it just hasn't been
+  implemented yet).
+
+# Throws
+- [`SshProcessFailedException`](@ref): if the command fails and `ignorestatus()`
+  wasn't used.
+
+# Arguments
+- `cmd`: The command to run. This will be converted to a string for running
+  remotely.
+- `session`: The session to run the command over.
+- `wait=true`: Wait for the command to finish before returning.
+- `verbose=false`: Print debug logging messages. Note that this is not the same
+  as setting the `log_verbosity` on a [`Session`](@ref).
+- `combine_outputs=true`: Write the `stderr` command output to the `IOBuffer`
+  for the commands `stdout`. If this is `true` then `SshProcess.out` and
+  `SshProcess.err` will refer to the same object.
+- `print_out=true`: Print the output (stdout + stderr by default) of the
+  command.
+
+# Examples
+```julia-repl
+julia> import LibSSH as ssh
+
+julia> ssh.Demo.DemoServer(2222; password="foo") do
+           session = ssh.Session("127.0.0.1", 2222)
+           @assert ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
+
+           @info "1"
+           run(`echo foo`, session)
+
+           println()
+           @info "2"
+           run(ignorestatus(`foo`), session)
+       end
+[ Info: 1
+foo
+
+[ Info: 2
+sh: line 1: foo: command not found
+```
 """
-function execute(session::Session, command::AbstractString; verbose=false)
-    userdata = Dict{Symbol, Any}(:channel => Channel(),
-                                 :exit_code => nothing,
-                                 :verbose => verbose)
-    callbacks = Callbacks.ChannelCallbacks(userdata;
+function Base.run(cmd::Cmd, session::Session;
+                  wait::Bool=true, verbose::Bool=false,
+                  combine_outputs::Bool=true, print_out::Bool=true)
+    process = SshProcess(; cmd, _verbose=verbose)
+    if combine_outputs
+        process.err = process.out
+    end
+
+    callbacks = Callbacks.ChannelCallbacks(process;
                                            on_eof=_on_channel_eof,
                                            on_close=_on_channel_close,
                                            on_data=_on_channel_data,
                                            on_exit_status=_on_channel_exit_status)
+    process._sshchan = SshChannel(session)
+    set_channel_callbacks(process._sshchan, callbacks)
 
-    SshChannel(session) do sshchan
-        set_channel_callbacks(sshchan, callbacks)
+    process._task = Threads.@spawn _exec_command(process)
+    if wait
+        # Note the use of Base.wait() to avoid aliasing with the `wait` argument
+        Base.wait(process._task)
 
-        # Open the session
-        ret = _session_trywait(session) do
-            lib.ssh_channel_open_session(sshchan.ptr)
+        if print_out
+            print(String(process.out))
         end
-        if ret != SSH_OK
-            throw(LibSSHException("Failed to open a session channel: $(ret)"))
-        end
-
-        # Make the request
-        ret = _session_trywait(session) do
-            GC.@preserve command begin
-                lib.ssh_channel_request_exec(sshchan.ptr, Base.unsafe_convert(Ptr{Cchar}, command))
-            end
-        end
-        if ret != SSH_OK
-            err = get_error(session)
-            throw(LibSSHException("Error from channel_request_exec, could not execute command: $(err)"))
-        end
-
-        # Start a task to read incoming data and append it to a vector
-        cmd_output = String[]
-        reader_task = Threads.@spawn for data in userdata[:channel]
-            try
-                push!(cmd_output, String(data))
-            catch ex
-                @error "Error handling command output" exception=(ex, catch_backtrace())
-            end
-        end
-
-        # Wait for data to be read
-        ret = poll_loop(sshchan)
-
-        # Close the reader task and send an EOF
-        close(userdata[:channel])
-        wait(reader_task)
-        lib.ssh_channel_send_eof(sshchan.ptr)
-
-        # Check the result of the read for an error
-        if ret == SSH_ERROR
-            throw(LibSSHException("Error while reading data from channel: $(ret)"))
-        end
-
-        return (userdata[:exit_code]::Union{Int, Nothing}, string(cmd_output...))
     end
+
+    return process
 end
+
+"""
+$(TYPEDSIGNATURES)
+
+Read the output from the command in bytes.
+"""
+function Base.read(cmd::Cmd, session::Session)
+    process = run(cmd, session; print_out=false)
+    return process.out
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Read the output from the command as a String.
+
+# Examples
+```julia-repl
+julia> import LibSSH as ssh
+
+julia> ssh.Demo.DemoServer(2222; password="foo") do
+           session = ssh.Session("127.0.0.1", 2222)
+           @assert ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
+
+           @show read(`echo foo`, session, String)
+       end
+read(`echo foo`, session, String) = "foo\\n"
+```
+"""
+Base.read(cmd::Cmd, session::Session, ::Type{String}) = String(read(cmd, session))
+
+"""
+$(TYPEDSIGNATURES)
+
+Check the command succeeded.
+"""
+Base.success(cmd::Cmd, session::Session) = success(run(cmd, session; print_out=false))
 
 ## Direct port forwarding
 

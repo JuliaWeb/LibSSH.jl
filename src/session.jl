@@ -12,6 +12,7 @@ mutable struct Session
     owning::Bool
     log_verbosity::Int
     channels::Vector{Any}
+    server_callbacks::Union{Callbacks.ServerCallbacks, Nothing}
 
     @doc """
     $(TYPEDSIGNATURES)
@@ -33,7 +34,7 @@ mutable struct Session
         # Set to non-blocking mode
         lib.ssh_set_blocking(ptr, 0)
 
-        session = new(ptr, own, -1, [])
+        session = new(ptr, own, -1, [], nothing)
         if !isnothing(log_verbosity)
             session.log_verbosity = log_verbosity
         end
@@ -43,6 +44,14 @@ mutable struct Session
         end
 
         return session
+    end
+end
+
+function Base.show(io::IO, session::Session)
+    if isopen(session)
+        print(io, Session, "(host=$(session.host), port=$(session.port), user=$(session.user), connected=$(isconnected(session)))")
+    else
+        print(io, Session, "()")
     end
 end
 
@@ -179,7 +188,7 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
 const SAVED_PROPERTIES = (:log_verbosity,)
 
 function Base.propertynames(::Session, private::Bool=false)
-    (:host, :port, :user, :log_verbosity, :owning, (private ? (:ptr, :channels) : ())...)
+    (:host, :port, :user, :log_verbosity, :owning, (private ? (:ptr, :channels, :server_callbacks) : ())...)
 end
 
 function Base.getproperty(session::Session, name::Symbol)
@@ -229,7 +238,7 @@ function Base.setproperty!(session::Session, name::Symbol, value)
         error("type Session has no field $(name)")
     end
 
-    if name == :ptr
+    if name == :ptr || name == :server_callbacks
         return setfield!(session, name, value)
     end
 
@@ -272,8 +281,15 @@ $(TYPEDSIGNATURES)
 
 Waits for a session in non-blocking mode. If the session is in blocking mode the
 function will return immediately.
+
+The `poll_timeout` argument has the same meaning as [`listen(::Function,
+::Bind)`](@ref).
 """
-function Base.wait(session::Session)
+function Base.wait(session::Session; poll_timeout=0.1)
+    if poll_timeout <= 0
+        throw(ArgumentError("poll_timeout=$(poll_timeout), it must be greater than 0"))
+    end
+
     if lib.ssh_is_blocking(session.ptr) == 1
         return
     end
@@ -283,7 +299,16 @@ function Base.wait(session::Session)
     writable = (poll_flags & lib.SSH_WRITE_PENDING) > 0
 
     fd = RawFD(lib.ssh_get_fd(session.ptr))
-    FileWatching.poll_fd(fd; readable, writable)
+    while isopen(session)
+        result = _safe_poll_fd(fd, poll_timeout; readable, writable)
+        if isnothing(result)
+            # This means the session's file descriptor has been closed (see the
+            # comments for _safe_poll_fd()).
+            continue
+        elseif !result.timedout
+            break
+        end
+    end
 
     return nothing
 end

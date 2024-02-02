@@ -158,9 +158,27 @@ function lib_version()
     VersionNumber(lib.LIBSSH_VERSION_MAJOR, lib.LIBSSH_VERSION_MINOR, lib.LIBSSH_VERSION_MICRO)
 end
 
+# Safe wrapper around poll_fd(). There's a race condition in older Julia
+# versions between the loop condition evaluation and this line, so we wrap
+# poll_fd() in a try-catch in case the bind (and thus the file descriptor) has
+# been closed in the meantime, which would cause poll_fd() to throw an IOError:
+# https://github.com/JuliaLang/julia/pull/52377
+function _safe_poll_fd(args...; kwargs...)
+    result = nothing
+    try
+        result = FileWatching.poll_fd(args...; kwargs...)
+    catch ex
+        if !(ex isa Base.IOError)
+            rethrow()
+        end
+    end
+
+    return result
+end
+
 include("pki.jl")
-include("session.jl")
 include("callbacks.jl")
+include("session.jl")
 include("channel.jl")
 include("message.jl")
 include("server.jl")

@@ -98,8 +98,19 @@ You should prefer using these instead of more low-level methods, if you can.
 
 #### Command execution
 
+LibSSH.jl attempts to mimic Julia's API for running local commands with `run()`
+etc. But some features are not supported and we attempt to document all of the
+differences.
+
 ```@docs
-execute
+SshProcessFailedException
+SshProcess
+Base.wait(::SshProcess)
+Base.success(::SshProcess)
+Base.run(::Cmd, ::Session)
+Base.read(::Cmd, ::Session)
+Base.read(::Cmd, ::Session, ::Type{String})
+Base.success(::Cmd, ::Session)
 ```
 
 #### Direct port forwarding
