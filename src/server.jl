@@ -338,8 +338,8 @@ doesn't matter much. It'll only control how frequently the listen loop wakes up
 to check if the bind has been closed yet.
 """
 function listen(handler::Function, bind::Bind; poll_timeout=0.1)
-    if poll_timeout < 0
-        throw(ArgumentError("poll_timeout cannot be negative!"))
+    if poll_timeout <= 0
+        throw(ArgumentError("poll_timeout=$(poll_timeout), it must be greater than 0"))
     end
 
     ret = lib.ssh_bind_listen(bind.ptr)
@@ -361,20 +361,11 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
             notify(bind._listener_event)
         end
 
-        # Wait for new connection attempts. Note that there's a race condition
-        # between the loop condition evaluation and this line, so we wrap
-        # poll_fd() in a try-catch in case the bind (and thus the file
-        # descriptor) has been closed in the meantime, which would cause
-        # poll_fd() to throw an IOError.
-        local poll_result
-        try
-            poll_result = FileWatching.poll_fd(fd, poll_timeout; readable=true)
-        catch ex
-            if ex isa Base.IOError
-                continue
-            else
-                rethrow()
-            end
+        poll_result = _safe_poll_fd(fd, poll_timeout; readable=true)
+        if isnothing(poll_result)
+            # This means the session's file descriptor has been closed (see the
+            # comments for _safe_poll_fd()).
+            continue
         end
 
         # The first thing we do is check if the Bind has been closed, because
@@ -701,6 +692,7 @@ function Base.close(client::Client)
     end
 
     close(client.session_event)
+    close(client.session)
     wait(client.task)
 end
 
@@ -885,12 +877,13 @@ $(TYPEDSIGNATURES)
 Stop a [`DemoServer`](@ref).
 """
 function stop(demo_server::DemoServer)
-    for client in demo_server.clients
-        close(client)
-    end
-
     if !isnothing(demo_server.listener_task)
         close(demo_server.bind)
+
+        for client in demo_server.clients
+            close(client)
+        end
+
         wait(demo_server.listener_task)
         demo_server.listener_task = nothing
     end

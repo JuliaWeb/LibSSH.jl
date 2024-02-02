@@ -182,6 +182,12 @@ end
         end
         @test length(demo_server.clients) == 2
     end
+
+    # Test that the DemoServer cleans up lingering sessions
+    server_task = Threads.@spawn DemoServer(2222; timeout=10) do
+        session = ssh.Session("127.0.0.1", 2222)
+    end
+    @test timedwait(() -> istaskdone(server_task), 5) == :ok
 end
 
 @testset "Session" begin
