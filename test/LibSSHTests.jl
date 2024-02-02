@@ -325,18 +325,20 @@ end
     end
 
     @testset "Executing commands" begin
-        # Test executing commands
         demo_server_with_session(2222) do session
-            ret, output = ssh.execute(session, "whoami")
-            @test ret == 0
-            @test strip(output) == username()
-        end
+            # Smoke test
+            process = run(`whoami`, session; print_out=false)
+            @test success(process)
+            @test chomp(String(process.out)) == username()
 
-        # Check that we read stderr as well as stdout
-        demo_server_with_session(2222) do session
-            ret, output = ssh.execute(session, "thisdoesntexist")
-            @test ret == 127
-            @test !isempty(output)
+            # Check that we read stderr as well as stdout
+            process = run(ignorestatus(`thisdoesntexist`), session; print_out=false)
+            @test process.exitcode == 127
+            @test !isempty(String(process.out))
+
+            # Test Base methods
+            @test read(`echo foo`, session, String) == "foo\n"
+            @test success(`whoami`, session)
         end
     end
 
