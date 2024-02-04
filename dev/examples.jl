@@ -71,12 +71,9 @@ ssh.userauth_list(session)
 @assert ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
 
 # Now we're authenticated to the server and we can actually do something, like
-# running a command:
+# running a command (see [Command execution](@ref)):
 
 @assert read(`echo 'Hello world!'`, session, String) == "Hello world!\n"
-
-# What we get back is a tuple of the return code and the output from the
-# command.
 
 # Now we can disconnect our client session:
 
