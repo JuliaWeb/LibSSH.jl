@@ -243,9 +243,9 @@ mutable struct ChannelCallbacks
     Create a callbacks object to set on a channel. A default function is
     registered for each callback and it will print a warning if a callback was
     requested but not found, so you don't need to set all of the callbacks for
-    the channel to work properly. The only exception is
-    `channel_write_wontblock_function`, which is set to `Returns(0)` by default
-    since it's always used but rarely necessary.
+    the channel to work properly. The only exception is `on_write_wontblock`,
+    which is set to `Returns(0)` by default since it's always used but rarely
+    necessary.
 
     The callback functions should all match the signature `f(::Session,
     ::SshChannel, args..., userdata)`. Note that some argument types will
