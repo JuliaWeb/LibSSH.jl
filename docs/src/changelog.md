@@ -3,6 +3,12 @@
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## Unreleased
+
+### Added
+
+- Initial client support for GSSAPI authentication ([#3]).
+
 ## [v0.2.0] - 2024-02-01
 
 ### Changed

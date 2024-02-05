@@ -158,6 +158,15 @@ function lib_version()
     VersionNumber(lib.LIBSSH_VERSION_MAJOR, lib.LIBSSH_VERSION_MINOR, lib.LIBSSH_VERSION_MICRO)
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Check if GSSAPI support is available (currently only Linux and FreeBSD).
+"""
+function gssapi_available()
+    Sys.islinux() || Sys.isfreebsd()
+end
+
 # Safe wrapper around poll_fd(). There's a race condition in older Julia
 # versions between the loop condition evaluation and this line, so we wrap
 # poll_fd() in a try-catch in case the bind (and thus the file descriptor) has

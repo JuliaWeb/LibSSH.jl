@@ -558,6 +558,32 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Authenticate with GSSAPI. This is not available on all platforms (see
+[`gssapi_available`](@ref)).
+
+# Throws
+- `ArgumentError`: If the session isn't connected.
+- `ErrorException`: If GSSAPI support isn't available.
+
+Wrapper around [`lib.ssh_userauth_gssapi()`](@ref).
+"""
+function userauth_gssapi(session::Session)
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+    elseif !gssapi_available()
+        error("GSSAPI support is not available")
+    end
+
+    ret = _session_trywait(session) do
+        lib.ssh_userauth_gssapi(session.ptr)
+    end
+
+    return AuthStatus(ret)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
 Attempt to authenticate with the keyboard-interactive method.
 
 # Throws

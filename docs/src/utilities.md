@@ -20,6 +20,7 @@ Depth = 10
 
 ```@docs
 get_hexa
+gssapi_available
 ```
 
 ## Messages
