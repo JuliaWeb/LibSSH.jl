@@ -8,7 +8,7 @@ import Aqua
 import Literate
 import CURL_jll: curl
 import OpenSSH_jll
-import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_logs
+import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_broken, @test_logs
 
 import LibSSH
 import LibSSH as ssh
@@ -191,8 +191,6 @@ end
 end
 
 @testset "Session" begin
-    @test ssh.lib_version() isa VersionNumber
-
     session = ssh.Session("localhost"; auto_connect=false, log_verbosity=lib.SSH_LOG_NOLOG)
     @test !ssh.isconnected(session)
 
@@ -269,6 +267,20 @@ end
             @test ssh.userauth_kbdint(session) == ssh.AuthStatus_Success
 
             ssh.disconnect(session)
+            close(session)
+        end
+    end
+
+    @testset "GSSAPI authentication" begin
+        DemoServer(2222; auth_methods=[ssh.AuthMethod_GSSAPI_MIC]) do
+            session = ssh.Session(Sockets.localhost, 2222)
+            @test ssh.isconnected(session)
+
+            # TODO: figure out how to write proper tests for this. It's a little
+            # tricky since we'd need to have Kerberos running and configured
+            # correctly. In the meantime, this has been tested manually.
+            @test_broken ssh.userauth_gssapi(session) == ssh.AuthStatus_Success
+
             close(session)
         end
     end
@@ -408,6 +420,11 @@ end
 
     # Dummy test
     @test true
+end
+
+@testset "Utility functions" begin
+    @test ssh.lib_version() isa VersionNumber
+    @test ssh.gssapi_available() isa Bool
 end
 
 @testset "Aqua.jl" begin

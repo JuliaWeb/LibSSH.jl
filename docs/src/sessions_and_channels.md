@@ -51,6 +51,7 @@ userauth_password
 userauth_kbdint
 userauth_kbdint_getprompts
 userauth_kbdint_setanswers
+userauth_gssapi
 get_error(::Session)
 Base.isopen(::Session)
 Base.close(::Session)
