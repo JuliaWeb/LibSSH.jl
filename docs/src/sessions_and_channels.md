@@ -80,7 +80,6 @@ SshChannel(::lib.ssh_channel, Any)
 Callbacks.ChannelCallbacks
 Callbacks.ChannelCallbacks()
 set_channel_callbacks
-channel_send_eof
 channel_request_send_exit_status
 poll_loop
 
@@ -88,6 +87,7 @@ Base.isassigned(::SshChannel)
 Base.isopen(::SshChannel)
 Base.close(::SshChannel)
 Base.eof(::SshChannel)
+Base.closewrite(::SshChannel)
 Base.iswritable(::SshChannel)
 Base.write(::SshChannel, ::AbstractString)
 Base.write(::SshChannel, ::Vector{UInt8})

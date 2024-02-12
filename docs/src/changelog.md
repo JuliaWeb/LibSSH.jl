@@ -1,3 +1,7 @@
+```@meta
+CurrentModule = LibSSH
+```
+
 # Changelog
 
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
@@ -8,6 +12,10 @@ Changelog](https://keepachangelog.com).
 ### Added
 
 - Initial client support for GSSAPI authentication ([#3]).
+
+### Changed
+
+- Renamed `channel_send_eof()` to [`closewrite(::SshChannel)`](@ref) ([#4]).
 
 ## [v0.2.0] - 2024-02-01
 

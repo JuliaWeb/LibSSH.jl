@@ -947,7 +947,7 @@ function exec_command(executor)
 
         # Clean up
         ssh.channel_request_send_exit_status(sshchan, proc.exitcode)
-        ssh.channel_send_eof(sshchan)
+        closewrite(sshchan)
     end
 
     close(sshchan)
@@ -1062,7 +1062,7 @@ function _forward_socket_data(forwarder::Forwarder)
             # can shutdown the port forward if it's still open.
             close(sock)
             if isopen(forwarder.sshchan)
-                ssh.channel_send_eof(forwarder.sshchan)
+                closewrite(forwarder.sshchan)
                 close(forwarder.sshchan)
             end
         elseif eof(forwarder.sshchan)
