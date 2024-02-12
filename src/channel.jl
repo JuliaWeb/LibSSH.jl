@@ -165,7 +165,7 @@ function Base.close(sshchan::SshChannel)
             # Close the channel
             if isopen(sshchan)
                 # This will trigger callbacks
-                channel_send_eof(sshchan)
+                closewrite(sshchan)
 
                 if isopen(sshchan)
                     # This will trigger callbacks
@@ -274,12 +274,14 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Sends an EOF message. Wrapper around [`lib.ssh_channel_send_eof()`](@ref).
+Sends an EOF message. Calling this function will trigger any waiting callbacks.
 
-!!! warning
-    Calling this function will trigger any waiting callbacks.
+# Throws
+- `ArgumentError`: if the channel is not writable.
+
+Wrapper around [`lib.ssh_channel_send_eof()`](@ref).
 """
-function channel_send_eof(sshchan::SshChannel)
+function Base.closewrite(sshchan::SshChannel)
     # If we've already sent an EOF, do nothing
     if sshchan.local_eof
         return
@@ -295,6 +297,8 @@ function channel_send_eof(sshchan::SshChannel)
     end
     sshchan.local_eof = true
 end
+
+@deprecate channel_send_eof(sshchan::SshChannel) closewrite(sshchan)
 
 """
 $(TYPEDSIGNATURES)
@@ -464,7 +468,9 @@ function _exec_command(process::SshProcess)
     ret = poll_loop(sshchan)
 
     # Close the channel
-    lib.ssh_channel_send_eof(sshchan.ptr)
+    if iswritable(sshchan)
+        closewrite(sshchan)
+    end
     close(sshchan)
 
     # Check the result of the read for an error
@@ -631,7 +637,7 @@ function _handle_forwarding_client(client)
         elseif isempty(data) && eof(sock)
             close(sock)
             if iswritable(client.sshchan)
-                channel_send_eof(client.sshchan)
+                closewrite(client.sshchan)
             end
             close(client.sshchan)
         end
