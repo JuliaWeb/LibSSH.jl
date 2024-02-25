@@ -19,10 +19,6 @@ be elsewhere.
 
 ---
 
-```@docs
-LibSSH.lib_version
-```
-
 ```@autodocs
 Modules = [LibSSH.lib]
 Order = [:function, :type, :constant]

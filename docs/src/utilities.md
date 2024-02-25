@@ -19,6 +19,7 @@ Depth = 10
 ---
 
 ```@docs
+lib_version
 get_hexa
 gssapi_available
 ```
