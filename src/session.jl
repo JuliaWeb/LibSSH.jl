@@ -170,7 +170,7 @@ Get the last error set by libssh.
 Wrapper around [`lib.ssh_get_error()`](@ref).
 """
 function get_error(session::Session)
-    if !isassigned(session.ptr)
+    if !isassigned(session)
         throw(ArgumentError("Session has been free'd, cannot get its error"))
     end
 

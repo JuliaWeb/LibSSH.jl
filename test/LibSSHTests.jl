@@ -70,6 +70,8 @@ end
         # Unsetting a ssh_bind option shouldn't be allowed
         @test_throws ArgumentError server.port = nothing
 
+        @test ssh.get_error(server) == ""
+
         # Basic listener test
         t = errormonitor(@async ssh.listen(_ -> nothing, server))
         ssh.wait_for_listener(server)
@@ -191,8 +193,12 @@ end
 end
 
 @testset "Session" begin
+    # Connecting to a nonexistent ssh server should fail
+    @test_throws ssh.LibSSHException ssh.Session("localhost", 42)
+
     session = ssh.Session("localhost"; auto_connect=false, log_verbosity=lib.SSH_LOG_NOLOG)
     @test !ssh.isconnected(session)
+    @test ssh.get_error(session) == ""
 
     # Authenticating on an unconnected session should error
     @test_throws ArgumentError ssh.userauth_none(session)

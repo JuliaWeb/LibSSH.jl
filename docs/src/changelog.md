@@ -17,6 +17,10 @@ Changelog](https://keepachangelog.com).
 
 - Renamed `channel_send_eof()` to [`closewrite(::SshChannel)`](@ref) ([#4]).
 
+### Fixed
+
+- An exception in [`get_error(::SshChannel)`](@ref) ([#5]).
+
 ## [v0.2.0] - 2024-02-01
 
 ### Changed
