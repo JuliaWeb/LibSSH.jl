@@ -20,7 +20,7 @@ Changelog](https://keepachangelog.com).
 
 ### Fixed
 
-- An exception in [`get_error(::SshChannel)`](@ref) ([#5]).
+- An exception in [`get_error(::Session)`](@ref) ([#5]).
 
 ## [v0.2.0] - 2024-02-01
 
