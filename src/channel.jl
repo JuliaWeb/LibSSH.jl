@@ -112,9 +112,7 @@ $(TYPEDSIGNATURES)
 
 Check if the channel holds a valid pointer to a `lib.ssh_channel`.
 """
-function Base.isassigned(sshchan::SshChannel)
-    !isnothing(sshchan.ptr)
-end
+Base.isassigned(sshchan::SshChannel) = !isnothing(sshchan.ptr)
 
 """
 $(TYPEDSIGNATURES)

@@ -157,7 +157,7 @@ $(TYPEDSIGNATURES)
 
 Check if a session is open.
 """
-Base.isopen(session::Session) = !isnothing(session.ptr)
+Base.isopen(session::Session) = isassigned(session) # We currently don't allow closed sessions
 
 """
 $(TYPEDSIGNATURES)
