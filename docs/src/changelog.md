@@ -7,11 +7,12 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
-## Unreleased
+## [v0.2.1] - 2024-02-27
 
 ### Added
 
-- Initial client support for GSSAPI authentication ([#3]).
+- Initial client support for GSSAPI authentication ([#3]). This is not fully
+  tested, so use it with caution.
 
 ### Changed
 
