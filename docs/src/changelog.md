@@ -9,6 +9,11 @@ Changelog](https://keepachangelog.com).
 
 ## Unreleased
 
+### Added
+
+- It's now possible to set an interface for the [`Forwarder`](@ref) socket to
+  listen on with `localinterface` ([#6]).
+
 ### Changed
 
 - The `userauth_*` functions will now throw a `LibSSHException` by default if

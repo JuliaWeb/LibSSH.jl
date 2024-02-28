@@ -730,9 +730,19 @@ mutable struct Forwarder
     Create a `Forwarder` object to forward data from `localport` to
     `remotehost:remoteport`. This will handle an internal [`SshChannel`](@ref)
     for forwarding.
+
+    # Arguments
+    - `session`: The session to create a forwarding channel over.
+    - `localport`: The local port to bind to.
+    - `remotehost`: The remote host.
+    - `remoteport`: The remote port to bind to.
+    - `verbose`: Print logging messages on callbacks etc (not equivalent to
+      setting `log_verbosity` on a [`Session`](@ref)).
+    - `localinterface=IPv4(0)`: The interface to bind `localport` on.
     """
-    function Forwarder(session::Session, localport::Int, remotehost::String, remoteport::Int; verbose=false)
-        listen_server = Sockets.listen(IPv4(0), localport)
+    function Forwarder(session::Session, localport::Int, remotehost::String, remoteport::Int;
+                       verbose=false, localinterface::Sockets.IPAddr=IPv4(0))
+        listen_server = Sockets.listen(localinterface, localport)
 
         self = new(remotehost, remoteport, localport,
                    listen_server, nothing, _ForwardingClient[],
