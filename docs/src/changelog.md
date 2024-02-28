@@ -21,6 +21,8 @@ Changelog](https://keepachangelog.com).
 - [`Base.run(::Cmd, ::Session)`](@ref) now properly converts commands into
   strings before executing them remotely, previously things like quotes weren't
   escaped properly ([#6]).
+- Fixed a bug in [`Base.run(::Cmd, ::Session)`](@ref) that would clear the
+  output buffer when printing ([#6]).
 
 ## [v0.2.1] - 2024-02-27
 

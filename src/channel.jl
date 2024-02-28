@@ -396,7 +396,7 @@ $(TYPEDFIELDS)
 This is analogous to `Base.Process`, it represents a command running over an
 SSH session. The stdout and stderr output are stored as byte arrays in
 `SshProcess.out` and `SshProcess.err` respectively. They can be converted to
-strings using e.g. `String(process.out)`.
+strings using e.g. `String(copy(process.out))`.
 """
 @kwdef mutable struct SshProcess
     out::Vector{UInt8} = Vector{UInt8}()
@@ -565,7 +565,7 @@ function Base.run(cmd::Cmd, session::Session;
         Base.wait(process._task)
 
         if print_out
-            print(String(process.out))
+            print(String(copy(process.out)))
         end
     end
 
