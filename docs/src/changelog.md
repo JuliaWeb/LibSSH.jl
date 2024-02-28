@@ -15,6 +15,11 @@ Changelog](https://keepachangelog.com).
   they got a `AuthStatus_Error` from libssh. This can be disabled by passing
   `throw_on_error=false` ([#6]).
 
+### Fixed
+
+- Fixed some race conditions in [`poll_loop()`](@ref) and
+  [`Forwarder()`](@ref) ([#6]).
+
 ## [v0.2.1] - 2024-02-27
 
 ### Added

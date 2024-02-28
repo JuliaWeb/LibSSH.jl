@@ -320,8 +320,10 @@ $(TYPEDSIGNATURES)
 
 Poll a (owning) channel in a loop while it's alive, which will trigger any
 callbacks. This function should always be called on a channel for it to work
-properly. It will return the last result from [`lib.ssh_channel_poll()`](@ref),
-which should be checked to see if it's `SSH_EOF`.
+properly. It will return:
+- `nothing` if the channel was closed during the loop.
+- Otherwise the last result from [`lib.ssh_channel_poll()`](@ref), which should
+  be checked to see if it's `SSH_EOF`.
 """
 function poll_loop(sshchan::SshChannel)
     if !sshchan.owning
@@ -330,6 +332,13 @@ function poll_loop(sshchan::SshChannel)
 
     ret = SSH_ERROR
     while true
+        # We always check if the channel and session are open within the loop
+        # because ssh_channel_poll() will execute callbacks, which could close
+        # them before returning.
+        if !isopen(sshchan)
+            return nothing
+        end
+
         # Note that we don't actually read any data in this loop, that's
         # handled by the callbacks, which are called by ssh_channel_poll().
         ret = lib.ssh_channel_poll(sshchan.ptr, 0)
@@ -337,6 +346,10 @@ function poll_loop(sshchan::SshChannel)
         # Break if there was an error, or if an EOF has been sent
         if ret == SSH_ERROR || ret == SSH_EOF
             break
+        end
+
+        if !isopen(sshchan.session)
+            return nothing
         end
 
         wait(sshchan.session)
@@ -611,8 +624,10 @@ function _on_client_channel_eof(session, sshchan, client)
     _logcb(client, "EOF")
 
     close(client.sshchan)
-    closewrite(client.sock)
-    close(client.sock)
+    if isopen(client.sock)
+        closewrite(client.sock)
+        close(client.sock)
+    end
 end
 
 function _on_client_channel_close(session, sshchan, client)
