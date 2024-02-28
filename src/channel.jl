@@ -320,8 +320,10 @@ $(TYPEDSIGNATURES)
 
 Poll a (owning) channel in a loop while it's alive, which will trigger any
 callbacks. This function should always be called on a channel for it to work
-properly. It will return the last result from [`lib.ssh_channel_poll()`](@ref),
-which should be checked to see if it's `SSH_EOF`.
+properly. It will return:
+- `nothing` if the channel was closed during the loop.
+- Otherwise the last result from [`lib.ssh_channel_poll()`](@ref), which should
+  be checked to see if it's `SSH_EOF`.
 """
 function poll_loop(sshchan::SshChannel)
     if !sshchan.owning
@@ -330,6 +332,13 @@ function poll_loop(sshchan::SshChannel)
 
     ret = SSH_ERROR
     while true
+        # We always check if the channel and session are open within the loop
+        # because ssh_channel_poll() will execute callbacks, which could close
+        # them before returning.
+        if !isopen(sshchan)
+            return nothing
+        end
+
         # Note that we don't actually read any data in this loop, that's
         # handled by the callbacks, which are called by ssh_channel_poll().
         ret = lib.ssh_channel_poll(sshchan.ptr, 0)
@@ -337,6 +346,10 @@ function poll_loop(sshchan::SshChannel)
         # Break if there was an error, or if an EOF has been sent
         if ret == SSH_ERROR || ret == SSH_EOF
             break
+        end
+
+        if !isopen(sshchan.session)
+            return nothing
         end
 
         wait(sshchan.session)
@@ -383,7 +396,7 @@ $(TYPEDFIELDS)
 This is analogous to `Base.Process`, it represents a command running over an
 SSH session. The stdout and stderr output are stored as byte arrays in
 `SshProcess.out` and `SshProcess.err` respectively. They can be converted to
-strings using e.g. `String(process.out)`.
+strings using e.g. `String(copy(process.out))`.
 """
 @kwdef mutable struct SshProcess
     out::Vector{UInt8} = Vector{UInt8}()
@@ -441,7 +454,7 @@ end
 function _exec_command(process::SshProcess)
     sshchan = process._sshchan
     session = sshchan.session
-    cmd_str = join(process.cmd.exec, " ")
+    cmd_str = Base.shell_escape(process.cmd)
 
     # Open the session channel
     ret = _session_trywait(session) do
@@ -552,7 +565,7 @@ function Base.run(cmd::Cmd, session::Session;
         Base.wait(process._task)
 
         if print_out
-            print(String(process.out))
+            print(String(copy(process.out)))
         end
     end
 
@@ -611,8 +624,10 @@ function _on_client_channel_eof(session, sshchan, client)
     _logcb(client, "EOF")
 
     close(client.sshchan)
-    closewrite(client.sock)
-    close(client.sock)
+    if isopen(client.sock)
+        closewrite(client.sock)
+        close(client.sock)
+    end
 end
 
 function _on_client_channel_close(session, sshchan, client)
@@ -715,9 +730,19 @@ mutable struct Forwarder
     Create a `Forwarder` object to forward data from `localport` to
     `remotehost:remoteport`. This will handle an internal [`SshChannel`](@ref)
     for forwarding.
+
+    # Arguments
+    - `session`: The session to create a forwarding channel over.
+    - `localport`: The local port to bind to.
+    - `remotehost`: The remote host.
+    - `remoteport`: The remote port to bind to.
+    - `verbose`: Print logging messages on callbacks etc (not equivalent to
+      setting `log_verbosity` on a [`Session`](@ref)).
+    - `localinterface=IPv4(0)`: The interface to bind `localport` on.
     """
-    function Forwarder(session::Session, localport::Int, remotehost::String, remoteport::Int; verbose=false)
-        listen_server = Sockets.listen(IPv4(0), localport)
+    function Forwarder(session::Session, localport::Int, remotehost::String, remoteport::Int;
+                       verbose=false, localinterface::Sockets.IPAddr=IPv4(0))
+        listen_server = Sockets.listen(localinterface, localport)
 
         self = new(remotehost, remoteport, localport,
                    listen_server, nothing, _ForwardingClient[],

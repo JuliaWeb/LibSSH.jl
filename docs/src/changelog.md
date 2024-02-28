@@ -7,6 +7,32 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## Unreleased
+
+### Added
+
+- It's possible to set an interface for the [`Forwarder`](@ref) socket to listen
+  on with the `localinterface` argument ([#6]).
+- A new `Gssapi` module to help with [GSSAPI support](@ref). In particular,
+  [`Gssapi.principal_name()`](@ref) was added to get the name of the default
+  principal if one is available ([#6]).
+
+### Changed
+
+- The `userauth_*` functions will now throw a `LibSSHException` by default if
+  they got a `AuthStatus_Error` from libssh. This can be disabled by passing
+  `throw_on_error=false` ([#6]).
+- `gssapi_available()` was renamed to [`Gssapi.isavailable()`](@ref) ([#6]).
+
+### Fixed
+
+- Fixed some race conditions in [`poll_loop()`](@ref) and
+- [`Base.run(::Cmd, ::Session)`](@ref) now properly converts commands into
+  strings before executing them remotely, previously things like quotes weren't
+  escaped properly ([#6]).
+- Fixed a bug in [`Base.run(::Cmd, ::Session)`](@ref) that would clear the
+  output buffer when printing ([#6]).
+
 ## [v0.2.1] - 2024-02-27
 
 ### Added

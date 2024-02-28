@@ -1,3 +1,7 @@
+```@meta
+CurrentModule = LibSSH
+```
+
 # LibSSH.jl
 
 This package provides a high-level API and low-level bindings to
@@ -32,8 +36,8 @@ pkg> add LibSSH
 
 ## Limitations
 
-- GSSAPI support is disabled on Windows and macOS due to `Kerberos_krb5_jll` not
-  being available on those platforms.
+- GSSAPI support isn't available on all platforms (see
+  [`Gssapi.isavailable`](@ref)).
 - Many features don't have high-level wrappers (see [Contributing](@ref)).
 
 ## FAQ
