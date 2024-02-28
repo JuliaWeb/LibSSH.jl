@@ -564,7 +564,8 @@ end
 $(TYPEDSIGNATURES)
 
 Authenticate with GSSAPI. This is not available on all platforms (see
-[`gssapi_available`](@ref)).
+[`Gssapi.isavailable()`](@ref)).
+
 # Arguments
 - `session`: The session to authenticate.
 - `throw_on_error=true`: Whether to throw if there's an internal error while
@@ -580,7 +581,7 @@ Wrapper around [`lib.ssh_userauth_gssapi()`](@ref).
 function userauth_gssapi(session::Session; throw_on_error=true)
     if !isconnected(session)
         throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
-    elseif !gssapi_available()
+    elseif !Gssapi.isavailable()
         error("GSSAPI support is not available")
     end
 

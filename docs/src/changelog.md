@@ -11,14 +11,18 @@ Changelog](https://keepachangelog.com).
 
 ### Added
 
-- It's now possible to set an interface for the [`Forwarder`](@ref) socket to
-  listen on with `localinterface` ([#6]).
+- It's possible to set an interface for the [`Forwarder`](@ref) socket to listen
+  on with the `localinterface` argument ([#6]).
+- A new `Gssapi` module to help with [GSSAPI support](@ref). In particular,
+  [`Gssapi.principal_name()`](@ref) was added to get the name of the default
+  principal if one is available ([#6]).
 
 ### Changed
 
 - The `userauth_*` functions will now throw a `LibSSHException` by default if
   they got a `AuthStatus_Error` from libssh. This can be disabled by passing
   `throw_on_error=false` ([#6]).
+- `gssapi_available()` was renamed to [`Gssapi.isavailable()`](@ref) ([#6]).
 
 ### Fixed
 

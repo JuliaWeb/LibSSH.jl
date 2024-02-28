@@ -418,6 +418,18 @@ end
     @test replace(ssh.get_hexa(sha256_hash), ":" => "") == bytes2hex(sha256_hash)
 end
 
+@testset "GSSAPI" begin
+    @test ssh.Gssapi.isavailable() isa Bool
+
+    # Sadly this is quite lightly tested since it's nontrivial to set up a
+    # Kerberos instance and acquire a token etc.
+    if ssh.Gssapi.isavailable()
+        @test ssh.Gssapi.principal_name() isa Union{String, Nothing}
+    else
+        @test_throws ErrorException ssh.Gssapi.principal_name()
+    end
+end
+
 @testset "Examples" begin
     mktempdir() do tempdir
         # Test and generate the examples
@@ -433,7 +445,6 @@ end
 
 @testset "Utility functions" begin
     @test ssh.lib_version() isa VersionNumber
-    @test ssh.gssapi_available() isa Bool
 end
 
 @testset "Aqua.jl" begin
