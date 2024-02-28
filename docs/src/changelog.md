@@ -7,6 +7,14 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## Unreleased
+
+### Changed
+
+- The `userauth_*` functions will now throw a `LibSSHException` by default if
+  they got a `AuthStatus_Error` from libssh. This can be disabled by passing
+  `throw_on_error=false` ([#6]).
+
 ## [v0.2.1] - 2024-02-27
 
 ### Added

@@ -461,13 +461,18 @@ authentication method is always disabled in practice, but it's still useful to
 check which authentication methods the server supports (see
 [`userauth_list()`](@ref)).
 
+# Arguments
+- `session`: The session to authenticate.
+- `throw_on_error=true`: Whether to throw if there's an internal error while
+  authenticating (`AuthStatus_Error`).
+
 # Throws
 - `ArgumentError`: If the session isn't connected.
-- `LibSSHException`: If there was an internal error.
+- `LibSSHException`: If there was an internal error, unless `throw_on_error=false`.
 
 Wrapper around [`lib.ssh_userauth_none()`](@ref).
 """
-function userauth_none(session::Session)
+function userauth_none(session::Session; throw_on_error=true)
     if !isconnected(session)
         throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
@@ -477,7 +482,7 @@ function userauth_none(session::Session)
 
         if ret == AuthStatus_Again
             wait(session)
-        elseif ret == AuthStatus_Error
+        elseif ret == AuthStatus_Error && throw_on_error
             throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when calling userauth_none()"))
         else
             return ret
@@ -493,8 +498,6 @@ automatically call [`userauth_none()`](@ref) beforehand.
 
 # Throws
 - `ArgumentError`: If the session isn't connected.
-- `LibSSHException`: If there was an internal error, or if the server by some
-   miracle actually supports `userauth_none`.
 
 Wrapper around [`lib.ssh_userauth_list()`](@ref).
 """
@@ -506,9 +509,6 @@ function userauth_list(session::Session)
     # First we have to call ssh_userauth_none() for... some reason, according to
     # the docs.
     status = userauth_none(session)
-    if status == AuthStatus_Success
-        throw(LibSSHException("userauth_none() succeeded when getting supported auth methods, this should not happen!"))
-    end
 
     ret = lib.ssh_userauth_list(session.ptr, C_NULL)
     auth_methods = AuthMethod[]
@@ -527,14 +527,19 @@ $(TYPEDSIGNATURES)
 Authenticate by username and password. The username will be taken from
 `session.user`.
 
+# Arguments
+- `session`: The session to authenticate.
+- `password`: The password to authenticate with.
+- `throw_on_error=true`: Whether to throw_on_error if there's an internal error while
+  authenticating (`AuthStatus_Error`).
+
 # Throws
 - `ArgumentError`: If the session isn't connected.
-- `LibSSHException`: If there was an internal error, or if the server by some
-   miracle actually supports `userauth_none`.
+- `LibSSHException`: If there was an internal error, unless `throw_on_error=false`.
 
 Wrapper around [`lib.ssh_userauth_password()`](@ref).
 """
-function userauth_password(session::Session, password::String)
+function userauth_password(session::Session, password::String; throw_on_error=true)
     if !isconnected(session)
         throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
@@ -547,7 +552,7 @@ function userauth_password(session::Session, password::String)
 
         if ret == AuthStatus_Again
             wait(session)
-        elseif ret == AuthStatus_Error
+        elseif ret == AuthStatus_Error && throw_on_error
             throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when authenticating"))
         else
             return ret
@@ -560,14 +565,19 @@ $(TYPEDSIGNATURES)
 
 Authenticate with GSSAPI. This is not available on all platforms (see
 [`gssapi_available`](@ref)).
+# Arguments
+- `session`: The session to authenticate.
+- `throw_on_error=true`: Whether to throw if there's an internal error while
+  authenticating (`AuthStatus_Error`).
 
 # Throws
 - `ArgumentError`: If the session isn't connected.
 - `ErrorException`: If GSSAPI support isn't available.
+- `LibSSHException`: If there was an internal error, unless `throw_on_error=false`.
 
 Wrapper around [`lib.ssh_userauth_gssapi()`](@ref).
 """
-function userauth_gssapi(session::Session)
+function userauth_gssapi(session::Session; throw_on_error=true)
     if !isconnected(session)
         throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     elseif !gssapi_available()
@@ -577,8 +587,13 @@ function userauth_gssapi(session::Session)
     ret = _session_trywait(session) do
         lib.ssh_userauth_gssapi(session.ptr)
     end
+    status = AuthStatus(ret)
 
-    return AuthStatus(ret)
+    if status == AuthStatus_Error && throw_on_error
+        throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when authenticating"))
+    end
+
+    return status
 end
 
 """
@@ -586,12 +601,18 @@ $(TYPEDSIGNATURES)
 
 Attempt to authenticate with the keyboard-interactive method.
 
+# Arguments
+- `session`: The session to authenticate.
+- `throw_on_error=true`: Whether to throw if there's an internal error while
+  authenticating (`AuthStatus_Error`).
+
 # Throws
 - `ArgumentError`: If the session isn't connected.
+- `LibSSHException`: If there was an internal error, unless `throw_on_error=false`.
 
 Wrapper around [`lib.ssh_userauth_kbdint`](@ref).
 """
-function userauth_kbdint(session::Session)
+function userauth_kbdint(session::Session; throw_on_error=true)
     if !isconnected(session)
         throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
@@ -599,8 +620,13 @@ function userauth_kbdint(session::Session)
     ret = _session_trywait(session) do
         lib.ssh_userauth_kbdint(session.ptr, C_NULL, C_NULL)
     end
+    status = AuthStatus(ret)
 
-    return AuthStatus(ret)
+    if status == AuthStatus_Error && throw_on_error
+        throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when authenticating"))
+    end
+
+    return status
 end
 
 """
@@ -638,8 +664,14 @@ $(TYPEDSIGNATURES)
 Sets answers for a keyboard-interactive auth session. Uses
 [`lib.ssh_userauth_kbdint_setanswer`](@ref) internally.
 
+# Arguments
+- `session`: The session to authenticate.
+- `answers`: A vector of answers for each prompt sent by the server.
+
 # Throws
-- `ArgumentError`: If the session isn't connected.
+- `ArgumentError`: If the session isn't connected, or if the wrong number of
+  answers were passed.
+- `LibSSHException`: If setting the answers failed.
 """
 function userauth_kbdint_setanswers(session::Session, answers::Vector{String})
     if !isconnected(session)
@@ -655,7 +687,7 @@ function userauth_kbdint_setanswers(session::Session, answers::Vector{String})
         ret = lib.ssh_userauth_kbdint_setanswer(session.ptr, i - 1,
                                                 Base.cconvert(Cstring, answer))
         if ret != SSH_OK
-            throw("Error while setting answer $(i) with ssh_userauth_kbdint_setanswer(): $(ret)")
+            throw(LibSSHException("Error while setting answer $(i) with ssh_userauth_kbdint_setanswer(): $(ret)"))
         end
     end
 end
