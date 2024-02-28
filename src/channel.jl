@@ -454,7 +454,7 @@ end
 function _exec_command(process::SshProcess)
     sshchan = process._sshchan
     session = sshchan.session
-    cmd_str = join(process.cmd.exec, " ")
+    cmd_str = Base.shell_escape(process.cmd)
 
     # Open the session channel
     ret = _session_trywait(session) do

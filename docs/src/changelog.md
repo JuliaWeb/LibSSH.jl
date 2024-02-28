@@ -18,7 +18,9 @@ Changelog](https://keepachangelog.com).
 ### Fixed
 
 - Fixed some race conditions in [`poll_loop()`](@ref) and
-  [`Forwarder()`](@ref) ([#6]).
+- [`Base.run(::Cmd, ::Session)`](@ref) now properly converts commands into
+  strings before executing them remotely, previously things like quotes weren't
+  escaped properly ([#6]).
 
 ## [v0.2.1] - 2024-02-27
 

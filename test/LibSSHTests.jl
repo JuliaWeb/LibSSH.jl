@@ -357,6 +357,9 @@ end
             # Test Base methods
             @test read(`echo foo`, session, String) == "foo\n"
             @test success(`whoami`, session)
+
+            # Check that commands with quotes are properly escaped
+            @test read(`echo 'foo bar'`, session, String) == "foo bar\n"
         end
     end
 
