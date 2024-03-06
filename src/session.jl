@@ -1,3 +1,9 @@
+# Represents a keyboard-interactive prompt from a server
+struct KbdintPrompt
+    msg::String
+    display::Bool
+end
+
 """
 $(TYPEDEF)
 $(TYPEDFIELDS)
@@ -13,6 +19,10 @@ mutable struct Session
     log_verbosity::Int
     channels::Vector{Any}
     server_callbacks::Union{Callbacks.ServerCallbacks, Nothing}
+
+    _auth_methods::Union{Vector{AuthMethod}, Nothing}
+    _attempted_auth_methods::Vector{AuthMethod}
+    _require_init_kbdint::Bool
 
     @doc """
     $(TYPEDSIGNATURES)
@@ -34,7 +44,7 @@ mutable struct Session
         # Set to non-blocking mode
         lib.ssh_set_blocking(ptr, 0)
 
-        session = new(ptr, own, -1, [], nothing)
+        session = new(ptr, own, -1, [], nothing, nothing, AuthMethod[], true)
         if !isnothing(log_verbosity)
             session.log_verbosity = log_verbosity
         end
@@ -188,7 +198,10 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
 const SAVED_PROPERTIES = (:log_verbosity,)
 
 function Base.propertynames(::Session, private::Bool=false)
-    (:host, :port, :user, :log_verbosity, :owning, (private ? (:ptr, :channels, :server_callbacks) : ())...)
+    private_fields = (:ptr, :channels, :server_callbacks,
+                      :_auth_methods, :_attempted_auth_methods,
+                      :_kbdint_prompts, :_require_init_kbdint)
+    (:host, :port, :user, :log_verbosity, :owning, (private ? private_fields : ())...)
 end
 
 function Base.getproperty(session::Session, name::Symbol)
@@ -238,7 +251,8 @@ function Base.setproperty!(session::Session, name::Symbol, value)
         error("type Session has no field $(name)")
     end
 
-    if name == :ptr || name == :server_callbacks
+    if name in (:ptr, :server_callbacks, :_auth_methods, :_attempted_auth_methods,
+                :_kbdint_prompts, :_require_init_kbdint)
         return setfield!(session, name, value)
     end
 
@@ -453,6 +467,216 @@ function update_known_hosts(session::Session)
     end
 end
 
+# Helper function to call userauth_kbdint() until we get a non-AuthStatus_Info
+# response.
+function _try_userauth_kbdint(session::Session; answers=nothing)
+    # We keep track of when we need to start an keyboard-interactive auth
+    # session with the server through the _require_init_kbdint field.
+    if session._require_init_kbdint
+        userauth_kbdint(session)
+    end
+
+    if !isnothing(answers)
+        userauth_kbdint_setanswers(session, answers)
+    end
+
+    status = userauth_kbdint(session)
+    if status == AuthStatus_Info
+        prompts = userauth_kbdint_getprompts(session)
+
+        # If the server responds with Info but doesn't send any prompts, then we
+        # just keep trying until we get something different. Servers can do that.
+        if isempty(prompts)
+            return _try_userauth_kbdint(session)
+        end
+    end
+
+    # If the auth session is 'over', then set the _require_init_kbdint field so
+    # that we know to call userauth_kbdint() again the next time it's tried.
+    if status == AuthStatus_Denied
+        session._require_init_kbdint = true
+    end
+
+    return status
+end
+
+function _can_attempt_auth(session::Session, auth_method::AuthMethod)
+    auth_method in session._auth_methods && auth_method ∉ session._attempted_auth_methods
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+This is a helper function that boldly attempts to handle the entire
+authentication flow by figuring out which authentication methods are still
+available and calling the appropriate functions for you. It can be called
+multiple times to complete authentication.
+
+It can return either:
+- A [`AuthStatus`](@ref) to indicate that authentication finished in some
+  way. The caller doesn't need to do anything else in this case but may retry
+  authenticating.
+- A [`AuthMethod`](@ref) to indicate the next method to try. This is only
+  returned for auth methods that require user input (i.e. `AuthMethod_Password`
+  or `AuthMethod_Interactive`), and the caller must pass the user input next
+  time they call `authenticate()`.
+
+!!! warning
+    If you're using this function do *not* call any of the other `userauth_*`
+    functions, except for [`userauth_kbdint_getprompts()`](@ref) to get the
+    server prompts if necessary. `authenticate()` maintains some internal state
+    to keep track of where it is in authentication, which can be messed up by
+    calling other auth methods yourself.
+
+!!! warning
+    `authenticate()` is quite experimental, we suggest testing it with
+    [`authenticate_cli()`](@ref) to verify it works on the servers you're
+    authenticating to.
+
+# Arguments
+- `session`: The [`Session`](@ref) to authenticate.
+- `password=nothing`: A password to authenticate with. Pass this if
+  `authenticate()` previously returned `AuthMethod_Password`.
+- `kbdint_answers=nothing`: Answers to keyboard-interactive prompts from the
+  server. Use [`userauth_kbdint_getprompts()`](@ref) to get the prompts if
+  `authenticate()` returns `AuthMethod_Interactive` and then pass the answers in
+  the next call.
+
+# Throws
+- `ArgumentError`: If the session isn't connected, or if both `password` and
+  `kbdint_answers` are passed.
+- `ErrorException`: If there are no more supported authentication methods
+  available.
+"""
+function authenticate(session::Session; password=nothing, kbdint_answers=nothing)
+    if !isconnected(session)
+        throw(ArgumentError("Session is disconnected, cannot authenticate"))
+    elseif !isnothing(password) && !isnothing(kbdint_answers)
+        throw(ArgumentError("Only one of `password` or `kbdint_answers` may be passed"))
+    end
+
+    # Retrieve the supported methods
+    session._auth_methods = userauth_list(session;
+                                          call_auth_none=isnothing(session._auth_methods))
+
+    # First we check if any of the input arguments have been passed, and we
+    # attempt authentication if so.
+    if !isnothing(password) || !isnothing(kbdint_answers)
+        status = if !isnothing(password)
+            userauth_password(session, password)
+        else
+            _try_userauth_kbdint(session; answers=kbdint_answers)
+        end
+
+        return status == AuthStatus_Partial ? authenticate(session) : status
+    end
+
+    if isempty(session._auth_methods)
+        error("Could not authenticate to the server, no authenication methods left")
+    end
+
+    # Otherwise we go through the support auth methods and select one to try.
+
+    # First we try GSSAPI. Handling this one is a little complex because it's
+    # allowed to fail if the user hasn't got a ticket for the server.
+    if (_can_attempt_auth(session, AuthMethod_GSSAPI_MIC)
+        && Gssapi.isavailable()
+        && !isnothing(Gssapi.principal_name()))
+        status = userauth_gssapi(session)
+
+        if status == AuthStatus_Denied
+            push!(session._attempted_auth_methods, AuthMethod_GSSAPI_MIC)
+
+            # If the ticket isn't valid but there are still other methods
+            # available, continue trying. Otherwise just return Denied.
+            if length(session._auth_methods) > 1
+                return authenticate(session)
+            else
+                return status
+            end
+        elseif status == AuthStatus_Partial
+            # If we're now partially authenticated, then we continue with some
+            # other method.
+            return authenticate(session)
+        else
+            return status
+        end
+    end
+
+    # Then password auth
+    if _can_attempt_auth(session, AuthMethod_Password)
+        return AuthMethod_Password
+    end
+
+    # Then keyboard-interactive auth
+    if _can_attempt_auth(session, AuthMethod_Interactive)
+        # Start a keyboard-interactive session if necessary. We call this now so
+        # that the caller can call userauth_kbdint_getprompts() immediately.
+        if session._require_init_kbdint
+            userauth_kbdint(session)
+        end
+
+        return AuthMethod_Interactive
+    end
+
+    error("The remaining auth methods are not supported: $(session._auth_methods)")
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Meant to mimic authenticating with the `ssh` command by calling
+[`authenticate()`](@ref) in a loop while prompting the user if necessary. It's
+useful to use this at the REPL to test whether the server can be authenticated
+to at all.
+
+# Examples
+```julia-repl
+julia> session = ssh.Session("test.com"; user="myuser")
+LibSSH.Session(host=test.com, port=22, user=myuser, connected=true)
+
+julia> ssh.authenticate_cli(session)
+Password:
+[ Info: AuthStatus_Info
+One-time password:
+[ Info: AuthStatus_Success
+AuthStatus_Success::AuthStatus = 0
+```
+"""
+function authenticate_cli(session::Session)
+    ret = nothing
+
+    while ret != AuthStatus_Success
+        ret = authenticate(session)
+
+        if ret == AuthMethod_Password
+            buf = Base.getpass("Password")
+            println()
+            password = read(buf, String)
+            Base.shred!(buf)
+
+            ret = authenticate(session; password)
+        elseif ret == AuthMethod_Interactive
+            prompts = userauth_kbdint_getprompts(session)
+            answers = String[]
+            for prompt in prompts
+                # TODO: use `with_suffix` in Julia 1.12. See
+                # https://github.com/JuliaLang/julia/pull/53614.
+                buf = Base.getpass(chopsuffix(prompt.msg, ": "))
+                println()
+                push!(answers, read(buf, String))
+                Base.shred!(buf)
+            end
+
+            ret = authenticate(session; kbdint_answers=answers)
+        end
+
+        @info ret
+    end
+
+    return ret
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -494,21 +718,24 @@ end
 $(TYPEDSIGNATURES)
 
 Get a list of support authentication methods from the server. This will
-automatically call [`userauth_none()`](@ref) beforehand.
+automatically call [`userauth_none()`](@ref) beforehand if `call_auth_none=true`
+(the default).
 
 # Throws
 - `ArgumentError`: If the session isn't connected.
 
 Wrapper around [`lib.ssh_userauth_list()`](@ref).
 """
-function userauth_list(session::Session)
+function userauth_list(session::Session; call_auth_none=true)
     if !isconnected(session)
         throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
 
     # First we have to call ssh_userauth_none() for... some reason, according to
     # the docs.
-    status = userauth_none(session)
+    if call_auth_none
+        userauth_none(session)
+    end
 
     ret = lib.ssh_userauth_list(session.ptr, C_NULL)
     auth_methods = AuthMethod[]
@@ -627,6 +854,8 @@ function userauth_kbdint(session::Session; throw_on_error=true)
         throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when authenticating"))
     end
 
+    session._require_init_kbdint = false
+
     return status
 end
 
@@ -634,7 +863,10 @@ end
 $(TYPEDSIGNATURES)
 
 Returns all the keyboard-interactive prompts from the server. You should have
-already called [`userauth_kbdint()`](@ref).
+already called [`userauth_kbdint()`](@ref). The `KbdintPrompt` objects it
+returns have `.msg` and `.display` fields that hold the prompt message and
+whether to echo the user input (e.g. it will be `false` for a password and other
+sensitive input).
 
 This is a combination of [`lib.ssh_userauth_kbdint_getnprompts`](@ref) and
 [`lib.userauth_kbdint_getprompt`](@ref). It should be preferred over the
@@ -648,12 +880,12 @@ function userauth_kbdint_getprompts(session::Session)
         throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
 
-    prompts = Tuple{String, Bool}[]
+    prompts = KbdintPrompt[]
     n_prompts = lib.ssh_userauth_kbdint_getnprompts(session.ptr)
     for i in 0:n_prompts - 1
         echo_ref = Ref{Cchar}()
-        prompt = lib.userauth_kbdint_getprompt(session.ptr, i, echo_ref)
-        push!(prompts, (prompt, Bool(echo_ref[])))
+        question = lib.userauth_kbdint_getprompt(session.ptr, i, echo_ref)
+        push!(prompts, KbdintPrompt(question, Bool(echo_ref[])))
     end
 
     return prompts

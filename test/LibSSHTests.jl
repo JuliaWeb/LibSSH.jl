@@ -13,7 +13,7 @@ import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_broken, @test_
 import LibSSH
 import LibSSH as ssh
 import LibSSH.PKI as pki
-import LibSSH: Demo, lib
+import LibSSH: Demo, lib, KbdintPrompt
 import LibSSH.Demo: DemoServer
 
 
@@ -258,7 +258,8 @@ end
             @test ssh.isconnected(session)
 
             @test ssh.userauth_kbdint(session) == ssh.AuthStatus_Info
-            @test ssh.userauth_kbdint_getprompts(session) == [("Password: ", true), ("Token: ", true)]
+            @test ssh.userauth_kbdint_getprompts(session) == [KbdintPrompt("Password: ", true),
+                                                              KbdintPrompt("Token: ", true)]
 
             # This should throw because we're passing the wrong number of answers
             @test_throws ArgumentError ssh.userauth_kbdint_setanswers(session, ["foo"])
@@ -288,6 +289,40 @@ end
             @test_broken ssh.userauth_gssapi(session) == ssh.AuthStatus_Success
 
             close(session)
+        end
+    end
+
+    @testset "authenticate()" begin
+        # Test with password auth
+        DemoServer(2222; auth_methods=[ssh.AuthMethod_Password], password="foo") do
+            session = ssh.Session(Sockets.localhost, 2222)
+            @test ssh.isconnected(session)
+
+            @test ssh.authenticate(session) == ssh.AuthMethod_Password
+            @test ssh.authenticate(session; password="bar") == ssh.AuthStatus_Denied
+            @test ssh.authenticate(session; password="foo") == ssh.AuthStatus_Success
+
+            close(session)
+        end
+
+        # Test with keyboard-interactive auth
+        DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
+            session = ssh.Session(Sockets.localhost, 2222)
+            @test ssh.isconnected(session)
+
+            @test ssh.authenticate(session) == ssh.AuthMethod_Interactive
+            @test ssh.authenticate(session; kbdint_answers=["bar", "foo"]) == ssh.AuthStatus_Denied
+            @test ssh.authenticate(session; kbdint_answers=["foo", "bar"]) == ssh.AuthStatus_Success
+
+            close(session)
+        end
+
+        DemoServer(2222; auth_methods=[ssh.AuthMethod_PublicKey]) do
+            session = ssh.Session(Sockets.localhost, 2222)
+            @test ssh.isconnected(session)
+
+            # We don't support public key auth yet so this should just throw
+            @test_throws ErrorException ssh.authenticate(session)
         end
     end
 end
