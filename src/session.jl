@@ -1,3 +1,9 @@
+# Represents a keyboard-interactive prompt from a server
+struct KbdintPrompt
+    msg::String
+    display::Bool
+end
+
 """
 $(TYPEDEF)
 $(TYPEDFIELDS)
@@ -634,7 +640,10 @@ end
 $(TYPEDSIGNATURES)
 
 Returns all the keyboard-interactive prompts from the server. You should have
-already called [`userauth_kbdint()`](@ref).
+already called [`userauth_kbdint()`](@ref). The `KbdintPrompt` objects it
+returns have `.msg` and `.display` fields that hold the prompt message and
+whether to echo the user input (e.g. it will be `false` for a password and other
+sensitive input).
 
 This is a combination of [`lib.ssh_userauth_kbdint_getnprompts`](@ref) and
 [`lib.userauth_kbdint_getprompt`](@ref). It should be preferred over the
@@ -648,12 +657,12 @@ function userauth_kbdint_getprompts(session::Session)
         throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
 
-    prompts = Tuple{String, Bool}[]
+    prompts = KbdintPrompt[]
     n_prompts = lib.ssh_userauth_kbdint_getnprompts(session.ptr)
     for i in 0:n_prompts - 1
         echo_ref = Ref{Cchar}()
-        prompt = lib.userauth_kbdint_getprompt(session.ptr, i, echo_ref)
-        push!(prompts, (prompt, Bool(echo_ref[])))
+        question = lib.userauth_kbdint_getprompt(session.ptr, i, echo_ref)
+        push!(prompts, KbdintPrompt(question, Bool(echo_ref[])))
     end
 
     return prompts

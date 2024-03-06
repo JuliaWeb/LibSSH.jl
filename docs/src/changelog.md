@@ -23,6 +23,8 @@ Changelog](https://keepachangelog.com).
   they got a `AuthStatus_Error` from libssh. This can be disabled by passing
   `throw_on_error=false` ([#6]).
 - `gssapi_available()` was renamed to [`Gssapi.isavailable()`](@ref) ([#6]).
+- [`userauth_kbdint_getprompts()`](@ref) returns a vector of `KbdintPrompt`
+  objects instead of tuples ([#7]).
 
 ### Fixed
 

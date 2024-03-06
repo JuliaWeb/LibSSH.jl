@@ -13,7 +13,7 @@ import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_broken, @test_
 import LibSSH
 import LibSSH as ssh
 import LibSSH.PKI as pki
-import LibSSH: Demo, lib
+import LibSSH: Demo, lib, KbdintPrompt
 import LibSSH.Demo: DemoServer
 
 
@@ -258,7 +258,8 @@ end
             @test ssh.isconnected(session)
 
             @test ssh.userauth_kbdint(session) == ssh.AuthStatus_Info
-            @test ssh.userauth_kbdint_getprompts(session) == [("Password: ", true), ("Token: ", true)]
+            @test ssh.userauth_kbdint_getprompts(session) == [KbdintPrompt("Password: ", true),
+                                                              KbdintPrompt("Token: ", true)]
 
             # This should throw because we're passing the wrong number of answers
             @test_throws ArgumentError ssh.userauth_kbdint_setanswers(session, ["foo"])
