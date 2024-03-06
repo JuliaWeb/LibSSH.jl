@@ -291,6 +291,40 @@ end
             close(session)
         end
     end
+
+    @testset "authenticate()" begin
+        # Test with password auth
+        DemoServer(2222; auth_methods=[ssh.AuthMethod_Password], password="foo") do
+            session = ssh.Session(Sockets.localhost, 2222)
+            @test ssh.isconnected(session)
+
+            @test ssh.authenticate(session) == ssh.AuthMethod_Password
+            @test ssh.authenticate(session; password="bar") == ssh.AuthStatus_Denied
+            @test ssh.authenticate(session; password="foo") == ssh.AuthStatus_Success
+
+            close(session)
+        end
+
+        # Test with keyboard-interactive auth
+        DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
+            session = ssh.Session(Sockets.localhost, 2222)
+            @test ssh.isconnected(session)
+
+            @test ssh.authenticate(session) == ssh.AuthMethod_Interactive
+            @test ssh.authenticate(session; kbdint_answers=["bar", "foo"]) == ssh.AuthStatus_Denied
+            @test ssh.authenticate(session; kbdint_answers=["foo", "bar"]) == ssh.AuthStatus_Success
+
+            close(session)
+        end
+
+        DemoServer(2222; auth_methods=[ssh.AuthMethod_PublicKey]) do
+            session = ssh.Session(Sockets.localhost, 2222)
+            @test ssh.isconnected(session)
+
+            # We don't support public key auth yet so this should just throw
+            @test_throws ErrorException ssh.authenticate(session)
+        end
+    end
 end
 
 # Helper function to start a DemoServer and create a session connected to it

@@ -16,6 +16,7 @@ Changelog](https://keepachangelog.com).
 - A new `Gssapi` module to help with [GSSAPI support](@ref). In particular,
   [`Gssapi.principal_name()`](@ref) was added to get the name of the default
   principal if one is available ([#6]).
+- An experimental [`authenticate()`](@ref) function to simplify authenticating ([#7]).
 
 ### Changed
 

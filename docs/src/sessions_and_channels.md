@@ -45,6 +45,8 @@ isconnected
 is_known_server
 get_server_publickey
 update_known_hosts
+authenticate
+authenticate_cli
 userauth_list
 userauth_none
 userauth_password
