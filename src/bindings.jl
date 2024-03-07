@@ -2682,7 +2682,7 @@ mutable struct sftp_packet_struct
     type::UInt8
     payload::ssh_buffer
 end
-Base.unsafe_convert(::Type{Ptr{__JL_sftp_packet_struct}}, x::Ref{sftp_packet_struct}) = Base.unsafe_convert(Ptr{__JL_sftp_packet_struct}, Base.unsafe_convert(Ptr{sftp_packet_struct}, x))
+Base.unsafe_convert(::Type{Ptr{__JL_sftp_packet_struct}}, x::Base.RefValue{sftp_packet_struct}) = Base.unsafe_convert(Ptr{__JL_sftp_packet_struct}, Base.unsafe_convert(Ptr{sftp_packet_struct}, x))
 
 Base.unsafe_convert(::Type{Ptr{__JL_sftp_packet_struct}}, x::Ptr{sftp_packet_struct}) = Ptr{__JL_sftp_packet_struct}(x)
 
@@ -2691,7 +2691,7 @@ mutable struct sftp_request_queue_struct
     next::sftp_request_queue
     message::sftp_message
 end
-Base.unsafe_convert(::Type{Ptr{__JL_sftp_request_queue_struct}}, x::Ref{sftp_request_queue_struct}) = Base.unsafe_convert(Ptr{__JL_sftp_request_queue_struct}, Base.unsafe_convert(Ptr{sftp_request_queue_struct}, x))
+Base.unsafe_convert(::Type{Ptr{__JL_sftp_request_queue_struct}}, x::Base.RefValue{sftp_request_queue_struct}) = Base.unsafe_convert(Ptr{__JL_sftp_request_queue_struct}, Base.unsafe_convert(Ptr{sftp_request_queue_struct}, x))
 
 Base.unsafe_convert(::Type{Ptr{__JL_sftp_request_queue_struct}}, x::Ptr{sftp_request_queue_struct}) = Ptr{__JL_sftp_request_queue_struct}(x)
 
