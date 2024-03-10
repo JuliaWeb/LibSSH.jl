@@ -736,6 +736,7 @@ This object manages a direct forwarding channel between `localport` and `remoteh
 mutable struct Forwarder
     remotehost::String
     remoteport::Int
+    localinterface::Sockets.IPAddr
     localport::Int
 
     _listen_server::TCPServer
@@ -765,7 +766,7 @@ mutable struct Forwarder
                        verbose=false, localinterface::Sockets.IPAddr=IPv4(0))
         listen_server = Sockets.listen(localinterface, localport)
 
-        self = new(remotehost, remoteport, localport,
+        self = new(remotehost, remoteport, localinterface, localport,
                    listen_server, nothing, _ForwardingClient[],
                    session, verbose)
 
@@ -777,6 +778,14 @@ mutable struct Forwarder
         end
 
         finalizer(close, self)
+    end
+end
+
+function Base.show(io::IO, f::Forwarder)
+    if !isopen(f)
+        print(io, Forwarder, "()")
+    else
+        print(io, Forwarder, "($(f.localinterface):$(f.localport) → $(f.remotehost):$(f.remoteport))")
     end
 end
 
@@ -812,6 +821,8 @@ function Base.close(forwarder::Forwarder)
         close(client)
     end
 end
+
+Base.isopen(forwarder::Forwarder) = isopen(forwarder._listen_server)
 
 # This function accepts connections on the local port and sets up
 # _ForwardingClient's for them.
