@@ -17,6 +17,7 @@ Changelog](https://keepachangelog.com).
   [`Gssapi.principal_name()`](@ref) was added to get the name of the default
   principal if one is available ([#6]).
 - An experimental [`authenticate()`](@ref) function to simplify authenticating ([#7]).
+- A do-constructor for [`Session(::Function)`](@ref) ([#8]).
 
 ### Changed
 
@@ -36,6 +37,9 @@ Changelog](https://keepachangelog.com).
   escaped properly ([#6]).
 - Fixed a bug in [`Base.run(::Cmd, ::Session)`](@ref) that would clear the
   output buffer when printing ([#6]).
+- Changed [`poll_loop()`](@ref) to poll the stdout and stderr streams, which
+  fixes a bug where callbacks would sometimes not get executed even when data
+  was available ([#8]).
 
 ## [v0.2.1] - 2024-02-27
 

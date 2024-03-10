@@ -332,20 +332,25 @@ function poll_loop(sshchan::SshChannel)
 
     ret = SSH_ERROR
     while true
-        # We always check if the channel and session are open within the loop
-        # because ssh_channel_poll() will execute callbacks, which could close
-        # them before returning.
-        if !isopen(sshchan)
-            return nothing
-        end
+        # Poll stdout and stderr
+        for io_stream in (0, 1)
+            # We always check if the channel and session are open within the loop
+            # because ssh_channel_poll() will execute callbacks, which could close
+            # them before returning.
+            if !isopen(sshchan)
+                return nothing
+            end
 
-        # Note that we don't actually read any data in this loop, that's
-        # handled by the callbacks, which are called by ssh_channel_poll().
-        ret = lib.ssh_channel_poll(sshchan.ptr, 0)
+            # Note that we don't actually read any data in this loop, that's
+            # handled by the callbacks, which are called by ssh_channel_poll().
+            ret = lib.ssh_channel_poll(sshchan.ptr, io_stream)
 
-        # Break if there was an error, or if an EOF has been sent
-        if ret == SSH_ERROR || ret == SSH_EOF
-            break
+            # Break if there was an error, or if an EOF has been sent. We use a
+            # @goto here (Knuth forgive me) to break out of the outer loop as
+            # well as the inner one.
+            if ret == SSH_ERROR || ret == SSH_EOF
+                @goto loop_end
+            end
         end
 
         if !isopen(sshchan.session)
@@ -354,6 +359,8 @@ function poll_loop(sshchan::SshChannel)
 
         wait(sshchan.session)
     end
+
+    @label loop_end
 
     return Int(ret)
 end
@@ -615,7 +622,11 @@ Base.success(cmd::Cmd, session::Session) = success(run(cmd, session; print_out=f
 function _on_client_channel_data(session, sshchan, data, is_stderr, client)
     _logcb(client, "Received $(length(data)) bytes from server")
 
-    write(client.sock, data)
+    if isopen(client.sock)
+        write(client.sock, data)
+    else
+        @warn "Client socket has been closed, dropping $(length(data)) bytes from the remote forwarded port"
+    end
 
     return length(data)
 end
@@ -638,12 +649,22 @@ end
 # the channel and forwarding data to the server and client.
 function _handle_forwarding_client(client)
     # Start polling the client channel
-    poller = Threads.@spawn poll_loop(client.sshchan)
+    poller = errormonitor(Threads.@spawn poll_loop(client.sshchan))
 
     # Read data from the socket while it's open
     sock = client.sock
     while isopen(sock)
-        data = readavailable(sock)
+        local data
+        try
+            # This will throw an IOError if the socket is closed during the read
+            data = readavailable(sock)
+        catch ex
+            if ex isa Base.IOError
+                continue
+            else
+                rethrow()
+            end
+        end
 
         if !isempty(data) && isopen(client.sshchan)
             write(client.sshchan, data)
@@ -715,6 +736,7 @@ This object manages a direct forwarding channel between `localport` and `remoteh
 mutable struct Forwarder
     remotehost::String
     remoteport::Int
+    localinterface::Sockets.IPAddr
     localport::Int
 
     _listen_server::TCPServer
@@ -744,7 +766,7 @@ mutable struct Forwarder
                        verbose=false, localinterface::Sockets.IPAddr=IPv4(0))
         listen_server = Sockets.listen(localinterface, localport)
 
-        self = new(remotehost, remoteport, localport,
+        self = new(remotehost, remoteport, localinterface, localport,
                    listen_server, nothing, _ForwardingClient[],
                    session, verbose)
 
@@ -756,6 +778,14 @@ mutable struct Forwarder
         end
 
         finalizer(close, self)
+    end
+end
+
+function Base.show(io::IO, f::Forwarder)
+    if !isopen(f)
+        print(io, Forwarder, "()")
+    else
+        print(io, Forwarder, "($(f.localinterface):$(f.localport) → $(f.remotehost):$(f.remoteport))")
     end
 end
 
@@ -791,6 +821,8 @@ function Base.close(forwarder::Forwarder)
         close(client)
     end
 end
+
+Base.isopen(forwarder::Forwarder) = isopen(forwarder._listen_server)
 
 # This function accepts connections on the local port and sets up
 # _ForwardingClient's for them.
