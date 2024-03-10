@@ -332,20 +332,25 @@ function poll_loop(sshchan::SshChannel)
 
     ret = SSH_ERROR
     while true
-        # We always check if the channel and session are open within the loop
-        # because ssh_channel_poll() will execute callbacks, which could close
-        # them before returning.
-        if !isopen(sshchan)
-            return nothing
-        end
+        # Poll stdout and stderr
+        for io_stream in (0, 1)
+            # We always check if the channel and session are open within the loop
+            # because ssh_channel_poll() will execute callbacks, which could close
+            # them before returning.
+            if !isopen(sshchan)
+                return nothing
+            end
 
-        # Note that we don't actually read any data in this loop, that's
-        # handled by the callbacks, which are called by ssh_channel_poll().
-        ret = lib.ssh_channel_poll(sshchan.ptr, 0)
+            # Note that we don't actually read any data in this loop, that's
+            # handled by the callbacks, which are called by ssh_channel_poll().
+            ret = lib.ssh_channel_poll(sshchan.ptr, io_stream)
 
-        # Break if there was an error, or if an EOF has been sent
-        if ret == SSH_ERROR || ret == SSH_EOF
-            break
+            # Break if there was an error, or if an EOF has been sent. We use a
+            # @goto here (Knuth forgive me) to break out of the outer loop as
+            # well as the inner one.
+            if ret == SSH_ERROR || ret == SSH_EOF
+                @goto loop_end
+            end
         end
 
         if !isopen(sshchan.session)
@@ -354,6 +359,8 @@ function poll_loop(sshchan::SshChannel)
 
         wait(sshchan.session)
     end
+
+    @label loop_end
 
     return Int(ret)
 end

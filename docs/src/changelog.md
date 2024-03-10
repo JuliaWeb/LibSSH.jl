@@ -36,6 +36,9 @@ Changelog](https://keepachangelog.com).
   escaped properly ([#6]).
 - Fixed a bug in [`Base.run(::Cmd, ::Session)`](@ref) that would clear the
   output buffer when printing ([#6]).
+- Changed [`poll_loop()`](@ref) to poll the stdout and stderr streams, which
+  fixes a bug where callbacks would sometimes not get executed even when data
+  was available ([#8]).
 
 ## [v0.2.1] - 2024-02-27
 
