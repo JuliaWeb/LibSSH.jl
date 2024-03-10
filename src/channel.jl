@@ -622,7 +622,11 @@ Base.success(cmd::Cmd, session::Session) = success(run(cmd, session; print_out=f
 function _on_client_channel_data(session, sshchan, data, is_stderr, client)
     _logcb(client, "Received $(length(data)) bytes from server")
 
-    write(client.sock, data)
+    if isopen(client.sock)
+        write(client.sock, data)
+    else
+        @warn "Client socket has been closed, dropping $(length(data)) bytes from the remote forwarded port"
+    end
 
     return length(data)
 end
@@ -645,12 +649,22 @@ end
 # the channel and forwarding data to the server and client.
 function _handle_forwarding_client(client)
     # Start polling the client channel
-    poller = Threads.@spawn poll_loop(client.sshchan)
+    poller = errormonitor(Threads.@spawn poll_loop(client.sshchan))
 
     # Read data from the socket while it's open
     sock = client.sock
     while isopen(sock)
-        data = readavailable(sock)
+        local data
+        try
+            # This will throw an IOError if the socket is closed during the read
+            data = readavailable(sock)
+        catch ex
+            if ex isa Base.IOError
+                continue
+            else
+                rethrow()
+            end
+        end
 
         if !isempty(data) && isopen(client.sshchan)
             write(client.sshchan, data)
