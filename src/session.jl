@@ -484,25 +484,25 @@ end
 
 # Helper function to call userauth_kbdint() until we get a non-AuthStatus_Info
 # response.
-function _try_userauth_kbdint(session::Session; answers=nothing)
+function _try_userauth_kbdint(session::Session, answers, throw_on_error)
     # We keep track of when we need to start an keyboard-interactive auth
     # session with the server through the _require_init_kbdint field.
     if session._require_init_kbdint
-        userauth_kbdint(session)
+        userauth_kbdint(session; throw_on_error)
     end
 
     if !isnothing(answers)
         userauth_kbdint_setanswers(session, answers)
     end
 
-    status = userauth_kbdint(session)
+    status = userauth_kbdint(session; throw_on_error)
     if status == AuthStatus_Info
         prompts = userauth_kbdint_getprompts(session)
 
         # If the server responds with Info but doesn't send any prompts, then we
         # just keep trying until we get something different. Servers can do that.
         if isempty(prompts)
-            return _try_userauth_kbdint(session)
+            return _try_userauth_kbdint(session, nothing, throw_on_error)
         end
     end
 
@@ -556,14 +556,18 @@ It can return either:
   server. Use [`userauth_kbdint_getprompts()`](@ref) to get the prompts if
   `authenticate()` returns `AuthMethod_Interactive` and then pass the answers in
   the next call.
+- `throw_on_error=true`: Whether to throw if there's an internal error while
+  authenticating (`AuthStatus_Error`).
 
 # Throws
 - `ArgumentError`: If the session isn't connected, or if both `password` and
   `kbdint_answers` are passed.
 - `ErrorException`: If there are no more supported authentication methods
   available.
+- `LibSSHException`: If there's an internal error and `throw_on_error=true`.
 """
-function authenticate(session::Session; password=nothing, kbdint_answers=nothing)
+function authenticate(session::Session; password=nothing, kbdint_answers=nothing,
+                      throw_on_error=true)
     if !isconnected(session)
         throw(ArgumentError("Session is disconnected, cannot authenticate"))
     elseif !isnothing(password) && !isnothing(kbdint_answers)
@@ -578,12 +582,18 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
     # attempt authentication if so.
     if !isnothing(password) || !isnothing(kbdint_answers)
         status = if !isnothing(password)
-            userauth_password(session, password)
+            userauth_password(session, password; throw_on_error)
         else
-            _try_userauth_kbdint(session; answers=kbdint_answers)
+            _try_userauth_kbdint(session, kbdint_answers, throw_on_error)
         end
 
-        return status == AuthStatus_Partial ? authenticate(session) : status
+        # For the sake of consistency we never return AuthStatus_Info to the
+        # caller.
+        if !isnothing(kbdint_answers) && status == AuthStatus_Info
+            status = AuthMethod_Interactive
+        end
+
+        return status == AuthStatus_Partial ? authenticate(session; throw_on_error) : status
     end
 
     if isempty(session._auth_methods)
@@ -597,7 +607,7 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
     if (_can_attempt_auth(session, AuthMethod_GSSAPI_MIC)
         && Gssapi.isavailable()
         && !isnothing(Gssapi.principal_name()))
-        status = userauth_gssapi(session)
+        status = userauth_gssapi(session; throw_on_error)
 
         if status == AuthStatus_Denied
             push!(session._attempted_auth_methods, AuthMethod_GSSAPI_MIC)
@@ -605,14 +615,14 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
             # If the ticket isn't valid but there are still other methods
             # available, continue trying. Otherwise just return Denied.
             if length(session._auth_methods) > 1
-                return authenticate(session)
+                return authenticate(session; throw_on_error)
             else
                 return status
             end
         elseif status == AuthStatus_Partial
             # If we're now partially authenticated, then we continue with some
             # other method.
-            return authenticate(session)
+            return authenticate(session; throw_on_error)
         else
             return status
         end
@@ -628,7 +638,7 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
         # Start a keyboard-interactive session if necessary. We call this now so
         # that the caller can call userauth_kbdint_getprompts() immediately.
         if session._require_init_kbdint
-            userauth_kbdint(session)
+            userauth_kbdint(session; throw_on_error)
         end
 
         return AuthMethod_Interactive
