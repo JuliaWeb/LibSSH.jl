@@ -17,6 +17,7 @@ Changelog](https://keepachangelog.com).
   [`Gssapi.principal_name()`](@ref) was added to get the name of the default
   principal if one is available ([#6]).
 - An experimental [`authenticate()`](@ref) function to simplify authenticating ([#7]).
+- A do-constructor for [`Session(::Function)`](@ref) ([#8]).
 
 ### Changed
 

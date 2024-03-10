@@ -39,6 +39,7 @@ session must be authenticated before being able to do anything with it.
 Session
 Session(::Union{AbstractString, Sockets.IPAddr})
 Session(::lib.ssh_session)
+Session(::Function)
 connect
 disconnect
 isconnected

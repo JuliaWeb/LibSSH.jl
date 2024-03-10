@@ -28,7 +28,7 @@ mutable struct Session
     $(TYPEDSIGNATURES)
 
     This is only useful if you already have a `ssh_session` (i.e. in a
-    server). Do not use it if you want a client, use the other constructor.
+    server). Do not use it if you want a client, use the host/port constructor.
 
     # Arguments
     - `ptr`: A pointer to the `lib.ssh_session` to wrap.
@@ -130,6 +130,21 @@ function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
     end
 
     return session
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Do-constructor for [`Session`](@ref). All arguments are forwarded to the other
+constructors.
+"""
+function Session(f::Function, args...; kwargs...)
+    session = Session(args...; kwargs...)
+    try
+        return f(session)
+    finally
+        close(session)
+    end
 end
 
 """
