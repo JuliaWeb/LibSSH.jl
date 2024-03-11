@@ -7,6 +7,12 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## [v0.3.1] - 2024-03-11
+
+### Added
+
+- A `throw_on_error` argument to [`poll_loop()`](@ref) ([#9]).
+
 ## [v0.3.0] - 2024-03-10
 
 ### Added
