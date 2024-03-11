@@ -117,10 +117,7 @@ function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
     if isnothing(user)
         # Explicitly initialize the user, otherwise an error will be thrown when
         # retrieving it. Passing null will set it to the current user (see docs).
-        ret = ssh_options_set(session.ptr, SSH_OPTIONS_USER, C_NULL)
-        if ret != 0
-            throw(LibSSHException("Error when initializing user: $(ret)"))
-        end
+        lib.ssh_options_set(session.ptr, SSH_OPTIONS_USER, C_NULL)
     else
         session.user = user
     end
@@ -237,7 +234,7 @@ function Base.getproperty(session::Session, name::Symbol)
     if name == :port
         # The port is a special option with its own function
         port = Ref{Cuint}(0)
-        ret = lib.ssh_options_get_port(session.ptr, port)
+        ret = lib.ssh_options_get_port(session.ptr, port; throw=false)
         value = UInt(port[])
     else
         # All properties supported by ssh_options_get() are strings, so we know
@@ -246,7 +243,7 @@ function Base.getproperty(session::Session, name::Symbol)
         option = SESSION_PROPERTY_OPTIONS[name][1]
 
         out = Ref{Ptr{Cchar}}()
-        ret = ssh_options_get(session.ptr, option, out)
+        ret = lib.ssh_options_get(session.ptr, option, out; throw=false)
     end
 
     if ret != 0
@@ -282,12 +279,12 @@ function Base.setproperty!(session::Session, name::Symbol, value)
         value_str = String(value)
         GC.@preserve value_str begin
             cvalue = Base.unsafe_convert(ctype, value_str)
-            ret = ssh_options_set(session.ptr, option, Ptr{Cvoid}(cvalue))
+            ret = lib.ssh_options_set(session.ptr, option, Ptr{Cvoid}(cvalue); throw=false)
         end
     else
         GC.@preserve value begin
             cvalue = Base.cconvert(ctype, value)
-            ret = ssh_options_set(session.ptr, option, Ref(cvalue))
+            ret = lib.ssh_options_set(session.ptr, option, Ref(cvalue); throw=false)
         end
     end
 
@@ -893,8 +890,8 @@ returns have `.msg` and `.display` fields that hold the prompt message and
 whether to echo the user input (e.g. it will be `false` for a password and other
 sensitive input).
 
-This is a combination of [`lib.ssh_userauth_kbdint_getnprompts`](@ref) and
-[`lib.userauth_kbdint_getprompt`](@ref). It should be preferred over the
+This is a combination of [`lib.ssh_userauth_kbdint_getnprompts()`](@ref) and
+[`lib.ssh_userauth_kbdint_getprompt()`](@ref). It should be preferred over the
 lower-level functions.
 
 # Throws
@@ -909,7 +906,7 @@ function userauth_kbdint_getprompts(session::Session)
     n_prompts = lib.ssh_userauth_kbdint_getnprompts(session.ptr)
     for i in 0:n_prompts - 1
         echo_ref = Ref{Cchar}()
-        question = lib.userauth_kbdint_getprompt(session.ptr, i, echo_ref)
+        question = lib.ssh_userauth_kbdint_getprompt(session.ptr, i, echo_ref)
         push!(prompts, KbdintPrompt(question, Bool(echo_ref[])))
     end
 

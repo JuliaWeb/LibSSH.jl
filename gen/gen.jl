@@ -18,7 +18,8 @@ string_functions = [:ssh_message_auth_user, :ssh_message_auth_password,
                     :ssh_userauth_kbdint_getprompt]
 bool_functions = [:ssh_message_auth_kbdint_is_response]
 ssh_ok_functions = [:ssh_message_auth_reply_success, :ssh_message_auth_set_methods,
-                    :ssh_message_reply_default]
+                    :ssh_message_reply_default,
+                    :ssh_options_get, :ssh_options_set, :ssh_options_get_port]
 all_rewritable_functions = vcat(string_functions, bool_functions, ssh_ok_functions)
 
 """
@@ -92,48 +93,41 @@ function rewrite!(ctx)
             # Look for function expressions
             if @capture(expr, function name_(args__) body_ end)
                 wrapper = nothing
-                ret_type = nothing
 
                 # Check if we can rewrite the function
                 if name in string_functions
                     wrapper = quote
                         if ret == C_NULL
-                            throw(LibSSHException($("Error from $name, no string found (returned C_NULL)")))
-                        else
-                            return unsafe_string(Ptr{UInt8}(ret))
+                            if throw
+                                Base.throw(LibSSHException($("Error from $name, no string found (returned C_NULL)")))
+                            else
+                                return ret
+                            end
                         end
+
+                        return unsafe_string(Ptr{UInt8}(ret))
                     end
-                    ret_type = String
                 elseif name in bool_functions
-                    wrapper = :(return ret == 1)
-                    ret_type = Bool
+                    wrapper = :(return Bool(ret))
                 elseif name in ssh_ok_functions
                     wrapper = quote
-                        if ret != SSH_OK
+                        if ret != SSH_OK && throw
                             # This ugly concatenation is necessary because we
                             # have to interpolate the function name into the
                             # error string but also keep the return value
                             # interpolation from being escaped.
-                            throw(LibSSHException($("Error from $name, did not return SSH_OK: ") * "$(ret)"))
+                            Base.throw(LibSSHException($("Error from $name, did not return SSH_OK: ") * "$(ret)"))
                         end
+
+                        return ret
                     end
                 end
 
                 if !isnothing(wrapper)
-                    wrapper_name = Symbol(chopprefix(string(name), "ssh_"))
-                    new_expr = if isnothing(ret_type)
-                        quote
-                            function $wrapper_name($(args...))
-                                ret = $body
-                                $wrapper
-                            end
-                        end
-                    else
-                        quote
-                            function $wrapper_name($(args...))::$ret_type
-                                ret = $body
-                                $wrapper
-                            end
+                    new_expr = quote
+                        function $name($(args...); throw=true)
+                            ret = $body
+                            $wrapper
                         end
                     end
 

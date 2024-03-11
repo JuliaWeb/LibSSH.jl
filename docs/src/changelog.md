@@ -13,6 +13,12 @@ Changelog](https://keepachangelog.com).
 
 - A `throw_on_error` argument to [`poll_loop()`](@ref) ([#9]).
 
+### Changed
+
+- Some automatically-wrapped low-level functions changed names back to retaining
+  their `ssh_` prefixes, and they now have a `throw` argument to allow disabling
+  throwing an exception upon error ([#9]).
+
 ## [v0.3.0] - 2024-03-10
 
 ### Added

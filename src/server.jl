@@ -437,11 +437,11 @@ $(TYPEDSIGNATURES)
 
 Set authentication methods for a `lib.ssh_message`.
 
-Wrapper around [`lib.message_auth_set_methods()`](@ref).
+Wrapper around [`lib.ssh_message_auth_set_methods()`](@ref).
 """
 function set_auth_methods(msg::lib.ssh_message, auth_methods::Vector{AuthMethod})
     bitflag = reduce(|, Int.(auth_methods))
-    lib.message_auth_set_methods(msg, bitflag)
+    lib.ssh_message_auth_set_methods(msg, bitflag)
 end
 
 """
@@ -628,13 +628,13 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
     if msg_type == ssh.RequestType_Auth && msg_subtype == lib.SSH_AUTH_METHOD_INTERACTIVE
         if client.authenticated
             _add_log_event!(client, :auth_kbdint, "already authenticated")
-            lib.message_auth_reply_success(msg, Int(false))
+            lib.ssh_message_auth_reply_success(msg, Int(false))
             return false
         end
 
-        if !lib.message_auth_kbdint_is_response(msg)
+        if !lib.ssh_message_auth_kbdint_is_response(msg)
             # This means the user is requesting authentication
-            user = lib.message_auth_user(msg)
+            user = lib.ssh_message_auth_user(msg)
             _add_log_event!(client, :auth_kbdint, user)
             ssh.message_auth_interactive_request(msg, "Demo server login", "Enter your details.",
                                                  ["Password: ", "Token: "], [true, true])
@@ -646,16 +646,16 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
             # If they didn't return the correct number of answers, deny the request
             if n_answers != 2
                 _add_log_event!(client, :auth_kbdint, "denied")
-                lib.message_reply_default(msg)
+                lib.ssh_message_reply_default(msg)
                 return false
             end
 
             # Get the answers and check them
-            password = lib.userauth_kbdint_getanswer(session.ptr, 0)
-            token = lib.userauth_kbdint_getanswer(session.ptr, 1)
+            password = lib.ssh_userauth_kbdint_getanswer(session.ptr, 0)
+            token = lib.ssh_userauth_kbdint_getanswer(session.ptr, 1)
             if password == "foo" && token == "bar"
                 _add_log_event!(client, :auth_kbdint, "accepted with '$password' and '$token'")
-                lib.message_auth_reply_success(msg, Int(false))
+                lib.ssh_message_auth_reply_success(msg, Int(false))
                 client.authenticated = true
                 return false
             end
