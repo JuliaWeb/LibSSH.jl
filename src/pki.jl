@@ -114,6 +114,14 @@ function _finalizer(key::SshKey)
     end
 end    
 
+function Base.show(io::IO, key::SshKey)
+    if !isassigned(key)
+        print(io, SshKey, "(assigned=false)")
+    else
+        print(io, SshKey, "($(key_type(key)), \"$(get_fingerprint_hash(key))\")")
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -239,5 +247,12 @@ function get_fingerprint_hash(hash_buffer::Vector{UInt8})
 
     return fingerprint
 end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get a fingerprint straight from a `SshKey`.
+"""
+get_fingerprint_hash(key::SshKey) = get_fingerprint_hash(get_publickey_hash(key))
 
 end

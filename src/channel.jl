@@ -324,10 +324,19 @@ properly. It will return:
 - `nothing` if the channel was closed during the loop.
 - Otherwise the last result from [`lib.ssh_channel_poll()`](@ref), which should
   be checked to see if it's `SSH_EOF`.
+
+# Throws
+- [`LibSSHException`](@ref): If `SSH_ERROR` is returned and
+  `throw=true`.
+
+# Arguments
+- `sshchan`: The [`SshChannel`](@ref) to poll.
+- `throw=true`: Whether to throw an exception if `SSH_ERROR` is
+  returned.
 """
-function poll_loop(sshchan::SshChannel)
+function poll_loop(sshchan::SshChannel; throw=true)
     if !sshchan.owning
-        throw(ArgumentError("Polling is only possible for owning SshChannel's, the passed channel is non-owning"))
+        Base.throw(ArgumentError("Polling is only possible for owning SshChannel's, the passed channel is non-owning"))
     end
 
     ret = SSH_ERROR
@@ -361,6 +370,10 @@ function poll_loop(sshchan::SshChannel)
     end
 
     @label loop_end
+
+    if ret == SSH_ERROR && throw
+        Base.throw(LibSSHException("SSH_ERROR returned from lib.ssh_channel_poll()"))
+    end
 
     return Int(ret)
 end
@@ -677,10 +690,8 @@ function _handle_forwarding_client(client)
         end
     end
 
-    ret = fetch(poller)
-    if ret == SSH_ERROR
-        throw(LibSSHException("Error when polling Forwarder SshChannel: $ret"))
-    end
+    # This will throw if polling failed with an SSH_ERROR
+    fetch(poller)
 end
 
 # Struct to represent a client connected to a forwarded port

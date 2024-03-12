@@ -1386,30 +1386,42 @@ function ssh_options_parse_config(session, filename)
 end
 
 """
-    ssh_options_set(session, type, value)
+    ssh_options_set(session, type, value; throw = true)
 
-[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#ga7a801b85800baa3f4e16f5b47db0a73d).
+Auto-generated wrapper around [`ssh_options_set`](https://api.libssh.org/stable/group__libssh__session.html#ga7a801b85800baa3f4e16f5b47db0a73d).
 """
-function ssh_options_set(session, type, value)
-    @ccall libssh.ssh_options_set(session::ssh_session, type::ssh_options_e, value::Ptr{Cvoid})::Cint
+function ssh_options_set(session, type, value; throw = true)
+    ret = @ccall(libssh.ssh_options_set(session::ssh_session, type::ssh_options_e, value::Ptr{Cvoid})::Cint)
+    if ret != SSH_OK && throw
+        Base.throw(LibSSHException("Error from ssh_options_set, did not return SSH_OK: " * "$(ret)"))
+    end
+    return ret
 end
 
 """
-    ssh_options_get(session, type, value)
+    ssh_options_get(session, type, value; throw = true)
 
-[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaaa9d400920cad4d6e4a0fb09ff8c7b01).
+Auto-generated wrapper around [`ssh_options_get`](https://api.libssh.org/stable/group__libssh__session.html#gaaa9d400920cad4d6e4a0fb09ff8c7b01).
 """
-function ssh_options_get(session, type, value)
-    @ccall libssh.ssh_options_get(session::ssh_session, type::ssh_options_e, value::Ptr{Ptr{Cchar}})::Cint
+function ssh_options_get(session, type, value; throw = true)
+    ret = @ccall(libssh.ssh_options_get(session::ssh_session, type::ssh_options_e, value::Ptr{Ptr{Cchar}})::Cint)
+    if ret != SSH_OK && throw
+        Base.throw(LibSSHException("Error from ssh_options_get, did not return SSH_OK: " * "$(ret)"))
+    end
+    return ret
 end
 
 """
-    ssh_options_get_port(session, port_target)
+    ssh_options_get_port(session, port_target; throw = true)
 
-[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaa298d8445355420d80f2d968477ba86f).
+Auto-generated wrapper around [`ssh_options_get_port`](https://api.libssh.org/stable/group__libssh__session.html#gaa298d8445355420d80f2d968477ba86f).
 """
-function ssh_options_get_port(session, port_target)
-    @ccall libssh.ssh_options_get_port(session::ssh_session, port_target::Ptr{Cuint})::Cint
+function ssh_options_get_port(session, port_target; throw = true)
+    ret = @ccall(libssh.ssh_options_get_port(session::ssh_session, port_target::Ptr{Cuint})::Cint)
+    if ret != SSH_OK && throw
+        Base.throw(LibSSHException("Error from ssh_options_get_port, did not return SSH_OK: " * "$(ret)"))
+    end
+    return ret
 end
 
 function ssh_pcap_file_close(pcap)
@@ -1862,17 +1874,20 @@ function ssh_userauth_kbdint_getinstruction(session)
 end
 
 """
-    userauth_kbdint_getname(session)::String
+    ssh_userauth_kbdint_getname(session; throw = true)
 
 Auto-generated wrapper around [`ssh_userauth_kbdint_getname`](https://api.libssh.org/stable/group__libssh__auth.html#ga5d6f5eb0ed09fe2c7a2ac69b972e130e).
 """
-function userauth_kbdint_getname(session)::String
+function ssh_userauth_kbdint_getname(session; throw = true)
     ret = @ccall(libssh.ssh_userauth_kbdint_getname(session::ssh_session)::Ptr{Cchar})
     if ret == C_NULL
-        throw(LibSSHException("Error from ssh_userauth_kbdint_getname, no string found (returned C_NULL)"))
-    else
-        return unsafe_string(Ptr{UInt8}(ret))
+        if throw
+            Base.throw(LibSSHException("Error from ssh_userauth_kbdint_getname, no string found (returned C_NULL)"))
+        else
+            return ret
+        end
     end
+    return unsafe_string(Ptr{UInt8}(ret))
 end
 
 """
@@ -1885,17 +1900,20 @@ function ssh_userauth_kbdint_getnprompts(session)
 end
 
 """
-    userauth_kbdint_getprompt(session, i, echo)::String
+    ssh_userauth_kbdint_getprompt(session, i, echo; throw = true)
 
 Auto-generated wrapper around [`ssh_userauth_kbdint_getprompt`](https://api.libssh.org/stable/group__libssh__auth.html#ga15c0f954f79d73e1ac5981ac483efb75).
 """
-function userauth_kbdint_getprompt(session, i, echo)::String
+function ssh_userauth_kbdint_getprompt(session, i, echo; throw = true)
     ret = @ccall(libssh.ssh_userauth_kbdint_getprompt(session::ssh_session, i::Cuint, echo::Ptr{Cchar})::Ptr{Cchar})
     if ret == C_NULL
-        throw(LibSSHException("Error from ssh_userauth_kbdint_getprompt, no string found (returned C_NULL)"))
-    else
-        return unsafe_string(Ptr{UInt8}(ret))
+        if throw
+            Base.throw(LibSSHException("Error from ssh_userauth_kbdint_getprompt, no string found (returned C_NULL)"))
+        else
+            return ret
+        end
     end
+    return unsafe_string(Ptr{UInt8}(ret))
 end
 
 """
@@ -1908,17 +1926,20 @@ function ssh_userauth_kbdint_getnanswers(session)
 end
 
 """
-    userauth_kbdint_getanswer(session, i)::String
+    ssh_userauth_kbdint_getanswer(session, i; throw = true)
 
 Auto-generated wrapper around [`ssh_userauth_kbdint_getanswer`](https://api.libssh.org/stable/group__libssh__auth.html#ga4f55ed8bc6f553423ab1c92598d0194b).
 """
-function userauth_kbdint_getanswer(session, i)::String
+function ssh_userauth_kbdint_getanswer(session, i; throw = true)
     ret = @ccall(libssh.ssh_userauth_kbdint_getanswer(session::ssh_session, i::Cuint)::Ptr{Cchar})
     if ret == C_NULL
-        throw(LibSSHException("Error from ssh_userauth_kbdint_getanswer, no string found (returned C_NULL)"))
-    else
-        return unsafe_string(Ptr{UInt8}(ret))
+        if throw
+            Base.throw(LibSSHException("Error from ssh_userauth_kbdint_getanswer, no string found (returned C_NULL)"))
+        else
+            return ret
+        end
     end
+    return unsafe_string(Ptr{UInt8}(ret))
 end
 
 """
@@ -3847,7 +3868,7 @@ function ssh_send_issue_banner(session, banner)
 end
 
 """
-    message_reply_default(msg)
+    ssh_message_reply_default(msg; throw = true)
 
 Auto-generated wrapper around `ssh_message_reply_default`. Original upstream documentation is below.
 
@@ -3864,15 +3885,16 @@ Use this function if you don't know what to respond or if you want to reject a r
 # See also
 [`ssh_message_get`](@ref)()
 """
-function message_reply_default(msg)
+function ssh_message_reply_default(msg; throw = true)
     ret = @ccall(libssh.ssh_message_reply_default(msg::ssh_message)::Cint)
-    if ret != SSH_OK
-        throw(LibSSHException("Error from ssh_message_reply_default, did not return SSH_OK: " * "$(ret)"))
+    if ret != SSH_OK && throw
+        Base.throw(LibSSHException("Error from ssh_message_reply_default, did not return SSH_OK: " * "$(ret)"))
     end
+    return ret
 end
 
 """
-    message_auth_user(msg)::String
+    ssh_message_auth_user(msg; throw = true)
 
 Auto-generated wrapper around `ssh_message_auth_user`. Original upstream documentation is below.
 
@@ -3887,17 +3909,20 @@ The username or NULL if an error occurred.
 # See also
 [`ssh_message_get`](@ref)(), [`ssh_message_type`](@ref)()
 """
-function message_auth_user(msg)::String
+function ssh_message_auth_user(msg; throw = true)
     ret = @ccall(libssh.ssh_message_auth_user(msg::ssh_message)::Ptr{Cchar})
     if ret == C_NULL
-        throw(LibSSHException("Error from ssh_message_auth_user, no string found (returned C_NULL)"))
-    else
-        return unsafe_string(Ptr{UInt8}(ret))
+        if throw
+            Base.throw(LibSSHException("Error from ssh_message_auth_user, no string found (returned C_NULL)"))
+        else
+            return ret
+        end
     end
+    return unsafe_string(Ptr{UInt8}(ret))
 end
 
 """
-    message_auth_password(msg)::String
+    ssh_message_auth_password(msg; throw = true)
 
 Auto-generated wrapper around `ssh_message_auth_password`. Original upstream documentation is below.
 
@@ -3916,13 +3941,16 @@ The username or NULL if an error occurred.
 # See also
 [`ssh_message_get`](@ref)(), [`ssh_message_type`](@ref)()
 """
-function message_auth_password(msg)::String
+function ssh_message_auth_password(msg; throw = true)
     ret = @ccall(libssh.ssh_message_auth_password(msg::ssh_message)::Ptr{Cchar})
     if ret == C_NULL
-        throw(LibSSHException("Error from ssh_message_auth_password, no string found (returned C_NULL)"))
-    else
-        return unsafe_string(Ptr{UInt8}(ret))
+        if throw
+            Base.throw(LibSSHException("Error from ssh_message_auth_password, no string found (returned C_NULL)"))
+        else
+            return ret
+        end
     end
+    return unsafe_string(Ptr{UInt8}(ret))
 end
 
 """
@@ -3948,13 +3976,13 @@ function ssh_message_auth_pubkey(msg)
 end
 
 """
-    message_auth_kbdint_is_response(msg)::Bool
+    ssh_message_auth_kbdint_is_response(msg; throw = true)
 
 Auto-generated wrapper around [`ssh_message_auth_kbdint_is_response`](https://api.libssh.org/stable/group__libssh__server.html#ga5132c82c49de985e9e10f51f393e52a4).
 """
-function message_auth_kbdint_is_response(msg)::Bool
+function ssh_message_auth_kbdint_is_response(msg; throw = true)
     ret = @ccall(libssh.ssh_message_auth_kbdint_is_response(msg::ssh_message)::Cint)
-    return ret == 1
+    return Bool(ret)
 end
 
 """
@@ -3972,15 +4000,16 @@ function ssh_message_auth_publickey_state(msg)
 end
 
 """
-    message_auth_reply_success(msg, partial)
+    ssh_message_auth_reply_success(msg, partial; throw = true)
 
 Auto-generated wrapper around `ssh_message_auth_reply_success`.
 """
-function message_auth_reply_success(msg, partial)
+function ssh_message_auth_reply_success(msg, partial; throw = true)
     ret = @ccall(libssh.ssh_message_auth_reply_success(msg::ssh_message, partial::Cint)::Cint)
-    if ret != SSH_OK
-        throw(LibSSHException("Error from ssh_message_auth_reply_success, did not return SSH_OK: " * "$(ret)"))
+    if ret != SSH_OK && throw
+        Base.throw(LibSSHException("Error from ssh_message_auth_reply_success, did not return SSH_OK: " * "$(ret)"))
     end
+    return ret
 end
 
 """
@@ -4002,15 +4031,16 @@ function ssh_message_auth_reply_pk_ok_simple(msg)
 end
 
 """
-    message_auth_set_methods(msg, methods)
+    ssh_message_auth_set_methods(msg, methods; throw = true)
 
 Auto-generated wrapper around [`ssh_message_auth_set_methods`](https://api.libssh.org/stable/group__libssh__server.html#gab993157d98e5b4b3399d216c9243effc).
 """
-function message_auth_set_methods(msg, methods)
+function ssh_message_auth_set_methods(msg, methods; throw = true)
     ret = @ccall(libssh.ssh_message_auth_set_methods(msg::ssh_message, methods::Cint)::Cint)
-    if ret != SSH_OK
-        throw(LibSSHException("Error from ssh_message_auth_set_methods, did not return SSH_OK: " * "$(ret)"))
+    if ret != SSH_OK && throw
+        Base.throw(LibSSHException("Error from ssh_message_auth_set_methods, did not return SSH_OK: " * "$(ret)"))
     end
+    return ret
 end
 
 """

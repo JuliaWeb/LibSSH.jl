@@ -7,6 +7,27 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## [v0.4.0] - 2024-03-12
+
+### Added
+
+- A `throw` argument to [`poll_loop()`](@ref) ([#9]).
+- Support for some more options in [`Session`](@ref) ([#9]).
+- A new method for [`PKI.get_fingerprint_hash(::PKI.SshKey)`](@ref) to get a
+  public key fingerprint straight from a [`PKI.SshKey`](@ref) ([#9]).
+
+### Changed
+
+- Some automatically-wrapped low-level functions changed names back to retaining
+  their `ssh_` prefixes, and they now have a `throw` argument to allow disabling
+  throwing an exception upon error ([#9]).
+- [`authenticate()`](@ref) will now do host verification as well. This is
+  critical for security so it is *strongly recommend* that all dependencies
+  update to this release ([#9]).
+- All the `throw_on_*` arguments in the various `Session` and `SshChannel`
+  methods have been renamed `throw` for consistency with `Base` and the new
+  `throw` arguments in some auto-wrapped bindings ([#9]).
+
 ## [v0.3.0] - 2024-03-10
 
 ### Added
