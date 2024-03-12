@@ -13,6 +13,8 @@ Changelog](https://keepachangelog.com).
 
 - A `throw_on_error` argument to [`poll_loop()`](@ref) ([#9]).
 - Support for some more options in [`Session`](@ref) ([#9]).
+- A new method for [`PKI.get_fingerprint_hash(::PKI.SshKey)`](@ref) to get a
+  public key fingerprint straight from a [`PKI.SshKey`](@ref) ([#9]).
 
 ### Changed
 
