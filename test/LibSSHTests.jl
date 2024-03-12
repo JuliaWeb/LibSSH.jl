@@ -222,6 +222,12 @@ end
         session.host = "quux"
         @test session.host == "quux"
         @test_throws ErrorException session.foo
+        session.ssh_dir = "/tmp"
+        @test session.ssh_dir == "/tmp"
+        session.known_hosts = "/tmp/foo"
+        @test session.known_hosts == "/tmp/foo"
+        session.gssapi_server_identity = "foo.com"
+        @test session.gssapi_server_identity == "foo.com"
 
         # Test setting an initial user
         session2 = ssh.Session("localhost"; user="foo", auto_connect=false)

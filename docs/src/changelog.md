@@ -12,6 +12,7 @@ Changelog](https://keepachangelog.com).
 ### Added
 
 - A `throw_on_error` argument to [`poll_loop()`](@ref) ([#9]).
+- Support for some more options in [`Session`](@ref) ([#9]).
 
 ### Changed
 

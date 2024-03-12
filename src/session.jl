@@ -16,9 +16,13 @@ be owning or non-owning of its internal pointer to a `lib.ssh_session`.
 mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
     owning::Bool
-    log_verbosity::Int
     channels::Vector{Any}
     server_callbacks::Union{Callbacks.ServerCallbacks, Nothing}
+
+    log_verbosity::Int
+    ssh_dir::Union{String, Nothing}
+    known_hosts::Union{String, Nothing}
+    gssapi_server_identity::Union{String, Nothing}
 
     _auth_methods::Union{Vector{AuthMethod}, Nothing}
     _attempted_auth_methods::Vector{AuthMethod}
@@ -44,7 +48,7 @@ mutable struct Session
         # Set to non-blocking mode
         lib.ssh_set_blocking(ptr, 0)
 
-        session = new(ptr, own, -1, [], nothing, nothing, AuthMethod[], true)
+        session = new(ptr, own, [], nothing, -1, nothing, nothing, nothing, nothing, AuthMethod[], true)
         if !isnothing(log_verbosity)
             session.log_verbosity = log_verbosity
         end
@@ -204,16 +208,22 @@ end
 const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
                                       :port => (SSH_OPTIONS_PORT, Cuint),
                                       :user => (SSH_OPTIONS_USER, Cstring),
+                                      :ssh_dir => (SSH_OPTIONS_SSH_DIR, Cstring),
+                                      :known_hosts => (SSH_OPTIONS_KNOWNHOSTS, Cstring),
+                                      :gssapi_server_identity => (SSH_OPTIONS_GSSAPI_SERVER_IDENTITY, Cstring),
                                       :log_verbosity => (SSH_OPTIONS_LOG_VERBOSITY, Cuint))
 # These properties cannot be retrieved from the libssh API (i.e. with
 # ssh_options_get()), so we store them in the Session object instead.
-const SAVED_PROPERTIES = (:log_verbosity,)
+const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :known_hosts)
 
 function Base.propertynames(::Session, private::Bool=false)
     private_fields = (:ptr, :channels, :server_callbacks,
                       :_auth_methods, :_attempted_auth_methods,
                       :_kbdint_prompts, :_require_init_kbdint)
-    (:host, :port, :user, :log_verbosity, :owning, (private ? private_fields : ())...)
+    libssh_options = tuple(keys(SESSION_PROPERTY_OPTIONS)...)
+    public_fields = (:owning,)
+
+    return (libssh_options..., public_fields..., (private ? private_fields : ())...)
 end
 
 function Base.getproperty(session::Session, name::Symbol)
@@ -296,7 +306,8 @@ function Base.setproperty!(session::Session, name::Symbol, value)
     # them explicitly in the Session.
     if name in SAVED_PROPERTIES
         saved_type = fieldtype(Session, name)
-        setfield!(session, name, saved_type(value))
+        converted_value = saved_type isa Union ? value : saved_type(value)
+        setfield!(session, name, converted_value)
     end
 
     return value
