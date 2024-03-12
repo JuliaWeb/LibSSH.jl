@@ -2,7 +2,7 @@ module LibSSHTests
 
 __revise_mode__ = :eval
 
-import Sockets
+import Sockets: listen, accept, IPv4, localhost
 
 import Aqua
 import Literate
@@ -10,7 +10,6 @@ import CURL_jll: curl
 import OpenSSH_jll
 import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_broken, @test_logs
 
-import LibSSH
 import LibSSH as ssh
 import LibSSH.PKI as pki
 import LibSSH: Demo, lib, KbdintPrompt
@@ -22,12 +21,12 @@ username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
 # Dummy HTTP server that only responds 200 to requests
 function http_server(f::Function, port)
     start_event = Base.Event()
-    server = Sockets.listen(Sockets.IPv4(0), port)
+    server = listen(IPv4(0), port)
     t = errormonitor(@async while isopen(server)
                          notify(start_event)
                          local sock
                          try
-                             sock = Sockets.accept(server)
+                             sock = accept(server)
                          catch ex
                              if ex isa Base.IOError
                                  break
@@ -241,7 +240,7 @@ end
     @testset "Password authentication" begin
         # Test connecting to a server and doing password authentication
         DemoServer(2222; password="foo") do
-            session = ssh.Session(Sockets.localhost, 2222)
+            session = ssh.Session(localhost, 2222)
 
             # The server uses a fake key so it should definitely fail verification
             @test_throws ssh.HostVerificationException ssh.is_known_server(session)
@@ -260,7 +259,7 @@ end
 
     @testset "Keyboard-interactive authentication" begin
         DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
-            session = ssh.Session(Sockets.localhost, 2222)
+            session = ssh.Session(localhost, 2222)
             @test ssh.isconnected(session)
 
             @test ssh.userauth_kbdint(session) == ssh.AuthStatus_Info
@@ -286,7 +285,7 @@ end
 
     @testset "GSSAPI authentication" begin
         DemoServer(2222; auth_methods=[ssh.AuthMethod_GSSAPI_MIC]) do
-            session = ssh.Session(Sockets.localhost, 2222)
+            session = ssh.Session(localhost, 2222)
             @test ssh.isconnected(session)
 
             # TODO: figure out how to write proper tests for this. It's a little
@@ -298,37 +297,61 @@ end
         end
     end
 
+    session_helper = (f::Function) -> begin
+        session = ssh.Session(localhost, 2222)
+        @test ssh.isconnected(session)
+
+        mktemp() do path, io
+            session.known_hosts = path
+            ssh.update_known_hosts(session)
+
+            try
+                f(session)
+            finally
+                close(session)
+            end
+        end
+    end
+
     @testset "authenticate()" begin
         # Test with password auth
         DemoServer(2222; auth_methods=[ssh.AuthMethod_Password], password="foo") do
-            session = ssh.Session(Sockets.localhost, 2222)
+            session = ssh.Session(localhost, 2222)
             @test ssh.isconnected(session)
 
-            @test ssh.authenticate(session) == ssh.AuthMethod_Password
-            @test ssh.authenticate(session; password="bar") == ssh.AuthStatus_Denied
-            @test ssh.authenticate(session; password="foo") == ssh.AuthStatus_Success
+            mktemp() do path, io
+                # Use a new hosts file so we don't mess up the users known_hosts file
+                session.known_hosts = path
+
+                # Initially the host will be unknown
+                @test ssh.authenticate(session) == ssh.KnownHosts_Unknown
+                ssh.update_known_hosts(session)
+
+                # Now there should be an entry in the known_hosts file
+                @test startswith(read(io, String), "[127.0.0.1]:2222")
+
+                @test ssh.authenticate(session) == ssh.AuthMethod_Password
+                @test ssh.authenticate(session; password="bar") == ssh.AuthStatus_Denied
+                @test ssh.authenticate(session; password="foo") == ssh.AuthStatus_Success
+            end
 
             close(session)
         end
 
         # Test with keyboard-interactive auth
         DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
-            session = ssh.Session(Sockets.localhost, 2222)
-            @test ssh.isconnected(session)
-
-            @test ssh.authenticate(session) == ssh.AuthMethod_Interactive
-            @test ssh.authenticate(session; kbdint_answers=["bar", "foo"]) == ssh.AuthStatus_Denied
-            @test ssh.authenticate(session; kbdint_answers=["foo", "bar"]) == ssh.AuthStatus_Success
-
-            close(session)
+            session_helper() do session
+                @test ssh.authenticate(session) == ssh.AuthMethod_Interactive
+                @test ssh.authenticate(session; kbdint_answers=["bar", "foo"]) == ssh.AuthStatus_Denied
+                @test ssh.authenticate(session; kbdint_answers=["foo", "bar"]) == ssh.AuthStatus_Success
+            end
         end
 
         DemoServer(2222; auth_methods=[ssh.AuthMethod_PublicKey]) do
-            session = ssh.Session(Sockets.localhost, 2222)
-            @test ssh.isconnected(session)
-
-            # We don't support public key auth yet so this should just throw
-            @test_throws ErrorException ssh.authenticate(session)
+            session_helper() do session
+                # We don't support public key auth yet so this should just throw
+                @test_throws ErrorException ssh.authenticate(session)
+            end
         end
     end
 end

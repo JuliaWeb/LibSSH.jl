@@ -21,6 +21,9 @@ Changelog](https://keepachangelog.com).
 - Some automatically-wrapped low-level functions changed names back to retaining
   their `ssh_` prefixes, and they now have a `throw` argument to allow disabling
   throwing an exception upon error ([#9]).
+- [`authenticate()`](@ref) will now do host verification as well. This is
+  critical for security so it is *strongly recommend* that all dependencies
+  update to this release ([#9]).
 
 ## [v0.3.0] - 2024-03-10
 

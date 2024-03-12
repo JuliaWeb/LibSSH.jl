@@ -532,13 +532,18 @@ $(TYPEDSIGNATURES)
 
 This is a helper function that boldly attempts to handle the entire
 authentication flow by figuring out which authentication methods are still
-available and calling the appropriate functions for you. It can be called
-multiple times to complete authentication.
+available and calling the appropriate functions for you. It may need to be
+called multiple times to complete authentication, the idea is that it will only
+return when user input is needed (e.g. for a password, or to accept a host key,
+etc).
 
-It can return either:
+It can return any of:
+- A [`KnownHosts`](@ref) to indicate that host verification failed in some
+  way. It will not return `KnownHosts_Ok`.
 - A [`AuthStatus`](@ref) to indicate that authentication finished in some
   way. The caller doesn't need to do anything else in this case but may retry
-  authenticating.
+  authenticating. It will not return
+  `AuthStatus_Info`/`AuthStatus_Again`/`AuthStatus_Partial`.
 - A [`AuthMethod`](@ref) to indicate the next method to try. This is only
   returned for auth methods that require user input (i.e. `AuthMethod_Password`
   or `AuthMethod_Interactive`), and the caller must pass the user input next
@@ -580,6 +585,12 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
         throw(ArgumentError("Session is disconnected, cannot authenticate"))
     elseif !isnothing(password) && !isnothing(kbdint_answers)
         throw(ArgumentError("Only one of `password` or `kbdint_answers` may be passed"))
+    end
+
+    # Verify the host key
+    host_status = is_known_server(session)
+    if host_status != KnownHosts_Ok
+        return host_status
     end
 
     # Retrieve the supported methods
@@ -655,6 +666,12 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
     error("The remaining auth methods are not supported: $(session._auth_methods)")
 end
 
+function _ask(msg::String)
+    print(msg, " [y/n]: ")
+    ret = readline()
+    return lowercase(ret) == "y"
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -702,6 +719,30 @@ function authenticate_cli(session::Session)
             end
 
             ret = authenticate(session; kbdint_answers=answers)
+        elseif ret isa KnownHosts
+            server_key = get_server_publickey(session)
+            fingerprint = PKI.get_fingerprint_hash(server_key)
+            key_type = PKI.key_type(server_key)
+
+            notfound_msg = ret == KnownHosts_NotFound ? " This will create the known_hosts file." : ""
+            first_line = if ret == KnownHosts_Changed
+                "The server key has changed ($(ret)), this may indicate a MITM attack."
+            elseif ret == KnownHosts_Other
+                "The server key has changed type ($(ret)) to $(key_type), this may indicate a MITM attack."
+            elseif ret == KnownHosts_Unknown || ret == KnownHosts_NotFound
+                "Server '$(session.host)' has not been seen before ($(ret))."
+            end
+
+            println(first_line)
+            println("New $(key_type) key fingerprint: $(fingerprint)")
+            if _ask("Do you want to add the key to the known_hosts file and continue?$(notfound_msg)")
+                update_known_hosts(session)
+            else
+                # We can't continue if they don't accept the key
+                return ret
+            end
+        else
+            error("Unsupported return value from authenticate(): $(ret)")
         end
 
         @info ret
