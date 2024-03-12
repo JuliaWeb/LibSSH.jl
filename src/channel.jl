@@ -327,16 +327,16 @@ properly. It will return:
 
 # Throws
 - [`LibSSHException`](@ref): If `SSH_ERROR` is returned and
-  `throw_on_error=true`.
+  `throw=true`.
 
 # Arguments
 - `sshchan`: The [`SshChannel`](@ref) to poll.
-- `throw_on_error=true`: Whether to throw an exception if `SSH_ERROR` is
+- `throw=true`: Whether to throw an exception if `SSH_ERROR` is
   returned.
 """
-function poll_loop(sshchan::SshChannel; throw_on_error=true)
+function poll_loop(sshchan::SshChannel; throw=true)
     if !sshchan.owning
-        throw(ArgumentError("Polling is only possible for owning SshChannel's, the passed channel is non-owning"))
+        Base.throw(ArgumentError("Polling is only possible for owning SshChannel's, the passed channel is non-owning"))
     end
 
     ret = SSH_ERROR
@@ -371,8 +371,8 @@ function poll_loop(sshchan::SshChannel; throw_on_error=true)
 
     @label loop_end
 
-    if ret == SSH_ERROR && throw_on_error
-        throw(LibSSHException("SSH_ERROR returned from lib.ssh_channel_poll()"))
+    if ret == SSH_ERROR && throw
+        Base.throw(LibSSHException("SSH_ERROR returned from lib.ssh_channel_poll()"))
     end
 
     return Int(ret)

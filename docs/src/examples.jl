@@ -28,7 +28,7 @@ session = ssh.Session("127.0.0.1", 2222)
 # the server*, which means checking its host key. The easiest way to do this is
 # by checking the server key against the users known hosts file:
 
-ssh.is_known_server(session; throw_on_failure=false)
+ssh.is_known_server(session; throw=false)
 
 # Ok, we got back a `KnownHosts_Unknown` response. That's because the demo
 # server automatically creates a dummy key to use, and that definitely won't be

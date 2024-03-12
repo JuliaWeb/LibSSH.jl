@@ -446,23 +446,23 @@ file.
 # Throws
 - `ArgumentError`: If the session isn't connected.
 - [`HostVerificationException`](@ref): If verification failed and
-  `throw_on_failure` is `true`.
+  `throw` is `true`.
 
 # Arguments
-- `throw_on_failure=true`: Whether to throw a
+- `throw=true`: Whether to throw a
   [`HostVerificationException`](@ref) if the verification fails, otherwise the
   function will just return the verification status.
 
 Wrapper around [`lib.ssh_session_is_known_server()`](@ref).
 """
-function is_known_server(session::Session; throw_on_failure=true)
+function is_known_server(session::Session; throw=true)
     if !isconnected(session)
-        throw(ArgumentError("Session is disconnected, cannot check the servers public key"))
+        Base.throw(ArgumentError("Session is disconnected, cannot check the servers public key"))
     end
 
     status = KnownHosts(Int(lib.ssh_session_is_known_server(session.ptr)))
-    if throw_on_failure && status != KnownHosts_Ok
-        throw(HostVerificationException(status))
+    if throw && status != KnownHosts_Ok
+        Base.throw(HostVerificationException(status))
     end
 
     return status
@@ -492,25 +492,25 @@ end
 
 # Helper function to call userauth_kbdint() until we get a non-AuthStatus_Info
 # response.
-function _try_userauth_kbdint(session::Session, answers, throw_on_error)
+function _try_userauth_kbdint(session::Session, answers, throw)
     # We keep track of when we need to start an keyboard-interactive auth
     # session with the server through the _require_init_kbdint field.
     if session._require_init_kbdint
-        userauth_kbdint(session; throw_on_error)
+        userauth_kbdint(session; throw)
     end
 
     if !isnothing(answers)
         userauth_kbdint_setanswers(session, answers)
     end
 
-    status = userauth_kbdint(session; throw_on_error)
+    status = userauth_kbdint(session; throw)
     if status == AuthStatus_Info
         prompts = userauth_kbdint_getprompts(session)
 
         # If the server responds with Info but doesn't send any prompts, then we
         # just keep trying until we get something different. Servers can do that.
         if isempty(prompts)
-            return _try_userauth_kbdint(session, nothing, throw_on_error)
+            return _try_userauth_kbdint(session, nothing, throw)
         end
     end
 
@@ -569,7 +569,7 @@ It can return any of:
   server. Use [`userauth_kbdint_getprompts()`](@ref) to get the prompts if
   `authenticate()` returns `AuthMethod_Interactive` and then pass the answers in
   the next call.
-- `throw_on_error=true`: Whether to throw if there's an internal error while
+- `throw=true`: Whether to throw if there's an internal error while
   authenticating (`AuthStatus_Error`).
 
 # Throws
@@ -577,19 +577,21 @@ It can return any of:
   `kbdint_answers` are passed.
 - `ErrorException`: If there are no more supported authentication methods
   available.
-- `LibSSHException`: If there's an internal error and `throw_on_error=true`.
+- `LibSSHException`: If there's an internal error and `throw=true`.
 """
 function authenticate(session::Session; password=nothing, kbdint_answers=nothing,
-                      throw_on_error=true)
+                      throw=true)
     if !isconnected(session)
-        throw(ArgumentError("Session is disconnected, cannot authenticate"))
+        Base.throw(ArgumentError("Session is disconnected, cannot authenticate"))
     elseif !isnothing(password) && !isnothing(kbdint_answers)
-        throw(ArgumentError("Only one of `password` or `kbdint_answers` may be passed"))
+        Base.throw(ArgumentError("Only one of `password` or `kbdint_answers` may be passed"))
     end
 
     # Verify the host key
-    host_status = is_known_server(session)
-    if host_status != KnownHosts_Ok
+    host_status = is_known_server(session; throw=false)
+    if host_status == KnownHosts_Error
+        Base.throw("Error while verifying host key for '$(session.host)': $(host_status)")
+    elseif host_status != KnownHosts_Ok
         return host_status
     end
 
@@ -601,9 +603,9 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
     # attempt authentication if so.
     if !isnothing(password) || !isnothing(kbdint_answers)
         status = if !isnothing(password)
-            userauth_password(session, password; throw_on_error)
+            userauth_password(session, password; throw)
         else
-            _try_userauth_kbdint(session, kbdint_answers, throw_on_error)
+            _try_userauth_kbdint(session, kbdint_answers, throw)
         end
 
         # For the sake of consistency we never return AuthStatus_Info to the
@@ -612,7 +614,7 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
             status = AuthMethod_Interactive
         end
 
-        return status == AuthStatus_Partial ? authenticate(session; throw_on_error) : status
+        return status == AuthStatus_Partial ? authenticate(session; throw) : status
     end
 
     if isempty(session._auth_methods)
@@ -626,7 +628,7 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
     if (_can_attempt_auth(session, AuthMethod_GSSAPI_MIC)
         && Gssapi.isavailable()
         && !isnothing(Gssapi.principal_name()))
-        status = userauth_gssapi(session; throw_on_error)
+        status = userauth_gssapi(session; throw)
 
         if status == AuthStatus_Denied
             push!(session._attempted_auth_methods, AuthMethod_GSSAPI_MIC)
@@ -634,14 +636,14 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
             # If the ticket isn't valid but there are still other methods
             # available, continue trying. Otherwise just return Denied.
             if length(session._auth_methods) > 1
-                return authenticate(session; throw_on_error)
+                return authenticate(session; throw)
             else
                 return status
             end
         elseif status == AuthStatus_Partial
             # If we're now partially authenticated, then we continue with some
             # other method.
-            return authenticate(session; throw_on_error)
+            return authenticate(session; throw)
         else
             return status
         end
@@ -657,7 +659,7 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
         # Start a keyboard-interactive session if necessary. We call this now so
         # that the caller can call userauth_kbdint_getprompts() immediately.
         if session._require_init_kbdint
-            userauth_kbdint(session; throw_on_error)
+            userauth_kbdint(session; throw)
         end
 
         return AuthMethod_Interactive
@@ -761,18 +763,18 @@ check which authentication methods the server supports (see
 
 # Arguments
 - `session`: The session to authenticate.
-- `throw_on_error=true`: Whether to throw if there's an internal error while
+- `throw=true`: Whether to throw if there's an internal error while
   authenticating (`AuthStatus_Error`).
 
 # Throws
 - `ArgumentError`: If the session isn't connected.
-- `LibSSHException`: If there was an internal error, unless `throw_on_error=false`.
+- `LibSSHException`: If there was an internal error, unless `throw=false`.
 
 Wrapper around [`lib.ssh_userauth_none()`](@ref).
 """
-function userauth_none(session::Session; throw_on_error=true)
+function userauth_none(session::Session; throw=true)
     if !isconnected(session)
-        throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+        Base.throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
 
     while true
@@ -780,8 +782,8 @@ function userauth_none(session::Session; throw_on_error=true)
 
         if ret == AuthStatus_Again
             wait(session)
-        elseif ret == AuthStatus_Error && throw_on_error
-            throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when calling userauth_none()"))
+        elseif ret == AuthStatus_Error && throw
+            Base.throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when calling userauth_none()"))
         else
             return ret
         end
@@ -831,18 +833,18 @@ Authenticate by username and password. The username will be taken from
 # Arguments
 - `session`: The session to authenticate.
 - `password`: The password to authenticate with.
-- `throw_on_error=true`: Whether to throw_on_error if there's an internal error while
+- `throw=true`: Whether to throw if there's an internal error while
   authenticating (`AuthStatus_Error`).
 
 # Throws
 - `ArgumentError`: If the session isn't connected.
-- `LibSSHException`: If there was an internal error, unless `throw_on_error=false`.
+- `LibSSHException`: If there was an internal error, unless `throw=false`.
 
 Wrapper around [`lib.ssh_userauth_password()`](@ref).
 """
-function userauth_password(session::Session, password::String; throw_on_error=true)
+function userauth_password(session::Session, password::String; throw=true)
     if !isconnected(session)
-        throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+        Base.throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
 
     while true
@@ -853,8 +855,8 @@ function userauth_password(session::Session, password::String; throw_on_error=tr
 
         if ret == AuthStatus_Again
             wait(session)
-        elseif ret == AuthStatus_Error && throw_on_error
-            throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when authenticating"))
+        elseif ret == AuthStatus_Error && throw
+            Base.throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when authenticating"))
         else
             return ret
         end
@@ -869,19 +871,19 @@ Authenticate with GSSAPI. This is not available on all platforms (see
 
 # Arguments
 - `session`: The session to authenticate.
-- `throw_on_error=true`: Whether to throw if there's an internal error while
+- `throw=true`: Whether to throw if there's an internal error while
   authenticating (`AuthStatus_Error`).
 
 # Throws
 - `ArgumentError`: If the session isn't connected.
 - `ErrorException`: If GSSAPI support isn't available.
-- `LibSSHException`: If there was an internal error, unless `throw_on_error=false`.
+- `LibSSHException`: If there was an internal error, unless `throw=false`.
 
 Wrapper around [`lib.ssh_userauth_gssapi()`](@ref).
 """
-function userauth_gssapi(session::Session; throw_on_error=true)
+function userauth_gssapi(session::Session; throw=true)
     if !isconnected(session)
-        throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+        Base.throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     elseif !Gssapi.isavailable()
         error("GSSAPI support is not available")
     end
@@ -891,8 +893,8 @@ function userauth_gssapi(session::Session; throw_on_error=true)
     end
     status = AuthStatus(ret)
 
-    if status == AuthStatus_Error && throw_on_error
-        throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when authenticating"))
+    if status == AuthStatus_Error && throw
+        Base.throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when authenticating"))
     end
 
     return status
@@ -905,18 +907,18 @@ Attempt to authenticate with the keyboard-interactive method.
 
 # Arguments
 - `session`: The session to authenticate.
-- `throw_on_error=true`: Whether to throw if there's an internal error while
+- `throw=true`: Whether to throw if there's an internal error while
   authenticating (`AuthStatus_Error`).
 
 # Throws
 - `ArgumentError`: If the session isn't connected.
-- `LibSSHException`: If there was an internal error, unless `throw_on_error=false`.
+- `LibSSHException`: If there was an internal error, unless `throw=false`.
 
 Wrapper around [`lib.ssh_userauth_kbdint`](@ref).
 """
-function userauth_kbdint(session::Session; throw_on_error=true)
+function userauth_kbdint(session::Session; throw=true)
     if !isconnected(session)
-        throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+        Base.throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
 
     ret = _session_trywait(session) do
@@ -924,8 +926,8 @@ function userauth_kbdint(session::Session; throw_on_error=true)
     end
     status = AuthStatus(ret)
 
-    if status == AuthStatus_Error && throw_on_error
-        throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when authenticating"))
+    if status == AuthStatus_Error && throw
+        Base.throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when authenticating"))
     end
 
     session._require_init_kbdint = false
@@ -1020,7 +1022,7 @@ function _session_trywait(f::Function, session::Session)
                     # closed in the middle of waiting.
                     break
                 else
-                    rethrow(ex)
+                    rethrow()
                 end
             end
         end
