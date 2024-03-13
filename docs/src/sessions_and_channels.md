@@ -122,6 +122,7 @@ Base.success(::Cmd, ::Session)
 ```@docs
 Forwarder
 Forwarder(::Session, ::Int, ::String, ::Int)
+Forwarder(::Session, ::String, ::Int)
 Forwarder(::Function)
 Base.close(::Forwarder)
 ```

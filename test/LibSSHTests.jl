@@ -18,6 +18,8 @@ import LibSSH.Demo: DemoServer
 
 username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
 
+const HTTP_200 = "HTTP/1.1 200 OK\r\n\r\n"
+
 # Dummy HTTP server that only responds 200 to requests
 function http_server(f::Function, port)
     start_event = Base.Event()
@@ -38,7 +40,7 @@ function http_server(f::Function, port)
                          # Wait for any request, doesn't matter what
                          data = readavailable(sock)
                          if !isempty(data)
-                             write(sock, "HTTP/1.1 200 OK\r\n\r\n")
+                             write(sock, HTTP_200)
                          end
 
                          closewrite(sock)
@@ -428,12 +430,13 @@ end
     end
 
     @testset "Direct port forwarding" begin
-        # Test port forwarding
+        # Smoke test
         demo_server_with_session(2222) do session
             forwarder = ssh.Forwarder(session, 8080, "localhost", 9090)
             close(forwarder)
         end
 
+        # Test forwarding to a port
         demo_server_with_session(2222) do session
             ssh.Forwarder(session, 8080, "localhost", 9090) do forwarder
                 http_server(9090) do
@@ -445,6 +448,17 @@ end
                     end
 
                     @test curl_proc.exitcode == 0
+                end
+            end
+        end
+
+        # Test forwarding to a socket
+        demo_server_with_session(2222) do session
+            ssh.Forwarder(session, "localhost", 9090) do forwarder
+                http_server(9090) do
+                    socket = forwarder.out
+                    write(socket, "foo")
+                    @test read(socket, String) == HTTP_200
                 end
             end
         end

@@ -176,6 +176,7 @@ function _safe_poll_fd(args...; kwargs...)
     return result
 end
 
+include("utils.jl")
 include("gssapi.jl")
 include("pki.jl")
 include("callbacks.jl")

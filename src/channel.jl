@@ -703,6 +703,46 @@ mutable struct _ForwardingClient
     sshchan::SshChannel
     callbacks::Callbacks.ChannelCallbacks
     client_task::Union{Task, Nothing}
+
+    function _ForwardingClient(forwarder, socket::TCPSocket)
+        remotehost = forwarder.remotehost
+        remoteport = forwarder.remoteport
+
+        # Open a forwarding channel
+        local_ip = string(getaddrinfo(gethostname()))
+        sshchan = SshChannel(forwarder._session)
+        ret = _session_trywait(forwarder._session) do
+            GC.@preserve remotehost local_ip begin
+                lib.ssh_channel_open_forward(sshchan.ptr,
+                                             Base.unsafe_convert(Ptr{Cchar}, remotehost), remoteport,
+                                             Base.unsafe_convert(Ptr{Cchar}, local_ip), forwarder.localport)
+            end
+        end
+        if ret != SSH_OK
+            throw(LibSSHException("Could not open a forwarding channel: $(get_error(forwarder._session))"))
+        end
+
+        # Set callbacks for the channel
+        callbacks = Callbacks.ChannelCallbacks(nothing;
+                                               on_data=_on_client_channel_data,
+                                               on_eof=_on_client_channel_eof,
+                                               on_close=_on_client_channel_close)
+        set_channel_callbacks(sshchan, callbacks)
+
+        # Create a client and set the callbacks userdata to the new client object
+        self = new(forwarder._next_client_id, forwarder.verbose, socket,
+                   sshchan, callbacks, nothing)
+        callbacks.userdata = self
+
+        # Start a listener on the new socket to forward data to the server
+        self.client_task = Threads.@spawn try
+            _handle_forwarding_client(self)
+        catch ex
+            @error "Error when handling SSH port forward client $(self.id)!" exception=(ex, catch_backtrace())
+        end
+
+        return self
+    end
 end
 
 # Helper function to log messages from a forwarding client
@@ -742,69 +782,98 @@ end
 $(TYPEDEF)
 $(TYPEDFIELDS)
 
-This object manages a direct forwarding channel between `localport` and `remotehost:remoteport`.
+This object manages a direct forwarding channel between `localport` and
+`remotehost:remoteport`. Fields beginning with an underscore `_` are private and
+should not be used.
 """
-mutable struct Forwarder
+@kwdef mutable struct Forwarder
     remotehost::String
     remoteport::Int
-    localinterface::Sockets.IPAddr
-    localport::Int
+    localinterface::Sockets.IPAddr = Sockets.localhost
+    localport::Int = -1
 
-    _listen_server::TCPServer
-    _listener_task::Union{Task, Nothing}
-    _clients::Vector{_ForwardingClient}
+    out::Union{TCPSocket, Nothing} = nothing
+
+    _listen_server::TCPServer = TCPServer()
+    _listener_task::Union{Task, Nothing} = nothing
+    _clients::Vector{_ForwardingClient} = _ForwardingClient[]
+    _next_client_id::Int = 1
 
     _session::Session
     verbose::Bool
-
-    @doc """
-    $(TYPEDSIGNATURES)
-
-    Create a `Forwarder` object to forward data from `localport` to
-    `remotehost:remoteport`. This will handle an internal [`SshChannel`](@ref)
-    for forwarding.
-
-    # Arguments
-    - `session`: The session to create a forwarding channel over.
-    - `localport`: The local port to bind to.
-    - `remotehost`: The remote host.
-    - `remoteport`: The remote port to bind to.
-    - `verbose`: Print logging messages on callbacks etc (not equivalent to
-      setting `log_verbosity` on a [`Session`](@ref)).
-    - `localinterface=IPv4(0)`: The interface to bind `localport` on.
-    """
-    function Forwarder(session::Session, localport::Int, remotehost::String, remoteport::Int;
-                       verbose=false, localinterface::Sockets.IPAddr=IPv4(0))
-        listen_server = Sockets.listen(localinterface, localport)
-
-        self = new(remotehost, remoteport, localinterface, localport,
-                   listen_server, nothing, _ForwardingClient[],
-                   session, verbose)
-
-        # Start the listener
-        self._listener_task = Threads.@spawn try
-            _fwd_listen(self)
-        catch ex
-            @error "Error in listen loop for Forwarder!" exception=(ex, catch_backtrace())
-        end
-
-        finalizer(close, self)
-    end
 end
+
+"""
+$(TYPEDSIGNATURES)
+
+Create a `Forwarder` object that will forward its data to a single
+`TCPSocket`. This is useful if there is only one client and binding to a port
+available to other processes is not desirable. The socket will be stored in the
+`Forwarder.out` property, and it will be closed when the `Forwarder` is closed.
+
+All arguments mean the same as in [`Forwarder(::Session, ::Int, ::String,
+::Int)`](@ref).
+"""
+function Forwarder(session::Session, remotehost::String, remoteport::Int;
+                   verbose=false)
+    sock1, sock2 = _socketpair()
+    self = Forwarder(; remotehost, remoteport, out=sock2, _session=session, verbose)
+    push!(self._clients, _ForwardingClient(self, sock1))
+
+    return self
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Create a `Forwarder` object to forward data from `localport` to
+`remotehost:remoteport`. This will handle an internal [`SshChannel`](@ref)
+for forwarding.
+
+# Arguments
+- `session`: The session to create a forwarding channel over.
+- `localport`: The local port to bind to.
+- `remotehost`: The remote host.
+- `remoteport`: The remote port to bind to.
+- `verbose`: Print logging messages on callbacks etc (not equivalent to
+  setting `log_verbosity` on a [`Session`](@ref)).
+- `localinterface=IPv4(0)`: The interface to bind `localport` on.
+"""
+function Forwarder(session::Session, localport::Int, remotehost::String, remoteport::Int;
+                   verbose=false, localinterface::Sockets.IPAddr=IPv4(0))
+    _listen_server = Sockets.listen(localinterface, localport)
+
+    self = Forwarder(; remotehost, remoteport, localinterface, localport,
+                     _listen_server, _session=session, verbose)
+
+    # Start the listener
+    self._listener_task = Threads.@spawn try
+        _fwd_listen(self)
+    catch ex
+        @error "Error in listen loop for Forwarder!" exception=(ex, catch_backtrace())
+    end
+
+    finalizer(close, self)
+end
+
 
 function Base.show(io::IO, f::Forwarder)
     if !isopen(f)
         print(io, Forwarder, "()")
     else
-        print(io, Forwarder, "($(f.localinterface):$(f.localport) → $(f.remotehost):$(f.remoteport))")
+        if isnothing(forwarder.out)
+            print(io, Forwarder, "($(f.localinterface):$(f.localport) → $(f.remotehost):$(f.remoteport))")
+        else
+            print(io, Forwarder, "($(f.out) → $(f.remotehost):$(f.remoteport))")
+        end
     end
 end
 
 """
 $(TYPEDSIGNATURES)
 
-Do-constructor for a `Forwarder`. All arguments are forwarded to the
-[`Forwarder(::Session, ::Int, ::String, ::Int)`](@ref) constructor.
+Do-constructor for a `Forwarder`. All arguments are forwarded to the other
+constructors.
 """
 function Forwarder(f::Function, args...; kwargs...)
     forwarder = Forwarder(args...; kwargs...)
@@ -825,7 +894,9 @@ socket.
 function Base.close(forwarder::Forwarder)
     # Stop accepting new clients
     close(forwarder._listen_server)
-    wait(forwarder._listener_task)
+    if !isnothing(forwarder._listener_task)
+        wait(forwarder._listener_task)
+    end
 
     # Close existing clients
     for client in forwarder._clients
@@ -833,15 +904,19 @@ function Base.close(forwarder::Forwarder)
     end
 end
 
-Base.isopen(forwarder::Forwarder) = isopen(forwarder._listen_server)
+function Base.isopen(forwarder::Forwarder)
+    # If we're forwarding to a bound port then check if the TCPServer is
+    # running, otherwise check if the single client socket is still open.
+    if isnothing(forwarder.out)
+        isopen(forwarder._listen_server)
+    else
+        isopen(forwarder.out)
+    end
+end
 
 # This function accepts connections on the local port and sets up
 # _ForwardingClient's for them.
 function _fwd_listen(forwarder::Forwarder)
-    next_client_id = 1
-    remotehost = forwarder.remotehost
-    remoteport = forwarder.remoteport
-
     while isopen(forwarder._listen_server)
         local sock
         try
@@ -854,40 +929,7 @@ function _fwd_listen(forwarder::Forwarder)
             end
         end
 
-        # Open a forwarding channel
-        local_ip = string(getaddrinfo(gethostname()))
-        sshchan = SshChannel(forwarder._session)
-        ret = _session_trywait(forwarder._session) do
-            GC.@preserve remotehost local_ip begin
-                lib.ssh_channel_open_forward(sshchan.ptr,
-                                             Base.unsafe_convert(Ptr{Cchar}, remotehost), remoteport,
-                                             Base.unsafe_convert(Ptr{Cchar}, local_ip), forwarder.localport)
-            end
-        end
-        if ret != SSH_OK
-            throw(LibSSHException("Could not open a forwarding channel: $(get_error(forwarder._session))"))
-        end
-
-        # Set callbacks for the channel
-        callbacks = Callbacks.ChannelCallbacks(nothing;
-                                               on_data=_on_client_channel_data,
-                                               on_eof=_on_client_channel_eof,
-                                               on_close=_on_client_channel_close)
-        set_channel_callbacks(sshchan, callbacks)
-
-        # Create a client and set the callbacks userdata to the new client object
-        client = _ForwardingClient(next_client_id, forwarder.verbose, sock,
-                                   sshchan, callbacks, nothing)
-        callbacks.userdata = client
-
-        # Start a listener on the new socket to forward data to the server
-        client.client_task = Threads.@spawn try
-            _handle_forwarding_client(client)
-        catch ex
-            @error "Error when handling SSH port forward client $(client.id)!" exception=(ex, catch_backtrace())
-        end
-
-        push!(forwarder._clients, client)
-        next_client_id += 1
+        push!(forwarder._clients, _ForwardingClient(forwarder, sock))
+        forwarder._next_client_id += 1
     end
 end
