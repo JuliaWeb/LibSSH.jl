@@ -243,9 +243,13 @@ mutable struct ChannelCallbacks
     Create a callbacks object to set on a channel. A default function is
     registered for each callback and it will print a warning if a callback was
     requested but not found, so you don't need to set all of the callbacks for
-    the channel to work properly. The only exception is `on_write_wontblock`,
-    which is set to `Returns(0)` by default since it's always used but rarely
-    necessary.
+    the channel to work properly. The only exceptions are:
+    - `on_write_wontblock=Returns(0)`
+    - `on_open_response=Returns(nothing)`
+    - `on_request_response=Returns(nothing)`
+
+    Which have default callbacks because they're always called but rarely
+    necessary to set explicitly.
 
     The callback functions should all match the signature `f(::Session,
     ::SshChannel, args..., userdata)`. Note that some argument types will
@@ -282,6 +286,8 @@ mutable struct ChannelCallbacks
     - [`on_env_request`](@ref lib.ssh_channel_env_request_callback): `f(::Session, ::SshChannel, ::String, ::String, userdata)::Bool`
     - [`on_subsystem_request`](@ref lib.ssh_channel_subsystem_request_callback): `f(::Session, ::SshChannel, ::String, userdata)::Bool`
     - [`on_write_wontblock`](@ref lib.ssh_channel_write_wontblock_callback): `f(::Session, ::SshChannel, ::UInt, userdata)::Int`
+    - [`on_open_response`](@ref lib.ssh_channel_open_resp_callback): `f(::Session, ::SshChannel, ::Bool, userdata)::Nothing`
+    - [`on_request_response`](@ref lib.ssh_channel_request_resp_callback): `f(::Session, ::SshChannel, userdata)::Nothing`
     """
     function ChannelCallbacks(userdata::Any=nothing;
                               on_data::Union{Function, Nothing}=nothing,
@@ -298,7 +304,9 @@ mutable struct ChannelCallbacks
                               on_exec_request::Union{Function, Nothing}=nothing,
                               on_env_request::Union{Function, Nothing}=nothing,
                               on_subsystem_request::Union{Function, Nothing}=nothing,
-                              on_write_wontblock=Returns(0))
+                              on_write_wontblock::Union{Function, Nothing}=Returns(0),
+                              on_open_response::Union{Function, Nothing}=Returns(nothing),
+                              on_request_response::Union{Function, Nothing}=Returns(nothing))
         self = new(nothing, userdata,
                    Dict{Symbol, Function}(),
                    Dict{Symbol, DataType}(),
@@ -308,55 +316,61 @@ mutable struct ChannelCallbacks
                    Dict{Symbol, Any}())
 
         # Why do some of these callbacks use 1 for denied and some -1? Who knows ¯\_(ツ)_/¯
-        data_cfunc              = @_gencb(:channel_data, on_data,
-                                          Int, 0, Cint,
-                                          Cint, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}, Cuint, Cint, Ptr{Cvoid}))
-        eof_cfunc               = @_gencb(:channel_eof, on_eof,
-                                          Nothing, nothing, identity,
-                                          Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
-        close_cfunc             = @_gencb(:channel_close, on_close,
-                                          Nothing, nothing, identity,
-                                          Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
-        signal_cfunc            = @_gencb(:channel_signal, on_signal,
-                                          Nothing, nothing, identity,
-                                          Cvoid, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
+        data_cfunc                  = @_gencb(:channel_data, on_data,
+                                              Int, 0, Cint,
+                                              Cint, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}, Cuint, Cint, Ptr{Cvoid}))
+        eof_cfunc                   = @_gencb(:channel_eof, on_eof,
+                                              Nothing, nothing, identity,
+                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
+        close_cfunc                 = @_gencb(:channel_close, on_close,
+                                              Nothing, nothing, identity,
+                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
+        signal_cfunc                = @_gencb(:channel_signal, on_signal,
+                                              Nothing, nothing, identity,
+                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
 
-        exit_status_cfunc       = @_gencb(:channel_exit_status, on_exit_status,
-                                          Nothing, nothing, identity,
-                                          Cvoid, (lib.ssh_session, lib.ssh_channel, Cint, Ptr{Cvoid}))
-        exit_signal_cfunc       = @_gencb(:channel_exit_signal, on_exit_signal,
-                                          Nothing, nothing, identity,
-                                          Cvoid, (lib.ssh_session, lib.ssh_channel, Cstring, Cint, Cstring, Cstring, Ptr{Cvoid}))
+        exit_status_cfunc           = @_gencb(:channel_exit_status, on_exit_status,
+                                              Nothing, nothing, identity,
+                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Cint, Ptr{Cvoid}))
+        exit_signal_cfunc           = @_gencb(:channel_exit_signal, on_exit_signal,
+                                              Nothing, nothing, identity,
+                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Cstring, Cint, Cstring, Cstring, Ptr{Cvoid}))
 
-        pty_request_cfunc       = @_gencb(:channel_pty_request, on_pty_request,
-                                          Bool, false, ret -> Cint(ret ? 0 : -1),
-                                          Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Cint, Cint, Cint, Cint, Ptr{Cvoid}))
-        shell_request_cfunc     = @_gencb(:channel_shell_request, on_shell_request,
-                                          Bool, false, ret -> Cint(ret ? 0 : 1),
-                                          Cint, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
-        auth_agent_req_cfunc    = @_gencb(:channel_auth_agent_req, on_auth_agent_req,
-                                          Nothing, nothing, identity,
-                                          Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
-        x11_req_cfunc           = @_gencb(:channel_x11_req, on_x11_req,
-                                          Nothing, nothing, identity,
-                                          Cvoid, (lib.ssh_session, lib.ssh_channel, Cint, Cstring, Cstring, Cuint, Ptr{Cvoid}))
-        pty_window_change_cfunc = @_gencb(:channel_pty_window_change, on_pty_window_change,
-                                          Bool, false, ret -> Cint(ret ? 0 : -1),
-                                          Cint, (lib.ssh_session, lib.ssh_channel, Cint, Cint, Cint, Cint, Ptr{Cvoid}))
+        pty_request_cfunc           = @_gencb(:channel_pty_request, on_pty_request,
+                                              Bool, false, ret -> Cint(ret ? 0 : -1),
+                                              Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Cint, Cint, Cint, Cint, Ptr{Cvoid}))
+        shell_request_cfunc         = @_gencb(:channel_shell_request, on_shell_request,
+                                              Bool, false, ret -> Cint(ret ? 0 : 1),
+                                              Cint, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
+        auth_agent_req_cfunc        = @_gencb(:channel_auth_agent_req, on_auth_agent_req,
+                                              Nothing, nothing, identity,
+                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
+        x11_req_cfunc               = @_gencb(:channel_x11_req, on_x11_req,
+                                              Nothing, nothing, identity,
+                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Cint, Cstring, Cstring, Cuint, Ptr{Cvoid}))
+        pty_window_change_cfunc     = @_gencb(:channel_pty_window_change, on_pty_window_change,
+                                              Bool, false, ret -> Cint(ret ? 0 : -1),
+                                              Cint, (lib.ssh_session, lib.ssh_channel, Cint, Cint, Cint, Cint, Ptr{Cvoid}))
 
-        exec_request_cfunc      = @_gencb(:channel_exec_request, on_exec_request,
-                                          Bool, false, ret -> Cint(ret ? 0 : 1),
-                                          Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
-        env_request_cfunc       = @_gencb(:channel_env_request, on_env_request,
-                                          Bool, false, ret -> Cint(ret ? 0 : 1),
-                                          Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Cstring, Ptr{Cvoid}))
+        exec_request_cfunc          = @_gencb(:channel_exec_request, on_exec_request,
+                                              Bool, false, ret -> Cint(ret ? 0 : 1),
+                                              Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
+        env_request_cfunc           = @_gencb(:channel_env_request, on_env_request,
+                                              Bool, false, ret -> Cint(ret ? 0 : 1),
+                                              Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Cstring, Ptr{Cvoid}))
 
-        subsystem_request_cfunc = @_gencb(:channel_subsystem_request, on_subsystem_request,
-                                          Bool, false, ret -> Cint(ret ? 0 : 1),
-                                          Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
-        write_wontblock_cfunc   = @_gencb(:channel_write_wontblock, on_write_wontblock,
-                                          Int, 0, Cint,
-                                          Cint, (lib.ssh_session, lib.ssh_channel, Cuint, Ptr{Cvoid}))
+        subsystem_request_cfunc     = @_gencb(:channel_subsystem_request, on_subsystem_request,
+                                              Bool, false, ret -> Cint(ret ? 0 : 1),
+                                              Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
+        write_wontblock_cfunc       = @_gencb(:channel_write_wontblock, on_write_wontblock,
+                                              Int, 0, Cint,
+                                              Cint, (lib.ssh_session, lib.ssh_channel, Cuint, Ptr{Cvoid}))
+        open_response_cfunc         = @_gencb(:channel_open_response, on_open_response,
+                                              Nothing, nothing, identity,
+                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Bool, Ptr{Cvoid}))
+        request_response_cfunc      = @_gencb(:channel_request_response, on_request_response,
+                                              Nothing, nothing, identity,
+                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
 
         self.cb_struct = lib.ssh_channel_callbacks_struct(sizeof(lib.ssh_channel_callbacks_struct), # size (see: ssh_callback_init())
                                                           pointer_from_objref(self), # userdata points to self
@@ -367,7 +381,9 @@ mutable struct ChannelCallbacks
                                                           auth_agent_req_cfunc, x11_req_cfunc,
                                                           pty_window_change_cfunc, exec_request_cfunc,
                                                           env_request_cfunc, subsystem_request_cfunc,
-                                                          write_wontblock_cfunc)
+                                                          write_wontblock_cfunc,
+                                                          open_response_cfunc,
+                                                          request_response_cfunc)
 
         return self
     end
