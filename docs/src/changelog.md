@@ -7,12 +7,16 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
-## Unreleased
+## [v0.5.0] - 2024-08-10
 
 ### Added
 
 - A new [`Forwarder(::Session, ::String, ::Int)`](@ref) constructor to allow for
   forwarding a port to an internal socket instead of to a port ([#10]).
+
+### Changed
+
+- Updated the libssh library to 0.11.0 ([#11]).
 
 ## [v0.4.0] - 2024-03-12
 

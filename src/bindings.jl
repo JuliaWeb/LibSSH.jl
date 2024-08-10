@@ -1,6 +1,6 @@
 module lib
 
-using CEnum
+using CEnum: CEnum, @cenum
 
 using libssh_jll
 using DocStringExtensions
@@ -34,6 +34,19 @@ mutable struct fd_set
 end
 
 const socket_t = Cint
+
+mutable struct ssh_channel_struct end
+
+const ssh_channel = Ptr{ssh_channel_struct}
+
+"""
+    ssh_channel_free(channel)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gad1417f9eae8928fed20faafe2d9dbfff).
+"""
+function ssh_channel_free(channel)
+    @ccall libssh.ssh_channel_free(channel::ssh_channel)::Cvoid
+end
 
 mutable struct ssh_key_struct end
 
@@ -125,10 +138,6 @@ mutable struct ssh_agent_struct end
 
 const ssh_agent = Ptr{ssh_agent_struct}
 
-mutable struct ssh_channel_struct end
-
-const ssh_channel = Ptr{ssh_channel_struct}
-
 mutable struct ssh_pcap_file_struct end
 
 const ssh_pcap_file = Ptr{ssh_pcap_file_struct}
@@ -209,6 +218,7 @@ end
     SSH_GLOBAL_REQUEST_TCPIP_FORWARD = 1
     SSH_GLOBAL_REQUEST_CANCEL_TCPIP_FORWARD = 2
     SSH_GLOBAL_REQUEST_KEEPALIVE = 3
+    SSH_GLOBAL_REQUEST_NO_MORE_SESSIONS = 4
 end
 
 @cenum ssh_publickey_state_e::Int32 begin
@@ -268,9 +278,10 @@ end
 @cenum ssh_keycmp_e::UInt32 begin
     SSH_KEY_CMP_PUBLIC = 0
     SSH_KEY_CMP_PRIVATE = 1
+    SSH_KEY_CMP_CERTIFICATE = 2
 end
 
-@cenum __JL_Ctag_22::UInt32 begin
+@cenum __JL_Ctag_9::UInt32 begin
     SSH_LOG_NOLOG = 0
     SSH_LOG_WARNING = 1
     SSH_LOG_PROTOCOL = 2
@@ -279,10 +290,18 @@ end
 end
 
 """
-    ssh_options_e
+    ssh_control_master_options_e
 
 @}
 """
+@cenum ssh_control_master_options_e::UInt32 begin
+    SSH_CONTROL_MASTER_NO = 0
+    SSH_CONTROL_MASTER_AUTO = 1
+    SSH_CONTROL_MASTER_YES = 2
+    SSH_CONTROL_MASTER_ASK = 3
+    SSH_CONTROL_MASTER_AUTOASK = 4
+end
+
 @cenum ssh_options_e::UInt32 begin
     SSH_OPTIONS_HOST = 0
     SSH_OPTIONS_PORT = 1
@@ -327,9 +346,15 @@ end
     SSH_OPTIONS_REKEY_TIME = 40
     SSH_OPTIONS_RSA_MIN_SIZE = 41
     SSH_OPTIONS_IDENTITY_AGENT = 42
+    SSH_OPTIONS_IDENTITIES_ONLY = 43
+    SSH_OPTIONS_CONTROL_MASTER = 44
+    SSH_OPTIONS_CONTROL_PATH = 45
+    SSH_OPTIONS_CERTIFICATE = 46
+    SSH_OPTIONS_PROXYJUMP = 47
+    SSH_OPTIONS_PROXYJUMP_CB_LIST_APPEND = 48
 end
 
-@cenum __JL_Ctag_23::UInt32 begin
+@cenum __JL_Ctag_10::UInt32 begin
     SSH_SCP_WRITE = 0
     SSH_SCP_READ = 1
     SSH_SCP_RECURSIVE = 16
@@ -387,12 +412,12 @@ function ssh_channel_close(channel)
 end
 
 """
-    ssh_channel_free(channel)
+    ssh_channel_get_exit_state(channel, pexit_code, pexit_signal, pcore_dumped)
 
-[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gad1417f9eae8928fed20faafe2d9dbfff).
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga17b249b4abd204fc776a902bddc14c01).
 """
-function ssh_channel_free(channel)
-    @ccall libssh.ssh_channel_free(channel::ssh_channel)::Cvoid
+function ssh_channel_get_exit_state(channel, pexit_code, pexit_signal, pcore_dumped)
+    @ccall libssh.ssh_channel_get_exit_state(channel::ssh_channel, pexit_code::Ptr{UInt32}, pexit_signal::Ptr{Ptr{Cchar}}, pcore_dumped::Ptr{Cint})::Cint
 end
 
 """
@@ -566,13 +591,17 @@ function ssh_channel_request_pty(channel)
     @ccall libssh.ssh_channel_request_pty(channel::ssh_channel)::Cint
 end
 
-"""
-    ssh_channel_request_pty_size(channel, term, cols, rows)
-
-[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gabb175414352256e1602286e0ab50886c).
-"""
 function ssh_channel_request_pty_size(channel, term, cols, rows)
     @ccall libssh.ssh_channel_request_pty_size(channel::ssh_channel, term::Ptr{Cchar}, cols::Cint, rows::Cint)::Cint
+end
+
+"""
+    ssh_channel_request_pty_size_modes(channel, term, cols, rows, modes, modes_len)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#ga2ebd34c7f15182e9fc1dde66863cf8d9).
+"""
+function ssh_channel_request_pty_size_modes(channel, term, cols, rows, modes, modes_len)
+    @ccall libssh.ssh_channel_request_pty_size_modes(channel::ssh_channel, term::Ptr{Cchar}, cols::Cint, rows::Cint, modes::Ptr{Cuchar}, modes_len::Csize_t)::Cint
 end
 
 """
@@ -885,6 +914,15 @@ end
 """
 function ssh_get_openssh_version(session)
     @ccall libssh.ssh_get_openssh_version(session::ssh_session)::Cint
+end
+
+"""
+    ssh_request_no_more_sessions(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gaa1819f532a57fb455704c227341f386b).
+"""
+function ssh_request_no_more_sessions(session)
+    @ccall libssh.ssh_request_no_more_sessions(session::ssh_session)::Cint
 end
 
 """
@@ -1457,9 +1495,20 @@ SSH authentication callback for password and publickey auth.
 const ssh_auth_callback = Ptr{Cvoid}
 
 """
-    ssh_key_new()
+    ssh_file_format_e
 
 @}
+"""
+@cenum ssh_file_format_e::UInt32 begin
+    SSH_FILE_FORMAT_DEFAULT = 0
+    SSH_FILE_FORMAT_OPENSSH = 1
+    SSH_FILE_FORMAT_PEM = 2
+end
+
+"""
+    ssh_key_new()
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gabfebce03474a4d014aa779d5dbf057b0).
 """
 function ssh_key_new()
     @ccall libssh.ssh_key_new()::ssh_key
@@ -1556,6 +1605,15 @@ function ssh_pki_export_privkey_base64(privkey, passphrase, auth_fn, auth_data, 
 end
 
 """
+    ssh_pki_export_privkey_base64_format(privkey, passphrase, auth_fn, auth_data, b64_key, format)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga116c23be7ef4c9482a147ff1316a98d7).
+"""
+function ssh_pki_export_privkey_base64_format(privkey, passphrase, auth_fn, auth_data, b64_key, format)
+    @ccall libssh.ssh_pki_export_privkey_base64_format(privkey::ssh_key, passphrase::Ptr{Cchar}, auth_fn::ssh_auth_callback, auth_data::Ptr{Cvoid}, b64_key::Ptr{Ptr{Cchar}}, format::ssh_file_format_e)::Cint
+end
+
+"""
     ssh_pki_import_privkey_file(filename, passphrase, auth_fn, auth_data, pkey)
 
 [Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga1c8f84137606b1585006302499100ee0).
@@ -1571,6 +1629,15 @@ end
 """
 function ssh_pki_export_privkey_file(privkey, passphrase, auth_fn, auth_data, filename)
     @ccall libssh.ssh_pki_export_privkey_file(privkey::ssh_key, passphrase::Ptr{Cchar}, auth_fn::ssh_auth_callback, auth_data::Ptr{Cvoid}, filename::Ptr{Cchar})::Cint
+end
+
+"""
+    ssh_pki_export_privkey_file_format(privkey, passphrase, auth_fn, auth_data, filename, format)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gadfe9d252a36bc0693b4b7fd3c840cded).
+"""
+function ssh_pki_export_privkey_file_format(privkey, passphrase, auth_fn, auth_data, filename, format)
+    @ccall libssh.ssh_pki_export_privkey_file_format(privkey::ssh_key, passphrase::Ptr{Cchar}, auth_fn::ssh_auth_callback, auth_data::Ptr{Cvoid}, filename::Ptr{Cchar}, format::ssh_file_format_e)::Cint
 end
 
 """
@@ -2534,6 +2601,26 @@ function string_to_char(str)
     @ccall libssh.string_to_char(str::ssh_string)::Ptr{Cchar}
 end
 
+mutable struct sftp_aio_struct end
+
+const sftp_aio = Ptr{sftp_aio_struct}
+
+"""
+    sftp_aio_free(aio)
+
+Deallocate memory corresponding to a sftp aio handle.
+
+This function deallocates memory corresponding to the aio handle returned by the sftp\\_aio\\_begin\\_*() functions. Users can use this function to free memory corresponding to an aio handle for an outstanding async i/o request on encountering some error.
+
+# Arguments
+* `aio`: sftp aio handle corresponding to which memory has to be deallocated.
+# See also
+[`sftp_aio_begin_read`](@ref)(), [`sftp_aio_wait_read`](@ref)(), [`sftp_aio_begin_write`](@ref)(), [`sftp_aio_wait_write`](@ref)()
+"""
+function sftp_aio_free(aio)
+    @ccall libssh.sftp_aio_free(aio::sftp_aio)::Cvoid
+end
+
 struct sftp_attributes_struct
     name::Ptr{Cchar}
     longname::Ptr{Cchar}
@@ -2599,6 +2686,23 @@ end
 
 const sftp_packet = Ptr{__JL_sftp_packet_struct}
 
+"""
+    sftp_limits_struct
+
+SFTP limits structure.
+"""
+struct sftp_limits_struct
+    max_packet_length::UInt64
+    max_read_length::UInt64
+    max_write_length::UInt64
+    max_open_handles::UInt64
+end
+
+"""
+Pointer to a [`sftp_limits_struct`](@ref)
+"""
+const sftp_limits_t = Ptr{sftp_limits_struct}
+
 struct sftp_session_struct
     session::ssh_session
     channel::ssh_channel
@@ -2611,6 +2715,7 @@ struct sftp_session_struct
     handles::Ptr{Ptr{Cvoid}}
     ext::sftp_ext
     read_packet::sftp_packet
+    limits::sftp_limits_t
 end
 
 const sftp_session = Ptr{sftp_session_struct}
@@ -3060,12 +3165,16 @@ end
 
 Read from a file using an opened sftp file handle.
 
+This function caps the length a user is allowed to read from an sftp file.
+
+The value used for the cap is same as the value of the max\\_read\\_length field of the [`sftp_limits_t`](@ref) returned by [`sftp_limits`](@ref)().
+
 # Arguments
 * `file`: The opened sftp file handle to be read from.
 * `buf`: Pointer to buffer to receive read data.
 * `count`: Size of the buffer in bytes.
 # Returns
-Number of bytes written, < 0 on error with ssh and sftp error set.
+Number of bytes read, < 0 on error with ssh and sftp error set.
 # See also
 [`sftp_get_error`](@ref)()
 """
@@ -3132,6 +3241,10 @@ end
 
 Write to a file using an opened sftp file handle.
 
+This function caps the length a user is allowed to write to an sftp file.
+
+The value used for the cap is same as the value of the max\\_write\\_length field of the [`sftp_limits_t`](@ref) returned by [`sftp_limits`](@ref)().
+
 # Arguments
 * `file`: Open sftp file handle to write to.
 * `buf`: Pointer to buffer to write data.
@@ -3143,6 +3256,141 @@ Number of bytes written, < 0 on error with ssh and sftp error set.
 """
 function sftp_write(file, buf, count)
     @ccall libssh.sftp_write(file::sftp_file, buf::Ptr{Cvoid}, count::Csize_t)::Cssize_t
+end
+
+"""
+    sftp_aio_begin_read(file, len, aio)
+
+Start an asynchronous read from a file using an opened sftp file handle.
+
+Its goal is to avoid the slowdowns related to the request/response pattern of a synchronous read. To do so, you must call 2 functions :
+
+[`sftp_aio_begin_read`](@ref)() and [`sftp_aio_wait_read`](@ref)().
+
+- The first step is to call [`sftp_aio_begin_read`](@ref)(). This function sends a read request to the sftp server, dynamically allocates memory to store information about the sent request and provides the caller an sftp aio handle to that memory.
+
+- The second step is to call [`sftp_aio_wait_read`](@ref)() and pass it the address of a location storing the sftp aio handle provided by [`sftp_aio_begin_read`](@ref)().
+
+These two functions do not close the open sftp file handle passed to [`sftp_aio_begin_read`](@ref)() irrespective of whether they fail or not.
+
+It is the responsibility of the caller to ensure that the open sftp file handle passed to [`sftp_aio_begin_read`](@ref)() must not be closed before the corresponding call to [`sftp_aio_wait_read`](@ref)(). After [`sftp_aio_wait_read`](@ref)() returns, it is caller's decision whether to immediately close the file by calling [`sftp_close`](@ref)() or to keep it open and perform some more operations on it.
+
+This function caps the length a user is allowed to read from an sftp file, the value of len parameter after capping is returned on success.
+
+The value used for the cap is same as the value of the max\\_read\\_length field of the [`sftp_limits_t`](@ref) returned by [`sftp_limits`](@ref)().
+
+!!! warning
+
+    When calling this function, the internal file offset is updated corresponding to the number of bytes requested to read.
+
+!!! warning
+
+    A call to [`sftp_aio_begin_read`](@ref)() sends a request to the server. When the server answers, libssh allocates memory to store it until [`sftp_aio_wait_read`](@ref)() is called. Not calling [`sftp_aio_wait_read`](@ref)() will lead to memory leaks.
+
+# Arguments
+* `file`: The opened sftp file handle to be read from.
+* `len`: Number of bytes to read.
+* `aio`: Pointer to a location where the sftp aio handle (corresponding to the sent request) should be stored.
+# Returns
+On success, the number of bytes the server is requested to read (value of len parameter after capping). On error, [`SSH_ERROR`](@ref) with sftp and ssh errors set.
+# See also
+[`sftp_aio_wait_read`](@ref)(), [`sftp_aio_free`](@ref)(), [`sftp_open`](@ref)(), [`sftp_close`](@ref)(), [`sftp_get_error`](@ref)(), [`ssh_get_error`](@ref)()
+"""
+function sftp_aio_begin_read(file, len, aio)
+    @ccall libssh.sftp_aio_begin_read(file::sftp_file, len::Csize_t, aio::Ptr{sftp_aio})::Cssize_t
+end
+
+"""
+    sftp_aio_wait_read(aio, buf, buf_size)
+
+Wait for an asynchronous read to complete and store the read data in the supplied buffer.
+
+A pointer to an sftp aio handle should be passed while calling this function. Except when the return value is [`SSH_AGAIN`](@ref), this function releases the memory corresponding to the supplied aio handle and assigns NULL to that aio handle using the passed pointer to that handle.
+
+If the file is opened in non-blocking mode and the request hasn't been executed yet, this function returns [`SSH_AGAIN`](@ref) and must be called again using the same sftp aio handle.
+
+!!! warning
+
+    A call to this function with an invalid sftp aio handle may never return.
+
+# Arguments
+* `aio`: Pointer to the sftp aio handle returned by [`sftp_aio_begin_read`](@ref)().
+* `buf`: Pointer to the buffer in which read data will be stored.
+* `buf_size`: Size of the buffer in bytes. It should be bigger or equal to the length parameter of the [`sftp_aio_begin_read`](@ref)() call.
+# Returns
+Number of bytes read, 0 on EOF, [`SSH_ERROR`](@ref) if an error occurred, [`SSH_AGAIN`](@ref) if the file is opened in nonblocking mode and the request hasn't been executed yet.
+# See also
+[`sftp_aio_begin_read`](@ref)(), [`sftp_aio_free`](@ref)()
+"""
+function sftp_aio_wait_read(aio, buf, buf_size)
+    @ccall libssh.sftp_aio_wait_read(aio::Ptr{sftp_aio}, buf::Ptr{Cvoid}, buf_size::Csize_t)::Cssize_t
+end
+
+"""
+    sftp_aio_begin_write(file, buf, len, aio)
+
+Start an asynchronous write to a file using an opened sftp file handle.
+
+Its goal is to avoid the slowdowns related to the request/response pattern of a synchronous write. To do so, you must call 2 functions :
+
+[`sftp_aio_begin_write`](@ref)() and [`sftp_aio_wait_write`](@ref)().
+
+- The first step is to call [`sftp_aio_begin_write`](@ref)(). This function sends a write request to the sftp server, dynamically allocates memory to store information about the sent request and provides the caller an sftp aio handle to that memory.
+
+- The second step is to call [`sftp_aio_wait_write`](@ref)() and pass it the address of a location storing the sftp aio handle provided by [`sftp_aio_begin_write`](@ref)().
+
+These two functions do not close the open sftp file handle passed to [`sftp_aio_begin_write`](@ref)() irrespective of whether they fail or not.
+
+It is the responsibility of the caller to ensure that the open sftp file handle passed to [`sftp_aio_begin_write`](@ref)() must not be closed before the corresponding call to [`sftp_aio_wait_write`](@ref)(). After [`sftp_aio_wait_write`](@ref)() returns, it is caller's decision whether to immediately close the file by calling [`sftp_close`](@ref)() or to keep it open and perform some more operations on it.
+
+This function caps the length a user is allowed to write to an sftp file, the value of len parameter after capping is returned on success.
+
+The value used for the cap is same as the value of the max\\_write\\_length field of the [`sftp_limits_t`](@ref) returned by [`sftp_limits`](@ref)().
+
+!!! warning
+
+    When calling this function, the internal file offset is updated corresponding to the number of bytes requested to write.
+
+!!! warning
+
+    A call to [`sftp_aio_begin_write`](@ref)() sends a request to the server. When the server answers, libssh allocates memory to store it until [`sftp_aio_wait_write`](@ref)() is called. Not calling [`sftp_aio_wait_write`](@ref)() will lead to memory leaks.
+
+# Arguments
+* `file`: The opened sftp file handle to write to.
+* `buf`: Pointer to the buffer containing data to write.
+* `len`: Number of bytes to write.
+* `aio`: Pointer to a location where the sftp aio handle (corresponding to the sent request) should be stored.
+# Returns
+On success, the number of bytes the server is requested to write (value of len parameter after capping). On error, [`SSH_ERROR`](@ref) with sftp and ssh errors set.
+# See also
+[`sftp_aio_wait_write`](@ref)(), [`sftp_aio_free`](@ref)(), [`sftp_open`](@ref)(), [`sftp_close`](@ref)(), [`sftp_get_error`](@ref)(), [`ssh_get_error`](@ref)()
+"""
+function sftp_aio_begin_write(file, buf, len, aio)
+    @ccall libssh.sftp_aio_begin_write(file::sftp_file, buf::Ptr{Cvoid}, len::Csize_t, aio::Ptr{sftp_aio})::Cssize_t
+end
+
+"""
+    sftp_aio_wait_write(aio)
+
+Wait for an asynchronous write to complete.
+
+A pointer to an sftp aio handle should be passed while calling this function. Except when the return value is [`SSH_AGAIN`](@ref), this function releases the memory corresponding to the supplied aio handle and assigns NULL to that aio handle using the passed pointer to that handle.
+
+If the file is opened in non-blocking mode and the request hasn't been executed yet, this function returns [`SSH_AGAIN`](@ref) and must be called again using the same sftp aio handle.
+
+!!! warning
+
+    A call to this function with an invalid sftp aio handle may never return.
+
+# Arguments
+* `aio`: Pointer to the sftp aio handle returned by [`sftp_aio_begin_write`](@ref)().
+# Returns
+Number of bytes written on success, [`SSH_ERROR`](@ref) if an error occurred, [`SSH_AGAIN`](@ref) if the file is opened in nonblocking mode and the request hasn't been executed yet.
+# See also
+[`sftp_aio_begin_write`](@ref)(), [`sftp_aio_free`](@ref)()
+"""
+function sftp_aio_wait_write(aio)
+    @ccall libssh.sftp_aio_wait_write(aio::Ptr{sftp_aio})::Cssize_t
 end
 
 """
@@ -3197,7 +3445,7 @@ Report current byte position in file.
 # Arguments
 * `file`: Open sftp file handle.
 # Returns
-The offset of the current byte relative to the beginning of the file associated with the file descriptor. < 0 on error.
+The offset of the current byte relative to the beginning of the file associated with the file descriptor.
 """
 function sftp_tell64(file)
     @ccall libssh.sftp_tell64(file::sftp_file)::UInt64
@@ -3306,6 +3554,26 @@ function sftp_setstat(sftp, file, attr)
 end
 
 """
+    sftp_lsetstat(sftp, file, attr)
+
+This request is like setstat (excluding mode and size) but sets file attributes on symlinks themselves.
+
+Note, that this function can only set time values using 32 bit values due to the restrictions in the SFTP protocol version 3 implemented by libssh. The support for 64 bit time values was introduced in SFTP version 5, which is not implemented by libssh nor any major SFTP servers.
+
+# Arguments
+* `sftp`: The sftp session handle.
+* `file`: The symbolic link which attributes should be changed.
+* `attr`: The file attributes structure with the attributes set which should be changed.
+# Returns
+0 on success, < 0 on error with ssh and sftp error set.
+# See also
+[`sftp_get_error`](@ref)()
+"""
+function sftp_lsetstat(sftp, file, attr)
+    @ccall libssh.sftp_lsetstat(sftp::sftp_session, file::Ptr{Cchar}, attr::sftp_attributes)::Cint
+end
+
+"""
     sftp_chown(sftp, file, owner, group)
 
 Change the file owner and group
@@ -3396,6 +3664,24 @@ function sftp_readlink(sftp, path)
 end
 
 """
+    sftp_hardlink(sftp, oldpath, newpath)
+
+Create a hard link.
+
+# Arguments
+* `sftp`: The sftp session handle.
+* `oldpath`: Specifies the pathname of the file for which the new hardlink is to be created.
+* `newpath`: Specifies the pathname of the hardlink to be created.
+# Returns
+0 on success, -1 on error with ssh and sftp error set.
+# See also
+[`sftp_get_error`](@ref)()
+"""
+function sftp_hardlink(sftp, oldpath, newpath)
+    @ccall libssh.sftp_hardlink(sftp::sftp_session, oldpath::Ptr{Cchar}, newpath::Ptr{Cchar})::Cint
+end
+
+"""
     sftp_statvfs(sftp, path)
 
 Get information about a mounted file system.
@@ -3461,6 +3747,34 @@ function sftp_fsync(file)
 end
 
 """
+    sftp_limits(sftp)
+
+Get information about the various limits the server might impose.
+
+# Arguments
+* `sftp`: The sftp session handle.
+# Returns
+A limits structure or NULL on error.
+# See also
+[`sftp_get_error`](@ref)()
+"""
+function sftp_limits(sftp)
+    @ccall libssh.sftp_limits(sftp::sftp_session)::sftp_limits_t
+end
+
+"""
+    sftp_limits_free(limits)
+
+Free the memory of an allocated limits.
+
+# Arguments
+* `limits`: The limits to free.
+"""
+function sftp_limits_free(limits)
+    @ccall libssh.sftp_limits_free(limits::sftp_limits_t)::Cvoid
+end
+
+"""
     sftp_canonicalize_path(sftp, path)
 
 Canonicalize a sftp path.
@@ -3487,6 +3801,42 @@ The server version.
 """
 function sftp_server_version(sftp)
     @ccall libssh.sftp_server_version(sftp::sftp_session)::Cint
+end
+
+"""
+    sftp_expand_path(sftp, path)
+
+Canonicalize path using expand-path.com extension
+
+# Arguments
+* `sftp`: The sftp session handle.
+* `path`: The path to be canonicalized.
+# Returns
+A pointer to the newly allocated canonicalized path, NULL on error. The caller needs to free the memory using [`ssh_string_free_char`](@ref)().
+"""
+function sftp_expand_path(sftp, path)
+    @ccall libssh.sftp_expand_path(sftp::sftp_session, path::Ptr{Cchar})::Ptr{Cchar}
+end
+
+"""
+    sftp_home_directory(sftp, username)
+
+Get the specified user's home directory
+
+This calls the "home-directory" extension. You should check if the extension is supported using:
+
+```c++
+ int supported  = sftp_extension_supported(sftp, "home-directory", "1");
+```
+
+# Arguments
+* `sftp`: The sftp session handle.
+* `username`: username of the user whose home directory is requested.
+# Returns
+On success, a newly allocated string containing the absolute real-path of the home directory of the user. NULL on error. The caller needs to free the memory using [`ssh_string_free_char`](@ref)().
+"""
+function sftp_home_directory(sftp, username)
+    @ccall libssh.sftp_home_directory(sftp::sftp_session, username::Ptr{Cchar})::Ptr{Cchar}
 end
 
 function sftp_get_client_message(sftp)
@@ -3588,6 +3938,7 @@ end
     SSH_BIND_OPTIONS_PROCESS_CONFIG = 19
     SSH_BIND_OPTIONS_MODULI = 20
     SSH_BIND_OPTIONS_RSA_MIN_SIZE = 21
+    SSH_BIND_OPTIONS_IMPORT_KEY_STR = 22
 end
 
 mutable struct ssh_bind_struct end
@@ -3828,6 +4179,8 @@ end
 
 Free a ssh servers bind.
 
+Note that this will also free options that have been set on the bind, including keys set with SSH\\_BIND\\_OPTIONS\\_IMPORT\\_KEY.
+
 # Arguments
 * `ssh_bind_o`: The ssh server bind to free.
 """
@@ -3937,7 +4290,7 @@ Get the password of the authenticated user.
 # Arguments
 * `msg`:\\[in\\] The message to get the password from.
 # Returns
-The username or NULL if an error occurred.
+The password or NULL if an error occurred.
 # See also
 [`ssh_message_get`](@ref)(), [`ssh_message_type`](@ref)()
 """
@@ -4337,6 +4690,26 @@ NULL if the request should not be allowed
 """
 const ssh_channel_open_request_auth_agent_callback = Ptr{Cvoid}
 
+# typedef ssh_channel ( * ssh_channel_open_request_forwarded_tcpip_callback ) ( ssh_session session , const char * destination_address , int destination_port , const char * originator_address , int originator_port , void * userdata )
+"""
+Handles an SSH new channel open "forwarded-tcpip" request. This happens when the server forwards an incoming TCP connection on a port it was previously requested to listen on. This is a client-side API
+
+!!! warning
+
+    The channel pointer returned by this callback must be closed by the application.
+
+# Arguments
+* `session`: current session handler
+* `destination_address`: the address that the TCP connection connected to
+* `destination_port`: the port that the TCP connection connected to
+* `originator_address`: the originator IP address
+* `originator_port`: the originator port
+* `userdata`: Userdata to be passed to the callback function.
+# Returns
+NULL if the request should not be allowed
+"""
+const ssh_channel_open_request_forwarded_tcpip_callback = Ptr{Cvoid}
+
 """
     ssh_callbacks_struct
 
@@ -4351,6 +4724,7 @@ mutable struct ssh_callbacks_struct
     global_request_function::ssh_global_request_callback
     channel_open_request_x11_function::ssh_channel_open_request_x11_callback
     channel_open_request_auth_agent_function::ssh_channel_open_request_auth_agent_callback
+    channel_open_request_forwarded_tcpip_function::ssh_channel_open_request_forwarded_tcpip_callback
 end
 
 const ssh_callbacks = Ptr{ssh_callbacks_struct}
@@ -4780,6 +5154,29 @@ SSH channel write will not block (flow control).
 """
 const ssh_channel_write_wontblock_callback = Ptr{Cvoid}
 
+# typedef void ( * ssh_channel_open_resp_callback ) ( ssh_session session , ssh_channel channel , bool is_success , void * userdata )
+"""
+SSH channel open callback. Called when a channel open succeeds or fails.
+
+# Arguments
+* `session`: Current session handler
+* `channel`: the actual channel
+* `is_success`: is 1 when the open succeeds, and 0 otherwise.
+* `userdata`: Userdata to be passed to the callback function.
+"""
+const ssh_channel_open_resp_callback = Ptr{Cvoid}
+
+# typedef void ( * ssh_channel_request_resp_callback ) ( ssh_session session , ssh_channel channel , void * userdata )
+"""
+SSH channel request response callback. Called when a response to the pending request is received.
+
+# Arguments
+* `session`: Current session handler
+* `channel`: the actual channel
+* `userdata`: Userdata to be passed to the callback function.
+"""
+const ssh_channel_request_resp_callback = Ptr{Cvoid}
+
 mutable struct ssh_channel_callbacks_struct
     size::Csize_t
     userdata::Ptr{Cvoid}
@@ -4798,6 +5195,8 @@ mutable struct ssh_channel_callbacks_struct
     channel_env_request_function::ssh_channel_env_request_callback
     channel_subsystem_request_function::ssh_channel_subsystem_request_callback
     channel_write_wontblock_function::ssh_channel_write_wontblock_callback
+    channel_open_response_function::ssh_channel_open_resp_callback
+    channel_request_response_function::ssh_channel_request_resp_callback
 end
 
 const ssh_channel_callbacks = Ptr{ssh_channel_callbacks_struct}
@@ -4985,6 +5384,49 @@ function ssh_get_log_callback()
     @ccall libssh.ssh_get_log_callback()::ssh_logging_callback
 end
 
+# typedef int ( * ssh_jump_before_connection_callback ) ( ssh_session session , void * userdata )
+"""
+SSH proxyjump before connection callback. Called before calling [`ssh_connect`](@ref)()
+
+# Arguments
+* `session`: Jump session handler
+* `userdata`: Userdata to be passed to the callback function.
+# Returns
+0 on success, < 0 on error.
+"""
+const ssh_jump_before_connection_callback = Ptr{Cvoid}
+
+# typedef int ( * ssh_jump_verify_knownhost_callback ) ( ssh_session session , void * userdata )
+"""
+SSH proxyjump verify knownhost callback. Verify the host. If not specified default function will be used.
+
+# Arguments
+* `session`: Jump session handler
+* `userdata`: Userdata to be passed to the callback function.
+# Returns
+0 on success, < 0 on error.
+"""
+const ssh_jump_verify_knownhost_callback = Ptr{Cvoid}
+
+# typedef int ( * ssh_jump_authenticate_callback ) ( ssh_session session , void * userdata )
+"""
+SSH proxyjump user authentication callback. Authenticate the user.
+
+# Arguments
+* `session`: Jump session handler
+* `userdata`: Userdata to be passed to the callback function.
+# Returns
+0 on success, < 0 on error.
+"""
+const ssh_jump_authenticate_callback = Ptr{Cvoid}
+
+mutable struct ssh_jump_callbacks_struct
+    userdata::Ptr{Cvoid}
+    before_connection::ssh_jump_before_connection_callback
+    verify_knownhost::ssh_jump_verify_knownhost_callback
+    authenticate::ssh_jump_authenticate_callback
+end
+
 # Skipping MacroDefinition: LIBSSH_API __attribute__ ( ( visibility ( "default" ) ) )
 
 # Skipping MacroDefinition: SSH_DEPRECATED __attribute__ ( ( deprecated ) )
@@ -5083,9 +5525,9 @@ SSH_VERSION(a, b, c) = SSH_VERSION_DOT(a, b, c)
 
 const LIBSSH_VERSION_MAJOR = 0
 
-const LIBSSH_VERSION_MINOR = 10
+const LIBSSH_VERSION_MINOR = 11
 
-const LIBSSH_VERSION_MICRO = 6
+const LIBSSH_VERSION_MICRO = 0
 
 const LIBSSH_VERSION_INT = SSH_VERSION_INT(LIBSSH_VERSION_MAJOR, LIBSSH_VERSION_MINOR, LIBSSH_VERSION_MICRO)
 

@@ -1,3 +1,7 @@
+```@meta
+CollapsedDocStrings = true
+```
+
 # Low-level bindings
 
 The symbols documented on this page have all been generated automatically, along

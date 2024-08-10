@@ -57,6 +57,8 @@ function get_docs(node::ExprNode, doc::Vector{String})
         String["Session struct ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_guided_tour.html))."]
     elseif node.id == :ssh_message_auth_interactive_request
         String["Initiate keyboard-interactive authentication from a server."]
+    elseif node.id == :sftp_limits_t
+        String["Pointer to a [`sftp_limits_struct`](@ref)"]
 
     # Internal Clang.jl structs start with '__' and we don't want to document them
     elseif startswith(string(node.id), "__")
