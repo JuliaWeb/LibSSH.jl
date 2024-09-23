@@ -484,6 +484,25 @@ function _exec_command(process::SshProcess)
         throw(LibSSHException("Failed to open a session channel: $(ret)"))
     end
 
+    # Set environment variables
+    if !isnothing(process.cmd.env)
+        for env_var in process.cmd.env
+            # We explicitly convert the SubString's returned from split() to
+            # String's so that they're each separate and null-terminated in
+            # memory, otherwise the entire 'name=value' string would be sent
+            # when we send `name`.
+            name, value = String.(split(env_var, "="))
+            ret = _session_trywait(session) do
+                lib.ssh_channel_request_env(sshchan.ptr, name, value)
+            end
+
+            if ret != SSH_OK
+                err = get_error(session)
+                throw(LibSSHException("Error from lib.ssh_channel_request_env(), could not set environment variable: '$(env_var)'"))
+            end
+        end
+    end
+
     # Make the request
     ret = _session_trywait(session) do
         GC.@preserve cmd_str begin
@@ -521,8 +540,6 @@ Run a command on the remote host over an SSH session. Things that aren't
 supported compared to `run()`:
 - Pipelined commands (use a regular pipe like `foo | bar` instead).
 - Setting the directory to execute the command in.
-- Setting environment variables (support is possible, it just hasn't been
-  implemented yet).
 
 # Throws
 - [`SshProcessFailedException`](@ref): if the command fails and `ignorestatus()`

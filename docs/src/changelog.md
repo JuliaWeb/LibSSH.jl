@@ -11,7 +11,9 @@ Changelog](https://keepachangelog.com).
 
 ### Added
 
-- Implemented [`Base.readchomp()`](@ref) for remote commands.
+- Implemented [`Base.readchomp(::Cmd)`](@ref) for remote commands ([#12]).
+- Add support for passing environment variables to remote commands with
+  [`Base.run(::Cmd)`](@ref) ([#12]).
 
 ## [v0.5.0] - 2024-08-10
 

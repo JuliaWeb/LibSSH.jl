@@ -542,6 +542,9 @@ end
 
 function on_channel_env_request(session, sshchan, name, value, client)::Bool
     _add_log_event!(client, :channel_env_request, (name, value))
+
+    client.env[name] = value
+
     return true
 end
 
@@ -567,7 +570,7 @@ function on_channel_exec_request(session, sshchan, command, client)::Bool
     end
 
     owning_sshchan = popat!(client.unclaimed_channels, idx)
-    push!(client.channel_operations, CommandExecutor(command, owning_sshchan))
+    push!(client.channel_operations, CommandExecutor(command, owning_sshchan, client.env))
 
     return true
 end
@@ -678,6 +681,8 @@ end
     channel_callbacks::ChannelCallbacks = ChannelCallbacks()
     unclaimed_channels::Vector{ssh.SshChannel} = ssh.SshChannel[]
     channel_operations::Vector{Any} = []
+
+    env::Dict{String, String} = Dict{String, String}()
 
     task::Union{Task, Nothing} = nothing
     log_timeline::Vector = []
@@ -933,8 +938,9 @@ function exec_command(executor)
     cmd_stderr = IOBuffer()
 
     # Start the process and wait for it
-    proc = run(pipeline(ignorestatus(`sh -c $(executor.command)`); stdout=cmd_stdout, stderr=cmd_stderr);
-               wait=false)
+    cmd_str = join(Base.shell_split(executor.command), " ")
+    cmd = setenv(ignorestatus(`sh -c $(cmd_str)`), executor.env)
+    proc = run(pipeline(cmd; stdout=cmd_stdout, stderr=cmd_stderr); wait=false)
     executor.process = proc
     notify(executor._started_event)
     wait(proc)
@@ -956,18 +962,19 @@ end
 @kwdef mutable struct CommandExecutor
     command::String
     sshchan::ssh.SshChannel
+    env::Dict{String, String}
     task::Union{Task, Nothing} = nothing
     process::Union{Base.Process, Nothing} = nothing
 
     _started_event::Base.Event = Base.Event()
 end
 
-function CommandExecutor(command::String, sshchan::ssh.SshChannel)
+function CommandExecutor(command::String, sshchan::ssh.SshChannel, env)
     if !sshchan.owning
         throw(ArgumentError("The passed SshChannel is non-owning, CommandExecutor requires an owning SshChannel"))
     end
 
-    executor = CommandExecutor(; command, sshchan)
+    executor = CommandExecutor(; command, sshchan, env)
 
     executor.task = Threads.@spawn try
         exec_command(executor)
