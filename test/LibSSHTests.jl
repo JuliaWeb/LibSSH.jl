@@ -91,13 +91,29 @@ end
     # https://github.com/JuliaLang/julia/issues/39282
     # Also note that we set `-F none` to disabling reading user config files.
     openssh_cmd = OpenSSH_jll.ssh()
-    ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`sshpass -p bar $(openssh_cmd.exec) -F none -o NoHostAuthenticationForLocalhost=yes $cmd`; env=openssh_cmd.env))
+    ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`sshpass -p bar $(openssh_cmd.exec) -F none -o NoHostAuthenticationForLocalhost=yes -p 2222 $cmd`; env=openssh_cmd.env))
+
+    @testset "Command execution" begin
+        demo_server = DemoServer(2222; password="bar") do
+            # Test exitcodes
+            @test run(ssh_cmd(`foo@localhost exit 0`)).exitcode == 0
+            @test run(ssh_cmd(`foo@localhost exit 42`)).exitcode == 42
+
+            # Test passing environment variables
+            cmd_out = IOBuffer()
+            cmd = ssh_cmd(`foo@localhost -o SendEnv=foo echo \$foo`)
+            cmd = addenv(cmd, "foo" => "bar")
+            cmd_result = run(pipeline(cmd; stdout=cmd_out))
+
+            @test strip(String(take!(cmd_out))) == "bar"
+        end
+    end
 
     @testset "Password authentication and session channels" begin
         # More complicated test, where we run a command and check the output
         demo_server = DemoServer(2222; password="bar") do
             cmd_out = IOBuffer()
-            cmd = ssh_cmd(`-p 2222 foo@localhost whoami`)
+            cmd = ssh_cmd(`foo@localhost whoami`)
             cmd_result = run(pipeline(cmd; stdout=cmd_out))
 
             @test cmd_result.exitcode == 0
@@ -117,7 +133,7 @@ end
 
         # Make sure that it can handle errors too
         DemoServer(2222; password="bar") do
-            cmd = ssh_cmd(`-p 2222 foo@localhost exit 42`)
+            cmd = ssh_cmd(`foo@localhost exit 42`)
             cmd_result = run(pipeline(ignorestatus(cmd)))
             @test cmd_result.exitcode == 42
         end
@@ -135,7 +151,7 @@ end
                 tmpfile = joinpath(tmpdir, "foo")
 
                 # Start a client and wait for it
-                cmd = ssh_cmd(`-p 2222 -L 8080:localhost:9090 foo@localhost "touch $tmpfile; while [ -f $tmpfile ]; do sleep 0.1; done"`)
+                cmd = ssh_cmd(`-L 8080:localhost:9090 foo@localhost "touch $tmpfile; while [ -f $tmpfile ]; do sleep 0.1; done"`)
                 ssh_process = run(cmd; wait=false)
                 if timedwait(() -> isfile(tmpfile), 5) == :timed_out
                     error("Timeout waiting for sentinel file $tmpfile to be created")
@@ -180,8 +196,8 @@ end
 
     @testset "Multiple connections" begin
         demo_server = DemoServer(2222; password="bar") do
-            run(ssh_cmd(`-p 2222 foo@localhost exit 0`))
-            run(ssh_cmd(`-p 2222 foo@localhost exit 0`))
+            run(ssh_cmd(`foo@localhost exit 0`))
+            run(ssh_cmd(`foo@localhost exit 0`))
         end
         @test length(demo_server.clients) == 2
     end
@@ -408,7 +424,7 @@ end
         end
     end
 
-    @testset "Executing commands" begin
+    @testset "Command execution" begin
         demo_server_with_session(2222) do session
             # Smoke test
             process = run(`whoami`, session; print_out=false)
@@ -421,11 +437,15 @@ end
             @test !isempty(String(process.out))
 
             # Test Base methods
-            @test read(`echo foo`, session, String) == "foo\n"
+            @test readchomp(`echo foo`, session) == "foo"
             @test success(`whoami`, session)
 
             # Check that commands with quotes are properly escaped
-            @test read(`echo 'foo bar'`, session, String) == "foo bar\n"
+            @test readchomp(`echo 'foo bar'`, session) == "foo bar"
+
+            # Test setting environment variables
+            cmd = setenv(`echo \$foo`, "foo" => "bar")
+            @test readchomp(cmd, session) == "bar"
         end
     end
 

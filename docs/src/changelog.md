@@ -7,6 +7,14 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## Unreleased
+
+### Added
+
+- Implemented [`Base.readchomp(::Cmd)`](@ref) for remote commands ([#12]).
+- Add support for passing environment variables to remote commands with
+  [`Base.run(::Cmd)`](@ref) ([#12]).
+
 ## [v0.5.0] - 2024-08-10
 
 ### Added
