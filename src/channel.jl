@@ -625,6 +625,13 @@ Base.read(cmd::Cmd, session::Session, ::Type{String}) = String(read(cmd, session
 """
 $(TYPEDSIGNATURES)
 
+`readchomp()` for remote commands.
+"""
+Base.readchomp(cmd::Cmd, session::Session) = chomp(read(cmd, session, String))
+
+"""
+$(TYPEDSIGNATURES)
+
 Check the command succeeded.
 """
 Base.success(cmd::Cmd, session::Session) = success(run(cmd, session; print_out=false))

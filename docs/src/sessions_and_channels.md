@@ -114,6 +114,7 @@ Base.success(::SshProcess)
 Base.run(::Cmd, ::Session)
 Base.read(::Cmd, ::Session)
 Base.read(::Cmd, ::Session, ::Type{String})
+Base.readchomp(::Cmd, ::Session)
 Base.success(::Cmd, ::Session)
 ```
 

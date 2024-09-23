@@ -421,11 +421,11 @@ end
             @test !isempty(String(process.out))
 
             # Test Base methods
-            @test read(`echo foo`, session, String) == "foo\n"
+            @test readchomp(`echo foo`, session) == "foo"
             @test success(`whoami`, session)
 
             # Check that commands with quotes are properly escaped
-            @test read(`echo 'foo bar'`, session, String) == "foo bar\n"
+            @test readchomp(`echo 'foo bar'`, session) == "foo bar"
         end
     end
 

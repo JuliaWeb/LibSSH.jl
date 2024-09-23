@@ -7,6 +7,12 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## Unreleased
+
+### Added
+
+- Implemented [`Base.readchomp()`](@ref) for remote commands.
+
 ## [v0.5.0] - 2024-08-10
 
 ### Added
