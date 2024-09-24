@@ -121,7 +121,7 @@ Checks if the channel is open. Wrapper around
 [`lib.ssh_channel_is_open()`](@ref).
 """
 function Base.isopen(sshchan::SshChannel)
-    if isassigned(sshchan)
+    if isassigned(sshchan) && (isnothing(sshchan.session) || isconnected(sshchan.session))
         lib.ssh_channel_is_open(sshchan.ptr) != 0
     else
         false
@@ -160,8 +160,13 @@ function Base.close(sshchan::SshChannel)
                 popat!(sshchan.session.channels, idx)
             end
 
-            # Close the channel
-            if isopen(sshchan)
+            if !isnothing(sshchan.session) && !isconnected(sshchan.session)
+                # If the session has already been disconnected from C
+                # (e.g. because of the other side disconnecting) then that will
+                # already have free'd the channel, which means we only need to
+                # unassign the pointer.
+                sshchan.ptr = nothing
+            elseif isopen(sshchan)
                 # This will trigger callbacks
                 closewrite(sshchan)
 

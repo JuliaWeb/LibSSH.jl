@@ -15,6 +15,11 @@ Changelog](https://keepachangelog.com).
 - Add support for passing environment variables to remote commands with
   [`Base.run(::Cmd)`](@ref) ([#12]).
 
+### Fixed
+
+- Fixed segfaults that would occur in [`SshChannel`](@ref) when its
+  [`Session`](@ref) is disconnected by the remote end ([#13]).
+
 ## [v0.5.0] - 2024-08-10
 
 ### Added
