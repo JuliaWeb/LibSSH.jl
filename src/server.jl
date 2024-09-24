@@ -696,6 +696,10 @@ function Base.close(client::Client)
         close(op)
     end
 
+    for sshchan in client.unclaimed_channels
+        close(sshchan)
+    end
+
     close(client.session_event)
     close(client.session)
     wait(client.task)
