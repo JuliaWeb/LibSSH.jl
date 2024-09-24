@@ -107,9 +107,17 @@ mutable struct SshKey
     end
 end
 
+function Base.unsafe_convert(::Type{lib.ssh_key}, key::SshKey)
+    if !isassigned(key)
+        throw(ArgumentError("SshKey is unassigned, cannot get a pointer from it"))
+    end
+
+    return key.ptr
+end
+
 function _finalizer(key::SshKey)
     if isassigned(key)
-        lib.ssh_key_free(key.ptr)
+        lib.ssh_key_free(key)
         key.ptr = nothing
     end
 end    
@@ -127,7 +135,7 @@ $(TYPEDSIGNATURES)
 
 Check if the [`SshKey`](@ref) holds a valid pointer to a `lib.ssh_key`.
 """
-Base.isassigned(key::SshKey) = key.ptr != nothing
+Base.isassigned(key::SshKey) = !isnothing(key.ptr)
 
 """
 $(TYPEDSIGNATURES)
@@ -139,7 +147,7 @@ function key_cmp(key1::SshKey, key2::SshKey, part::KeyCmp)
         throw(ArgumentError("SshKey has been free'd, cannot compare"))
     end
 
-    ret = lib.ssh_key_cmp(key1.ptr, key2.ptr, lib.ssh_keycmp_e(Int(part)))
+    ret = lib.ssh_key_cmp(key1, key2, lib.ssh_keycmp_e(Int(part)))
     return ret == 0
 end
 
@@ -168,7 +176,7 @@ function key_type(key::SshKey)
         throw(ArgumentError("SshKey has been free'd, cannot get the key type"))
     end
 
-    ret = lib.ssh_key_type(key.ptr)
+    ret = lib.ssh_key_type(key)
     return KeyType(Int(ret))
 end
 
@@ -191,7 +199,7 @@ function get_publickey_hash(key::SshKey, hash_type::HashType=HashType_Sha256)
     # Compute the hash
     hash_arr = Ref{Ptr{Cuchar}}()
     hash_len = Ref{Csize_t}()
-    ret = lib.ssh_get_publickey_hash(key.ptr, lib.ssh_publickey_hash_type(Int(hash_type)),
+    ret = lib.ssh_get_publickey_hash(key, lib.ssh_publickey_hash_type(Int(hash_type)),
                                      hash_arr, hash_len)
     if ret != lib.SSH_OK
         throw(LibSSHException("Computing the SshKey public key hash failed: $(ret)"))

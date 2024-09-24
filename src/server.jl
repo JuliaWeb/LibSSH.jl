@@ -23,7 +23,7 @@ mutable struct SessionEvent
             throw(LibSSHException("Could not allocate ssh_event"))
         end
 
-        ret = lib.ssh_event_add_session(ptr, session.ptr)
+        ret = lib.ssh_event_add_session(ptr, session)
         if ret != SSH_OK
             lib.ssh_event_free(ptr)
             throw(LibSSHException("Could not add Session to SessionEvent: $(ret)"))
@@ -40,6 +40,14 @@ function _finalizer(event::SessionEvent)
     catch ex
         Threads.@spawn @error "Exception when finalizing SessionEvent" exception=(ex, catch_backtrace())
     end
+end
+
+function Base.unsafe_convert(::Type{lib.ssh_event}, event::SessionEvent)
+    if !isassigned(event)
+        throw(ArgumentError("SessionEvent is unassigned, cannot get a pointer from it"))
+    end
+
+    return event.ptr
 end
 
 """
@@ -67,7 +75,7 @@ function event_dopoll(event::SessionEvent)
         # Always check if the event is still assigned within the loop since it
         # may be closed at any time.
         ret = if isassigned(event)
-            lib.ssh_event_dopoll(event.ptr, 0)
+            lib.ssh_event_dopoll(event, 0)
         else
             SSH_ERROR
         end
@@ -98,11 +106,11 @@ function Base.close(event::SessionEvent)
         # return code because some other callback may have already removed the
         # session, which will cause this to return SSH_ERROR.
         if isassigned(event.session)
-            lib.ssh_event_remove_session(event.ptr, event.session.ptr)
+            lib.ssh_event_remove_session(event, event.session)
         end
 
         # Free the ssh_event
-        lib.ssh_event_free(event.ptr)
+        lib.ssh_event_free(event)
         event.ptr = nothing
     end
 end
@@ -193,6 +201,18 @@ mutable struct Bind
     end
 end
 
+Base.isassigned(bind::Bind) = !isnothing(bind.ptr)
+
+function Base.unsafe_convert(::Type{lib.ssh_bind}, bind::Bind)
+    if !isassigned(bind)
+        throw(ArgumentError("Bind is unassigned, cannot get a pointer from it"))
+    end
+
+    return bind.ptr
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, bind::Bind) = Ptr{Cvoid}(Base.unsafe_convert(lib.ssh_bind, bind))
+
 function Base.show(io::IO, bind::Bind)
     print(io, Bind, "(addr=$(bind.addr), port=$(bind.port))")
 end
@@ -204,7 +224,7 @@ Close and free the bind.
 """
 function Base.close(bind::Bind)
     if isopen(bind)
-        lib.ssh_bind_free(bind.ptr)
+        lib.ssh_bind_free(bind)
         bind.ptr = nothing
     end
 end
@@ -240,7 +260,7 @@ function get_error(bind::Bind)
         throw(ArgumentError("Bind data has been free'd, cannot get its error"))
     end
 
-    ret = lib.ssh_get_error(Ptr{Cvoid}(bind.ptr))
+    ret = lib.ssh_get_error(bind)
     return unsafe_string(ret)
 end
 
@@ -284,7 +304,7 @@ function Base.setproperty!(bind::Bind, name::Symbol, value)
                     Ref(Base.cconvert(ctype, value))
                 end
 
-                ret = lib.ssh_bind_options_set(bind.ptr, option, cvalue)
+                ret = lib.ssh_bind_options_set(bind, option, cvalue)
             end
         end
 
@@ -342,7 +362,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
         throw(ArgumentError("poll_timeout=$(poll_timeout), it must be greater than 0"))
     end
 
-    ret = lib.ssh_bind_listen(bind.ptr)
+    ret = lib.ssh_bind_listen(bind)
     if ret != SSH_OK
         # If binding fails, we wake up any waiting tasks and throw an exception
         notify(bind._listener_event)
@@ -353,7 +373,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
                                         Cint,
                                         (lib.ssh_session, lib.ssh_message, Ptr{Cvoid}))
 
-    fd = RawFD(lib.ssh_bind_get_fd(bind.ptr))
+    fd = RawFD(lib.ssh_bind_get_fd(bind))
     while isopen(bind)
         # Notify listeners that we've started
         if !bind._listener_started
@@ -384,7 +404,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
 
         # Accept the new connection
         session_ptr = lib.ssh_new()
-        ret = lib.ssh_bind_accept(bind.ptr, session_ptr)
+        ret = lib.ssh_bind_accept(bind, session_ptr)
         if ret != SSH_OK
             throw(LibSSHException("Error when accepting new connection: $(ret)"))
         end
@@ -429,7 +449,7 @@ Wrapper around [`lib.ssh_set_auth_methods()`](@ref).
 """
 function set_auth_methods(session::Session, auth_methods::Vector{AuthMethod})
     bitflag = reduce(|, Int.(auth_methods))
-    lib.ssh_set_auth_methods(session.ptr, bitflag)
+    lib.ssh_set_auth_methods(session, bitflag)
 end
 
 """
@@ -452,7 +472,7 @@ Non-blocking wrapper around [`lib.ssh_handle_key_exchange()`](@ref). Returns
 """
 function handle_key_exchange(session::Session)::Bool
     ret = _session_trywait(session) do
-        lib.ssh_handle_key_exchange(session.ptr)
+        lib.ssh_handle_key_exchange(session)
     end
 
     return ret == SSH_OK
@@ -464,7 +484,7 @@ $(TYPEDSIGNATURES)
 Set callbacks for a Session. Wrapper around [`lib.ssh_set_server_callbacks()`](@ref).
 """
 function set_server_callbacks(session::Session, callbacks::ServerCallbacks)
-    ret = lib.ssh_set_server_callbacks(session.ptr, Ref(callbacks.cb_struct::lib.ssh_server_callbacks_struct))
+    ret = lib.ssh_set_server_callbacks(session, Ref(callbacks.cb_struct::lib.ssh_server_callbacks_struct))
     if ret != SSH_OK
         throw(LibSSHException("Error setting server callbacks: $(ret)"))
     end
@@ -644,7 +664,7 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
             return false
         else
             # Now they're responding to our prompts
-            n_answers = lib.ssh_userauth_kbdint_getnanswers(session.ptr)
+            n_answers = lib.ssh_userauth_kbdint_getnanswers(session)
 
             # If they didn't return the correct number of answers, deny the request
             if n_answers != 2
@@ -654,8 +674,8 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
             end
 
             # Get the answers and check them
-            password = lib.ssh_userauth_kbdint_getanswer(session.ptr, 0)
-            token = lib.ssh_userauth_kbdint_getanswer(session.ptr, 1)
+            password = lib.ssh_userauth_kbdint_getanswer(session, 0)
+            token = lib.ssh_userauth_kbdint_getanswer(session, 1)
             if password == "foo" && token == "bar"
                 _add_log_event!(client, :auth_kbdint, "accepted with '$password' and '$token'")
                 lib.ssh_message_auth_reply_success(msg, Int(false))
