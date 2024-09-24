@@ -3839,6 +3839,47 @@ function sftp_home_directory(sftp, username)
     @ccall libssh.sftp_home_directory(sftp::sftp_session, username::Ptr{Cchar})::Ptr{Cchar}
 end
 
+"""
+    sftp_server_new(session, chan)
+
+Create a new sftp server session.
+
+# Arguments
+* `session`: The ssh session to use.
+* `chan`: The ssh channel to use.
+# Returns
+A new sftp server session.
+"""
+function sftp_server_new(session, chan)
+    @ccall libssh.sftp_server_new(session::ssh_session, chan::ssh_channel)::sftp_session
+end
+
+"""
+    sftp_server_init(sftp)
+
+Initialize the sftp server.
+
+# Arguments
+* `sftp`: The sftp session to init.
+# Returns
+0 on success, < 0 on error.
+"""
+function sftp_server_init(sftp)
+    @ccall libssh.sftp_server_init(sftp::sftp_session)::Cint
+end
+
+"""
+    sftp_server_free(sftp)
+
+Close and deallocate a sftp server session.
+
+# Arguments
+* `sftp`: The sftp session handle to free.
+"""
+function sftp_server_free(sftp)
+    @ccall libssh.sftp_server_free(sftp::sftp_session)::Cvoid
+end
+
 function sftp_get_client_message(sftp)
     @ccall libssh.sftp_get_client_message(sftp::sftp_session)::sftp_client_message
 end
@@ -5527,7 +5568,7 @@ const LIBSSH_VERSION_MAJOR = 0
 
 const LIBSSH_VERSION_MINOR = 11
 
-const LIBSSH_VERSION_MICRO = 0
+const LIBSSH_VERSION_MICRO = 1
 
 const LIBSSH_VERSION_INT = SSH_VERSION_INT(LIBSSH_VERSION_MAJOR, LIBSSH_VERSION_MINOR, LIBSSH_VERSION_MICRO)
 
@@ -5759,6 +5800,12 @@ Manual copy of the upstream macro.
 function ssh_callbacks_init(callbacks::Union{ssh_callbacks_struct, ssh_bind_callbacks_struct,
                                              ssh_server_callbacks_struct, ssh_channel_callbacks_struct})
     callbacks.size = sizeof(typeof(callbacks))
+end
+
+# Manually wrapped for now until this is merged:
+# https://gitlab.com/libssh/libssh-mirror/-/merge_requests/538
+function sftp_channel_default_data_callback(session, channel, data, len, is_stderr, userdata)
+    @ccall libssh.sftp_channel_default_data_callback(session::ssh_session, channel::ssh_channel, data::Ptr{Cvoid}, len::UInt32, is_stderr::Cint, userdata::Ptr{Cvoid})::Cint
 end
 
 
