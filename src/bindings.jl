@@ -5838,16 +5838,6 @@ const SSH_PACKET_USED = 1
 """
 const SSH_PACKET_NOT_USED = 2
 
-"""
-$(TYPEDSIGNATURES)
-
-Manual copy of the upstream macro.
-"""
-function ssh_callbacks_init(callbacks::Union{ssh_callbacks_struct, ssh_bind_callbacks_struct,
-                                             ssh_server_callbacks_struct, ssh_channel_callbacks_struct})
-    callbacks.size = sizeof(typeof(callbacks))
-end
-
 # Manually wrapped for now until this is merged:
 # https://gitlab.com/libssh/libssh-mirror/-/merge_requests/538
 function sftp_channel_default_data_callback(session, channel, data, len, is_stderr, userdata)
