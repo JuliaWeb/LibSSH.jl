@@ -61,6 +61,16 @@ mutable struct Session
     end
 end
 
+function Base.unsafe_convert(::Type{lib.ssh_session}, session::Session)
+    if !isassigned(session)
+        throw(ArgumentError("Session is unassigned, cannot get a pointer from it"))
+    end
+
+    return session.ptr
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, session::Session) = Ptr{Cvoid}(Base.unsafe_convert(lib.ssh_session, session))
+
 function Base.show(io::IO, session::Session)
     if isopen(session)
         print(io, Session, "(host=$(session.host), port=$(session.port), user=$(session.user), connected=$(isconnected(session)))")
@@ -121,7 +131,7 @@ function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
     if isnothing(user)
         # Explicitly initialize the user, otherwise an error will be thrown when
         # retrieving it. Passing null will set it to the current user (see docs).
-        lib.ssh_options_set(session.ptr, SSH_OPTIONS_USER, C_NULL)
+        lib.ssh_options_set(session, SSH_OPTIONS_USER, C_NULL)
     else
         session.user = user
     end
@@ -173,7 +183,7 @@ function Base.close(session::Session)
 
     if isopen(session)
         disconnect(session)
-        lib.ssh_free(session.ptr)
+        lib.ssh_free(session)
         session.ptr = nothing
     end
 end
@@ -200,7 +210,7 @@ function get_error(session::Session)
         throw(ArgumentError("Session has been free'd, cannot get its error"))
     end
 
-    ret = lib.ssh_get_error(Ptr{Cvoid}(session.ptr))
+    ret = lib.ssh_get_error(session)
     return unsafe_string(ret)
 end
 
@@ -244,7 +254,7 @@ function Base.getproperty(session::Session, name::Symbol)
     if name == :port
         # The port is a special option with its own function
         port = Ref{Cuint}(0)
-        ret = lib.ssh_options_get_port(session.ptr, port; throw=false)
+        ret = lib.ssh_options_get_port(session, port; throw=false)
         value = UInt(port[])
     else
         # All properties supported by ssh_options_get() are strings, so we know
@@ -253,7 +263,7 @@ function Base.getproperty(session::Session, name::Symbol)
         option = SESSION_PROPERTY_OPTIONS[name][1]
 
         out = Ref{Ptr{Cchar}}()
-        ret = lib.ssh_options_get(session.ptr, option, out; throw=false)
+        ret = lib.ssh_options_get(session, option, out; throw=false)
     end
 
     if ret != 0
@@ -289,12 +299,12 @@ function Base.setproperty!(session::Session, name::Symbol, value)
         value_str = String(value)
         GC.@preserve value_str begin
             cvalue = Base.unsafe_convert(ctype, value_str)
-            ret = lib.ssh_options_set(session.ptr, option, Ptr{Cvoid}(cvalue); throw=false)
+            ret = lib.ssh_options_set(session, option, Ptr{Cvoid}(cvalue); throw=false)
         end
     else
         GC.@preserve value begin
             cvalue = Base.cconvert(ctype, value)
-            ret = lib.ssh_options_set(session.ptr, option, Ref(cvalue); throw=false)
+            ret = lib.ssh_options_set(session, option, Ref(cvalue); throw=false)
         end
     end
 
@@ -327,15 +337,15 @@ function Base.wait(session::Session; poll_timeout=0.1)
         throw(ArgumentError("poll_timeout=$(poll_timeout), it must be greater than 0"))
     end
 
-    if lib.ssh_is_blocking(session.ptr) == 1
+    if lib.ssh_is_blocking(session) == 1
         return
     end
 
-    poll_flags = lib.ssh_get_poll_flags(session.ptr)
+    poll_flags = lib.ssh_get_poll_flags(session)
     readable = (poll_flags & lib.SSH_READ_PENDING) > 0
     writable = (poll_flags & lib.SSH_WRITE_PENDING) > 0
 
-    fd = RawFD(lib.ssh_get_fd(session.ptr))
+    fd = RawFD(lib.ssh_get_fd(session))
     while isopen(session)
         result = _safe_poll_fd(fd, poll_timeout; readable, writable)
         if isnothing(result)
@@ -366,7 +376,7 @@ function connect(session::Session)
     end
 
     while true
-        ret = lib.ssh_connect(session.ptr)
+        ret = lib.ssh_connect(session)
 
         if ret == SSH_AGAIN
             wait(session)
@@ -399,7 +409,7 @@ function disconnect(session::Session)
             close(session.channels[i])
         end
 
-        lib.ssh_disconnect(session.ptr)
+        lib.ssh_disconnect(session)
     end
 end
 
@@ -409,7 +419,7 @@ $(TYPEDSIGNATURES)
 Wrapper around [`lib.ssh_is_connected()`](@ref).
 """
 function isconnected(session::Session)
-    isassigned(session) ? lib.ssh_is_connected(session.ptr) == 1 : false
+    isassigned(session) ? lib.ssh_is_connected(session) == 1 : false
 end
 
 """
@@ -429,7 +439,7 @@ function get_server_publickey(session::Session)
     end
 
     key_ref = Ref{lib.ssh_key}()
-    ret = lib.ssh_get_server_publickey(session.ptr, key_ref)
+    ret = lib.ssh_get_server_publickey(session, key_ref)
     if ret != SSH_OK
         throw(LibSSHException("Error when getting servers public key: $(ret)"))
     end
@@ -460,7 +470,7 @@ function is_known_server(session::Session; throw=true)
         Base.throw(ArgumentError("Session is disconnected, cannot check the servers public key"))
     end
 
-    status = KnownHosts(Int(lib.ssh_session_is_known_server(session.ptr)))
+    status = KnownHosts(Int(lib.ssh_session_is_known_server(session)))
     if throw && status != KnownHosts_Ok
         Base.throw(HostVerificationException(status))
     end
@@ -484,7 +494,7 @@ function update_known_hosts(session::Session)
         throw(ArgumentError("Session is disconnected, cannot get the servers public key to update the known hosts file"))
     end
 
-    ret = lib.ssh_session_update_known_hosts(session.ptr)
+    ret = lib.ssh_session_update_known_hosts(session)
     if ret != SSH_OK
         throw(LibSSHException("Could not update the users known hosts file: $(ret)"))
     end
@@ -778,7 +788,7 @@ function userauth_none(session::Session; throw=true)
     end
 
     while true
-        ret = AuthStatus(lib.ssh_userauth_none(session.ptr, C_NULL))
+        ret = AuthStatus(lib.ssh_userauth_none(session, C_NULL))
 
         if ret == AuthStatus_Again
             wait(session)
@@ -813,7 +823,7 @@ function userauth_list(session::Session; call_auth_none=true)
         userauth_none(session)
     end
 
-    ret = lib.ssh_userauth_list(session.ptr, C_NULL)
+    ret = lib.ssh_userauth_list(session, C_NULL)
     auth_methods = AuthMethod[]
     for method in instances(AuthMethod)
         if (Int(method) & ret) > 0
@@ -850,7 +860,7 @@ function userauth_password(session::Session, password::String; throw=true)
     while true
         GC.@preserve password begin
             password_cstr = Base.unsafe_convert(Ptr{Cchar}, password)
-            ret = AuthStatus(lib.ssh_userauth_password(session.ptr, C_NULL, password_cstr))
+            ret = AuthStatus(lib.ssh_userauth_password(session, C_NULL, password_cstr))
         end
 
         if ret == AuthStatus_Again
@@ -889,7 +899,7 @@ function userauth_gssapi(session::Session; throw=true)
     end
 
     ret = _session_trywait(session) do
-        lib.ssh_userauth_gssapi(session.ptr)
+        lib.ssh_userauth_gssapi(session)
     end
     status = AuthStatus(ret)
 
@@ -922,7 +932,7 @@ function userauth_kbdint(session::Session; throw=true)
     end
 
     ret = _session_trywait(session) do
-        lib.ssh_userauth_kbdint(session.ptr, C_NULL, C_NULL)
+        lib.ssh_userauth_kbdint(session, C_NULL, C_NULL)
     end
     status = AuthStatus(ret)
 
@@ -957,10 +967,10 @@ function userauth_kbdint_getprompts(session::Session)
     end
 
     prompts = KbdintPrompt[]
-    n_prompts = lib.ssh_userauth_kbdint_getnprompts(session.ptr)
+    n_prompts = lib.ssh_userauth_kbdint_getnprompts(session)
     for i in 0:n_prompts - 1
         echo_ref = Ref{Cchar}()
-        question = lib.ssh_userauth_kbdint_getprompt(session.ptr, i, echo_ref)
+        question = lib.ssh_userauth_kbdint_getprompt(session, i, echo_ref)
         push!(prompts, KbdintPrompt(question, Bool(echo_ref[])))
     end
 
@@ -987,13 +997,13 @@ function userauth_kbdint_setanswers(session::Session, answers::Vector{String})
         throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
 
-    n_prompts = lib.ssh_userauth_kbdint_getnprompts(session.ptr)
+    n_prompts = lib.ssh_userauth_kbdint_getnprompts(session)
     if n_prompts != length(answers)
         throw(ArgumentError("Server sent $(n_prompts) prompts, but was passed $(length(answers)) answers"))
     end
 
     for (i, answer) in enumerate(answers)
-        ret = lib.ssh_userauth_kbdint_setanswer(session.ptr, i - 1,
+        ret = lib.ssh_userauth_kbdint_setanswer(session, i - 1,
                                                 Base.cconvert(Cstring, answer))
         if ret != SSH_OK
             throw(LibSSHException("Error while setting answer $(i) with ssh_userauth_kbdint_setanswer(): $(ret)"))

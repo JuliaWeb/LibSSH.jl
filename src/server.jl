@@ -23,7 +23,7 @@ mutable struct SessionEvent
             throw(LibSSHException("Could not allocate ssh_event"))
         end
 
-        ret = lib.ssh_event_add_session(ptr, session.ptr)
+        ret = lib.ssh_event_add_session(ptr, session)
         if ret != SSH_OK
             lib.ssh_event_free(ptr)
             throw(LibSSHException("Could not add Session to SessionEvent: $(ret)"))
@@ -40,6 +40,14 @@ function _finalizer(event::SessionEvent)
     catch ex
         Threads.@spawn @error "Exception when finalizing SessionEvent" exception=(ex, catch_backtrace())
     end
+end
+
+function Base.unsafe_convert(::Type{lib.ssh_event}, event::SessionEvent)
+    if !isassigned(event)
+        throw(ArgumentError("SessionEvent is unassigned, cannot get a pointer from it"))
+    end
+
+    return event.ptr
 end
 
 """
@@ -67,7 +75,7 @@ function event_dopoll(event::SessionEvent)
         # Always check if the event is still assigned within the loop since it
         # may be closed at any time.
         ret = if isassigned(event)
-            lib.ssh_event_dopoll(event.ptr, 0)
+            lib.ssh_event_dopoll(event, 0)
         else
             SSH_ERROR
         end
@@ -98,11 +106,11 @@ function Base.close(event::SessionEvent)
         # return code because some other callback may have already removed the
         # session, which will cause this to return SSH_ERROR.
         if isassigned(event.session)
-            lib.ssh_event_remove_session(event.ptr, event.session.ptr)
+            lib.ssh_event_remove_session(event, event.session)
         end
 
         # Free the ssh_event
-        lib.ssh_event_free(event.ptr)
+        lib.ssh_event_free(event)
         event.ptr = nothing
     end
 end
@@ -193,6 +201,18 @@ mutable struct Bind
     end
 end
 
+Base.isassigned(bind::Bind) = !isnothing(bind.ptr)
+
+function Base.unsafe_convert(::Type{lib.ssh_bind}, bind::Bind)
+    if !isassigned(bind)
+        throw(ArgumentError("Bind is unassigned, cannot get a pointer from it"))
+    end
+
+    return bind.ptr
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, bind::Bind) = Ptr{Cvoid}(Base.unsafe_convert(lib.ssh_bind, bind))
+
 function Base.show(io::IO, bind::Bind)
     print(io, Bind, "(addr=$(bind.addr), port=$(bind.port))")
 end
@@ -204,7 +224,7 @@ Close and free the bind.
 """
 function Base.close(bind::Bind)
     if isopen(bind)
-        lib.ssh_bind_free(bind.ptr)
+        lib.ssh_bind_free(bind)
         bind.ptr = nothing
     end
 end
@@ -240,7 +260,7 @@ function get_error(bind::Bind)
         throw(ArgumentError("Bind data has been free'd, cannot get its error"))
     end
 
-    ret = lib.ssh_get_error(Ptr{Cvoid}(bind.ptr))
+    ret = lib.ssh_get_error(bind)
     return unsafe_string(ret)
 end
 
@@ -284,7 +304,7 @@ function Base.setproperty!(bind::Bind, name::Symbol, value)
                     Ref(Base.cconvert(ctype, value))
                 end
 
-                ret = lib.ssh_bind_options_set(bind.ptr, option, cvalue)
+                ret = lib.ssh_bind_options_set(bind, option, cvalue)
             end
         end
 
@@ -342,7 +362,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
         throw(ArgumentError("poll_timeout=$(poll_timeout), it must be greater than 0"))
     end
 
-    ret = lib.ssh_bind_listen(bind.ptr)
+    ret = lib.ssh_bind_listen(bind)
     if ret != SSH_OK
         # If binding fails, we wake up any waiting tasks and throw an exception
         notify(bind._listener_event)
@@ -353,7 +373,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
                                         Cint,
                                         (lib.ssh_session, lib.ssh_message, Ptr{Cvoid}))
 
-    fd = RawFD(lib.ssh_bind_get_fd(bind.ptr))
+    fd = RawFD(lib.ssh_bind_get_fd(bind))
     while isopen(bind)
         # Notify listeners that we've started
         if !bind._listener_started
@@ -384,7 +404,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
 
         # Accept the new connection
         session_ptr = lib.ssh_new()
-        ret = lib.ssh_bind_accept(bind.ptr, session_ptr)
+        ret = lib.ssh_bind_accept(bind, session_ptr)
         if ret != SSH_OK
             throw(LibSSHException("Error when accepting new connection: $(ret)"))
         end
@@ -429,7 +449,7 @@ Wrapper around [`lib.ssh_set_auth_methods()`](@ref).
 """
 function set_auth_methods(session::Session, auth_methods::Vector{AuthMethod})
     bitflag = reduce(|, Int.(auth_methods))
-    lib.ssh_set_auth_methods(session.ptr, bitflag)
+    lib.ssh_set_auth_methods(session, bitflag)
 end
 
 """
@@ -452,7 +472,7 @@ Non-blocking wrapper around [`lib.ssh_handle_key_exchange()`](@ref). Returns
 """
 function handle_key_exchange(session::Session)::Bool
     ret = _session_trywait(session) do
-        lib.ssh_handle_key_exchange(session.ptr)
+        lib.ssh_handle_key_exchange(session)
     end
 
     return ret == SSH_OK
@@ -464,7 +484,7 @@ $(TYPEDSIGNATURES)
 Set callbacks for a Session. Wrapper around [`lib.ssh_set_server_callbacks()`](@ref).
 """
 function set_server_callbacks(session::Session, callbacks::ServerCallbacks)
-    ret = lib.ssh_set_server_callbacks(session.ptr, Ref(callbacks.cb_struct::lib.ssh_server_callbacks_struct))
+    ret = lib.ssh_set_server_callbacks(session, Ref(callbacks.cb_struct::lib.ssh_server_callbacks_struct))
     if ret != SSH_OK
         throw(LibSSHException("Error setting server callbacks: $(ret)"))
     end
@@ -550,26 +570,7 @@ end
 
 function on_channel_exec_request(session, sshchan, command, client)::Bool
     _add_log_event!(client, :channel_exec_request, command)
-
-    # Note that we ignore the `sshchan` argument in favour of
-    # `demo_server.sshchan`. That's extremely important! `sshchan` is a
-    # non-owning SshChannel created by the callback over the underlying
-    # lib.ssh_channel pointer, which means that `sshchan` and
-    # `demo_server.sshchan` are two distinct Julia objects with pointers to the
-    # same lib.ssh_channel struct.
-    #
-    # If we were to pass `sshchan` instead, exec_command() would attempt to
-    # close `sshchan`, which would free the underlying lib.ssh_channel, which
-    # would cause a double-free later when we close
-    # `demo_server.sshchan`. That's why close()'ing non-owning SshChannels is
-    # forbidden.
-    idx = findfirst(x -> x.ptr == sshchan.ptr, client.unclaimed_channels)
-    if isnothing(idx)
-        @error "Couldn't find the requested SshChannel in the client"
-        return false
-    end
-
-    owning_sshchan = popat!(client.unclaimed_channels, idx)
+    owning_sshchan = find_unclaimed_channel(client, sshchan)
     push!(client.channel_operations, CommandExecutor(command, owning_sshchan, client.env))
 
     return true
@@ -577,6 +578,14 @@ end
 
 function on_channel_eof(session, sshchan, client)::Nothing
     _add_log_event!(client, :channel_eof, true)
+
+    # For SFTP clients, close the channel as soon as we get an EOF
+    for op in client.channel_operations
+        if op isa SftpOperation && op.sshchan.ptr == sshchan.ptr
+            close(op)
+        end
+    end
+
     return nothing
 end
 
@@ -644,7 +653,7 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
             return false
         else
             # Now they're responding to our prompts
-            n_answers = lib.ssh_userauth_kbdint_getnanswers(session.ptr)
+            n_answers = lib.ssh_userauth_kbdint_getnanswers(session)
 
             # If they didn't return the correct number of answers, deny the request
             if n_answers != 2
@@ -654,8 +663,8 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
             end
 
             # Get the answers and check them
-            password = lib.ssh_userauth_kbdint_getanswer(session.ptr, 0)
-            token = lib.ssh_userauth_kbdint_getanswer(session.ptr, 1)
+            password = lib.ssh_userauth_kbdint_getanswer(session, 0)
+            token = lib.ssh_userauth_kbdint_getanswer(session, 1)
             if password == "foo" && token == "bar"
                 _add_log_event!(client, :auth_kbdint, "accepted with '$password' and '$token'")
                 lib.ssh_message_auth_reply_success(msg, Int(false))
@@ -682,6 +691,8 @@ end
     unclaimed_channels::Vector{ssh.SshChannel} = ssh.SshChannel[]
     channel_operations::Vector{Any} = []
 
+    sftp_session::Union{lib.sftp_session, Nothing} = nothing
+
     env::Dict{String, String} = Dict{String, String}()
 
     task::Union{Task, Nothing} = nothing
@@ -703,6 +714,31 @@ function Base.close(client::Client)
     close(client.session_event)
     close(client.session)
     wait(client.task)
+end
+
+#=
+This is a helper function to find an unclaimed, owning SshChannel in a
+Client. It's meant to be called from within callbacks.
+
+Note that we ignore the callbacks usual `sshchan` argument in favour of the
+Client's owning SshChannel. That's extremely important! `sshchan` is a
+non-owning SshChannel created by the callback over the underlying
+lib.ssh_channel pointer, which means that `sshchan` and some owning
+`client.sshchan` are two distinct Julia objects with pointers to the same
+lib.ssh_channel struct.
+
+If we were to pass `sshchan` instead, exec_command() would attempt to close
+`sshchan`, which would free the underlying lib.ssh_channel, which would cause a
+double-free later when we close `client.sshchan`. That's why close()'ing
+non-owning SshChannels is forbidden.
+=#
+function find_unclaimed_channel(client::Client, sshchan)
+    idx = findfirst(x -> x.ptr == sshchan.ptr, client.unclaimed_channels)
+    if isnothing(idx)
+        error("Couldn't find the requested SshChannel in the client")
+    end
+
+    return popat!(client.unclaimed_channels, idx)
 end
 
 """
@@ -843,7 +879,8 @@ function _handle_client(session::ssh.Session, ds::DemoServer)
                                                 on_close=on_channel_close,
                                                 on_pty_request=on_channel_pty_request,
                                                 on_exec_request=on_channel_exec_request,
-                                                on_env_request=on_channel_env_request)
+                                                on_env_request=on_channel_env_request,
+                                                on_subsystem_request=on_channel_subsystem_request)
     client.task = current_task()
 
     ssh.set_server_callbacks(session, server_callbacks)
@@ -1082,6 +1119,55 @@ function _forward_socket_data(forwarder::Forwarder)
             close(sock)
         end
     end
+end
+
+## SFTP
+
+function on_channel_subsystem_request(session, sshchan, subsystem, client)::Bool
+    _add_log_event!(client, :channel_subsystem_request, subsystem)
+
+    if subsystem == "sftp"
+        ptr = lib.sftp_server_new(session, sshchan)
+        if ptr == C_NULL
+            @error "Call to lib.sftp_server_new() failed"
+            return false
+        end
+
+        owning_sshchan = find_unclaimed_channel(client, sshchan)
+        client.sftp_session = ptr
+        client.channel_callbacks.on_data = on_sftp_data
+
+        push!(client.channel_operations, SftpOperation(ptr, owning_sshchan))
+
+        return true
+    end
+
+    return false
+end
+
+function on_sftp_data(session, sshchan, data, is_stderr, client)
+    _add_log_event!(client, :channel_sftp_data, "$(length(data)) bytes")
+
+    lib.sftp_channel_default_data_callback(session, sshchan,
+                                           pointer(data), length(data),
+                                           is_stderr,
+                                           Ref(Ptr{Cvoid}(client.sftp_session)))
+end
+
+mutable struct SftpOperation
+    sftp_session::Union{lib.sftp_session, Nothing}
+    sshchan::ssh.SshChannel
+end
+
+getchannels(op::SftpOperation) = [op.sshchan]
+
+function Base.close(op::SftpOperation)
+    if !isnothing(op.sftp_session)
+        lib.sftp_server_free(op.sftp_session)
+        op.sftp_session = nothing
+    end
+
+    close(op.sshchan)
 end
 
 end

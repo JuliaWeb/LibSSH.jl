@@ -154,7 +154,7 @@ cd(@__DIR__) do
     headers = [joinpath(include_dir, "libssh", name) for name in
                ["libssh.h", "libssh_version.h", "sftp.h", "server.h", "callbacks.h"]]
     args = Clang.get_default_args()
-    push!(args, "-I$include_dir")
+    push!(args, "-I$include_dir", "-DWITH_SERVER=1")
 
     # Generate the bindings
     ctx = Clang.create_context(headers, args, options)

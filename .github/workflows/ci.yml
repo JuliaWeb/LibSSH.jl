@@ -56,10 +56,17 @@ jobs:
           arch: ${{ matrix.arch }}
 
       # Cache everything
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v2
 
       # Run the tests
       - uses: julia-actions/julia-runtest@latest
+
+      # Compute coverage
+      - uses: julia-actions/julia-processcoverage@v1
+      - uses: codecov/codecov-action@v4
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   docs:
     name: Documentation
@@ -75,7 +82,7 @@ jobs:
       - uses: julia-actions/setup-julia@latest
         with:
           version: '1'
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v2
       - name: Install dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
 

@@ -202,6 +202,22 @@ end
         @test length(demo_server.clients) == 2
     end
 
+    sftp_cmd(cmd::Cmd) = ignorestatus(`sshpass -p bar sftp -F none -o NoHostAuthenticationForLocalhost=yes -P 2222 $cmd`)
+
+    @testset "SFTP" begin
+        DemoServer(2222; verbose=false, log_verbosity=ssh.SSH_LOG_NOLOG, password="bar") do
+            mktempdir() do tmpdir
+                src = joinpath(tmpdir, "foo")
+                dest = joinpath(tmpdir, "bar")
+                touch(src)
+
+                proc = run(sftp_cmd(`localhost:$(src) $(dest)`))
+                @test success(proc)
+                @test isfile(dest)
+            end
+        end
+    end
+
     # Test that the DemoServer cleans up lingering sessions
     server_task = Threads.@spawn DemoServer(2222; timeout=10) do
         session = ssh.Session("127.0.0.1", 2222)

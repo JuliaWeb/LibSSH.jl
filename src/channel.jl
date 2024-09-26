@@ -71,7 +71,7 @@ function SshChannel(session::Session)
         throw(ArgumentError("Cannot create a SshChannel on an unconnected Session"))
     end
 
-    ptr = lib.ssh_channel_new(session.ptr)
+    ptr = lib.ssh_channel_new(session)
     if ptr == C_NULL
         throw(LibSSHException("Could not allocate ssh_channel (hint: check that the session is authenticated)"))
     end
@@ -103,6 +103,14 @@ function SshChannel(f::Function, session::Session)
     end
 end
 
+function Base.unsafe_convert(::Type{lib.ssh_channel}, sshchan::SshChannel)
+    if !isassigned(sshchan)
+        throw(ArgumentError("SshChannel is unassigned, cannot get a pointer from it"))
+    end
+
+    return sshchan.ptr
+end
+
 function Base.show(io::IO, sshchan::SshChannel)
     print(io, SshChannel, "(ptr=$(sshchan.ptr), owning=$(sshchan.owning))")
 end
@@ -122,7 +130,7 @@ Checks if the channel is open. Wrapper around
 """
 function Base.isopen(sshchan::SshChannel)
     if isassigned(sshchan) && (isnothing(sshchan.session) || isconnected(sshchan.session))
-        lib.ssh_channel_is_open(sshchan.ptr) != 0
+        lib.ssh_channel_is_open(sshchan) != 0
     else
         false
     end
@@ -172,7 +180,7 @@ function Base.close(sshchan::SshChannel)
 
                 if isopen(sshchan)
                     # This will trigger callbacks
-                    ret = lib.ssh_channel_close(sshchan.ptr)
+                    ret = lib.ssh_channel_close(sshchan)
                     if ret != SSH_OK
                         throw(LibSSHException("Closing SshChannel failed: $(ret)"))
                     end
@@ -181,7 +189,7 @@ function Base.close(sshchan::SshChannel)
 
             # Free the memory
             if isassigned(sshchan)
-                lib.ssh_channel_free(sshchan.ptr)
+                lib.ssh_channel_free(sshchan)
                 sshchan.ptr = nothing
             end
         end
@@ -220,7 +228,7 @@ function Base.write(sshchan::SshChannel, data::Vector{UInt8}; stderr::Bool=false
 
     GC.@preserve data begin
         ptr = Ptr{Cvoid}(pointer(data))
-        ret = writer(sshchan.ptr, ptr, length(data))
+        ret = writer(sshchan, ptr, length(data))
     end
     if ret == SSH_ERROR
         throw(LibSSHException("Error when writing to channel: $(ret)"))
@@ -241,7 +249,7 @@ Wrapper around [`lib.ssh_channel_is_eof()`](@ref).
 """
 function Base.eof(sshchan::SshChannel)
     if isassigned(sshchan)
-        lib.ssh_channel_is_eof(sshchan.ptr) != 0
+        lib.ssh_channel_is_eof(sshchan) != 0
     else
         true
     end
@@ -267,7 +275,7 @@ Wrapper around [`lib.ssh_set_channel_callbacks()`](@ref). Will throw a
 [`LibSSHException`](@ref) if setting the callbacks failed.
 """
 function set_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.ChannelCallbacks)
-    ret = lib.ssh_set_channel_callbacks(sshchan.ptr, Ref(callbacks.cb_struct))
+    ret = lib.ssh_set_channel_callbacks(sshchan, Ref(callbacks.cb_struct))
     if ret != SSH_OK
         throw(LibSSHException("Error when setting channel callbacks: $(ret)"))
     end
@@ -294,7 +302,7 @@ function Base.closewrite(sshchan::SshChannel)
         throw(ArgumentError("SshChannel has been closed, cannot send EOF"))
     end
 
-    ret = lib.ssh_channel_send_eof(sshchan.ptr)
+    ret = lib.ssh_channel_send_eof(sshchan)
     if ret != SSH_OK
         throw(LibSSHException("Error when sending EOF on channel: $(ret)"))
     end
@@ -314,7 +322,7 @@ function channel_request_send_exit_status(sshchan::SshChannel, status::Int)
         throw(ArgumentError("SshChannel has been closed, cannot send exit status"))
     end
 
-    ret = lib.ssh_channel_request_send_exit_status(sshchan.ptr, Cint(status))
+    ret = lib.ssh_channel_request_send_exit_status(sshchan, Cint(status))
     if ret != SSH_OK
         throw(LibSSHException("Error when sending exit status on channel: $(ret)"))
     end
@@ -357,7 +365,7 @@ function poll_loop(sshchan::SshChannel; throw=true)
 
             # Note that we don't actually read any data in this loop, that's
             # handled by the callbacks, which are called by ssh_channel_poll().
-            ret = lib.ssh_channel_poll(sshchan.ptr, io_stream)
+            ret = lib.ssh_channel_poll(sshchan, io_stream)
 
             # Break if there was an error, or if an EOF has been sent. We use a
             # @goto here (Knuth forgive me) to break out of the outer loop as
@@ -483,7 +491,7 @@ function _exec_command(process::SshProcess)
 
     # Open the session channel
     ret = _session_trywait(session) do
-        lib.ssh_channel_open_session(sshchan.ptr)
+        lib.ssh_channel_open_session(sshchan)
     end
     if ret != SSH_OK
         throw(LibSSHException("Failed to open a session channel: $(ret)"))
@@ -498,7 +506,7 @@ function _exec_command(process::SshProcess)
             # when we send `name`.
             name, value = String.(split(env_var, "="))
             ret = _session_trywait(session) do
-                lib.ssh_channel_request_env(sshchan.ptr, name, value)
+                lib.ssh_channel_request_env(sshchan, name, value)
             end
 
             if ret != SSH_OK
@@ -511,7 +519,7 @@ function _exec_command(process::SshProcess)
     # Make the request
     ret = _session_trywait(session) do
         GC.@preserve cmd_str begin
-            lib.ssh_channel_request_exec(sshchan.ptr, Base.unsafe_convert(Ptr{Cchar}, cmd_str))
+            lib.ssh_channel_request_exec(sshchan, Base.unsafe_convert(Ptr{Cchar}, cmd_str))
         end
     end
     if ret != SSH_OK
@@ -742,7 +750,7 @@ mutable struct _ForwardingClient
         sshchan = SshChannel(forwarder._session)
         ret = _session_trywait(forwarder._session) do
             GC.@preserve remotehost local_ip begin
-                lib.ssh_channel_open_forward(sshchan.ptr,
+                lib.ssh_channel_open_forward(sshchan,
                                              Base.unsafe_convert(Ptr{Cchar}, remotehost), remoteport,
                                              Base.unsafe_convert(Ptr{Cchar}, local_ip), forwarder.localport)
             end

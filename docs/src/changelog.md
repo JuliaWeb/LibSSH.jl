@@ -14,6 +14,8 @@ Changelog](https://keepachangelog.com).
 - Implemented [`Base.readchomp(::Cmd)`](@ref) for remote commands ([#12]).
 - Add support for passing environment variables to remote commands with
   [`Base.run(::Cmd)`](@ref) ([#12]).
+- Made it possible to assign callbacks to [`Callbacks.ServerCallbacks`](@ref) and
+  [`Callbacks.ChannelCallbacks`](@ref) by property ([#14]).
 
 ### Fixed
 

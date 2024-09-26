@@ -3839,6 +3839,47 @@ function sftp_home_directory(sftp, username)
     @ccall libssh.sftp_home_directory(sftp::sftp_session, username::Ptr{Cchar})::Ptr{Cchar}
 end
 
+"""
+    sftp_server_new(session, chan)
+
+Create a new sftp server session.
+
+# Arguments
+* `session`: The ssh session to use.
+* `chan`: The ssh channel to use.
+# Returns
+A new sftp server session.
+"""
+function sftp_server_new(session, chan)
+    @ccall libssh.sftp_server_new(session::ssh_session, chan::ssh_channel)::sftp_session
+end
+
+"""
+    sftp_server_init(sftp)
+
+Initialize the sftp server.
+
+# Arguments
+* `sftp`: The sftp session to init.
+# Returns
+0 on success, < 0 on error.
+"""
+function sftp_server_init(sftp)
+    @ccall libssh.sftp_server_init(sftp::sftp_session)::Cint
+end
+
+"""
+    sftp_server_free(sftp)
+
+Close and deallocate a sftp server session.
+
+# Arguments
+* `sftp`: The sftp session handle to free.
+"""
+function sftp_server_free(sftp)
+    @ccall libssh.sftp_server_free(sftp::sftp_session)::Cvoid
+end
+
 function sftp_get_client_message(sftp)
     @ccall libssh.sftp_get_client_message(sftp::sftp_session)::sftp_client_message
 end
@@ -4845,6 +4886,25 @@ mutable struct ssh_server_callbacks_struct
     gssapi_accept_sec_ctx_function::ssh_gssapi_accept_sec_ctx_callback
     gssapi_verify_mic_function::ssh_gssapi_verify_mic_callback
 end
+function Base.getproperty(x::Ptr{ssh_server_callbacks_struct}, f::Symbol)
+    f === :size && return Ptr{Csize_t}(x + 0)
+    f === :userdata && return Ptr{Ptr{Cvoid}}(x + 8)
+    f === :auth_password_function && return Ptr{ssh_auth_password_callback}(x + 16)
+    f === :auth_none_function && return Ptr{ssh_auth_none_callback}(x + 24)
+    f === :auth_gssapi_mic_function && return Ptr{ssh_auth_gssapi_mic_callback}(x + 32)
+    f === :auth_pubkey_function && return Ptr{ssh_auth_pubkey_callback}(x + 40)
+    f === :service_request_function && return Ptr{ssh_service_request_callback}(x + 48)
+    f === :channel_open_request_session_function && return Ptr{ssh_channel_open_request_session_callback}(x + 56)
+    f === :gssapi_select_oid_function && return Ptr{ssh_gssapi_select_oid_callback}(x + 64)
+    f === :gssapi_accept_sec_ctx_function && return Ptr{ssh_gssapi_accept_sec_ctx_callback}(x + 72)
+    f === :gssapi_verify_mic_function && return Ptr{ssh_gssapi_verify_mic_callback}(x + 80)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{ssh_server_callbacks_struct}, f::Symbol, v)
+    unsafe_store!(getproperty(x, f), v)
+end
+
 
 const ssh_server_callbacks = Ptr{ssh_server_callbacks_struct}
 
@@ -5198,6 +5258,33 @@ mutable struct ssh_channel_callbacks_struct
     channel_open_response_function::ssh_channel_open_resp_callback
     channel_request_response_function::ssh_channel_request_resp_callback
 end
+function Base.getproperty(x::Ptr{ssh_channel_callbacks_struct}, f::Symbol)
+    f === :size && return Ptr{Csize_t}(x + 0)
+    f === :userdata && return Ptr{Ptr{Cvoid}}(x + 8)
+    f === :channel_data_function && return Ptr{ssh_channel_data_callback}(x + 16)
+    f === :channel_eof_function && return Ptr{ssh_channel_eof_callback}(x + 24)
+    f === :channel_close_function && return Ptr{ssh_channel_close_callback}(x + 32)
+    f === :channel_signal_function && return Ptr{ssh_channel_signal_callback}(x + 40)
+    f === :channel_exit_status_function && return Ptr{ssh_channel_exit_status_callback}(x + 48)
+    f === :channel_exit_signal_function && return Ptr{ssh_channel_exit_signal_callback}(x + 56)
+    f === :channel_pty_request_function && return Ptr{ssh_channel_pty_request_callback}(x + 64)
+    f === :channel_shell_request_function && return Ptr{ssh_channel_shell_request_callback}(x + 72)
+    f === :channel_auth_agent_req_function && return Ptr{ssh_channel_auth_agent_req_callback}(x + 80)
+    f === :channel_x11_req_function && return Ptr{ssh_channel_x11_req_callback}(x + 88)
+    f === :channel_pty_window_change_function && return Ptr{ssh_channel_pty_window_change_callback}(x + 96)
+    f === :channel_exec_request_function && return Ptr{ssh_channel_exec_request_callback}(x + 104)
+    f === :channel_env_request_function && return Ptr{ssh_channel_env_request_callback}(x + 112)
+    f === :channel_subsystem_request_function && return Ptr{ssh_channel_subsystem_request_callback}(x + 120)
+    f === :channel_write_wontblock_function && return Ptr{ssh_channel_write_wontblock_callback}(x + 128)
+    f === :channel_open_response_function && return Ptr{ssh_channel_open_resp_callback}(x + 136)
+    f === :channel_request_response_function && return Ptr{ssh_channel_request_resp_callback}(x + 144)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{ssh_channel_callbacks_struct}, f::Symbol, v)
+    unsafe_store!(getproperty(x, f), v)
+end
+
 
 const ssh_channel_callbacks = Ptr{ssh_channel_callbacks_struct}
 
@@ -5527,7 +5614,7 @@ const LIBSSH_VERSION_MAJOR = 0
 
 const LIBSSH_VERSION_MINOR = 11
 
-const LIBSSH_VERSION_MICRO = 0
+const LIBSSH_VERSION_MICRO = 1
 
 const LIBSSH_VERSION_INT = SSH_VERSION_INT(LIBSSH_VERSION_MAJOR, LIBSSH_VERSION_MINOR, LIBSSH_VERSION_MICRO)
 
@@ -5751,14 +5838,10 @@ const SSH_PACKET_USED = 1
 """
 const SSH_PACKET_NOT_USED = 2
 
-"""
-$(TYPEDSIGNATURES)
-
-Manual copy of the upstream macro.
-"""
-function ssh_callbacks_init(callbacks::Union{ssh_callbacks_struct, ssh_bind_callbacks_struct,
-                                             ssh_server_callbacks_struct, ssh_channel_callbacks_struct})
-    callbacks.size = sizeof(typeof(callbacks))
+# Manually wrapped for now until this is merged:
+# https://gitlab.com/libssh/libssh-mirror/-/merge_requests/538
+function sftp_channel_default_data_callback(session, channel, data, len, is_stderr, userdata)
+    @ccall libssh.sftp_channel_default_data_callback(session::ssh_session, channel::ssh_channel, data::Ptr{Cvoid}, len::UInt32, is_stderr::Cint, userdata::Ptr{Cvoid})::Cint
 end
 
 
