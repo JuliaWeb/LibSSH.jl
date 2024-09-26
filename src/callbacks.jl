@@ -158,6 +158,8 @@ mutable struct ServerCallbacks
         and they will be unusable after the callback has been executed.
 
     # Arguments
+    All of these are also properties that can be set after creation.
+
     - `userdata`: An arbitrary object that will be passed to each callback.
     - [`on_auth_password`](@ref lib.ssh_auth_password_callback): `f(::Session, ::String, ::String, userdata)::AuthStatus`
     - [`on_auth_none`](@ref lib.ssh_auth_none_callback): `f(::Session, ::String, userdata)::AuthStatus`
@@ -187,35 +189,53 @@ mutable struct ServerCallbacks
                    Dict{Symbol, Any}(),
                    Dict{Symbol, Any}())
 
-        auth_password_cfunc = @_gencb(:auth_password, on_auth_password,
-                                      ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
-                                      Cint, (lib.ssh_session, Cstring, Cstring, Ptr{Cvoid}))
-        auth_none_cfunc = @_gencb(:auth_none, on_auth_none,
-                                  ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
-                                  Cint, (lib.ssh_session, Cstring, Ptr{Cvoid}))
-        auth_gssapi_cfunc = @_gencb(:auth_gssapi, on_auth_gssapi_mic,
-                                    ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
-                                    Cint, (lib.ssh_session, Cstring, Cstring, Ptr{Cvoid}))
-        auth_pubkey_cfunc = @_gencb(:auth_pubkey, on_auth_pubkey,
-                                    ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
-                                    Cint, (lib.ssh_session, Cstring, lib.ssh_key, Cchar, Ptr{Cvoid}))
-
-        service_request_cfunc = @_gencb(:service_request, on_service_request,
-                                        Bool, false, ret -> ret ? 0 : -1,
-                                        Cint, (lib.ssh_session, Cstring, Ptr{Cvoid}))
-        open_request_cfunc = @_gencb(:channel_open, on_channel_open_request_session,
-                                     Union{ssh.SshChannel, Nothing}, nothing, ret -> isnothing(ret) ? lib.ssh_channel() : ret.ptr,
-                                     lib.ssh_channel, (lib.ssh_session, Ptr{Cvoid}))
-
         self.cb_struct = lib.ssh_server_callbacks_struct(sizeof(lib.ssh_server_callbacks_struct), # size (usually done with ssh_callback_init())
                                                          pointer_from_objref(self), # userdata points to self
-                                                         auth_password_cfunc, auth_none_cfunc,
-                                                         auth_gssapi_cfunc, auth_pubkey_cfunc,
-                                                         service_request_cfunc, open_request_cfunc,
+                                                         C_NULL, C_NULL,
+                                                         C_NULL, C_NULL,
+                                                         C_NULL, C_NULL,
                                                          C_NULL, C_NULL,
                                                          C_NULL)
+        self.on_auth_password = on_auth_password
+        self.on_auth_none = on_auth_none
+        self.on_auth_gssapi_mic = on_auth_gssapi_mic
+        self.on_auth_pubkey = on_auth_pubkey
+        self.on_service_request = on_service_request
+        self.on_channel_open_request_session = on_channel_open_request_session
 
         return self
+    end
+end
+
+function Base.setproperty!(self::ServerCallbacks, name::Symbol, value)
+    ptr = self.cb_struct
+
+    if name === :on_auth_password
+        ptr.auth_password_function = @_gencb(:auth_password, value,
+                                             ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
+                                             Cint, (lib.ssh_session, Cstring, Cstring, Ptr{Cvoid}))
+    elseif name === :on_auth_none
+        ptr.auth_none_function = @_gencb(:auth_none, value,
+                                         ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
+                                         Cint, (lib.ssh_session, Cstring, Ptr{Cvoid}))
+    elseif name === :on_auth_gssapi_mic
+        ptr.auth_gssapi_mic_function = @_gencb(:auth_gssapi, value,
+                                               ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
+                                               Cint, (lib.ssh_session, Cstring, Cstring, Ptr{Cvoid}))
+    elseif name === :on_auth_pubkey
+        ptr.auth_pubkey_function = @_gencb(:auth_pubkey, value,
+                                           ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
+                                           Cint, (lib.ssh_session, Cstring, lib.ssh_key, Cchar, Ptr{Cvoid}))
+    elseif name === :on_service_request
+        ptr.service_request_function = @_gencb(:service_request, value,
+                                               Bool, false, ret -> ret ? 0 : -1,
+                                               Cint, (lib.ssh_session, Cstring, Ptr{Cvoid}))
+    elseif name === :on_channel_open_request_session
+        ptr.channel_open_request_session_function = @_gencb(:channel_open, value,
+                                                            Union{ssh.SshChannel, Nothing}, nothing, ret -> isnothing(ret) ? lib.ssh_channel() : ret.ptr,
+                                                            lib.ssh_channel, (lib.ssh_session, Ptr{Cvoid}))
+    else
+        setfield!(self, name, value)
     end
 end
 
@@ -269,6 +289,8 @@ mutable struct ChannelCallbacks
         and they will be unusable after the callback has been executed.
 
     # Arguments
+    All of these are also properties that can be set after creation.
+
     - `userdata`: An arbitrary object that will be passed to each callback
        function.
     - [`on_data`](@ref lib.ssh_channel_data_callback): `f(::Session, ::SshChannel, ::Vector{UInt8}, Int, userdata)::Int`
@@ -315,77 +337,118 @@ mutable struct ChannelCallbacks
                    Dict{Symbol, Any}(),
                    Dict{Symbol, Any}())
 
-        # Why do some of these callbacks use 1 for denied and some -1? Who knows ¯\_(ツ)_/¯
-        data_cfunc                  = @_gencb(:channel_data, on_data,
-                                              Int, 0, Cint,
-                                              Cint, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}, Cuint, Cint, Ptr{Cvoid}))
-        eof_cfunc                   = @_gencb(:channel_eof, on_eof,
-                                              Nothing, nothing, identity,
-                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
-        close_cfunc                 = @_gencb(:channel_close, on_close,
-                                              Nothing, nothing, identity,
-                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
-        signal_cfunc                = @_gencb(:channel_signal, on_signal,
-                                              Nothing, nothing, identity,
-                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
-
-        exit_status_cfunc           = @_gencb(:channel_exit_status, on_exit_status,
-                                              Nothing, nothing, identity,
-                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Cint, Ptr{Cvoid}))
-        exit_signal_cfunc           = @_gencb(:channel_exit_signal, on_exit_signal,
-                                              Nothing, nothing, identity,
-                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Cstring, Cint, Cstring, Cstring, Ptr{Cvoid}))
-
-        pty_request_cfunc           = @_gencb(:channel_pty_request, on_pty_request,
-                                              Bool, false, ret -> Cint(ret ? 0 : -1),
-                                              Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Cint, Cint, Cint, Cint, Ptr{Cvoid}))
-        shell_request_cfunc         = @_gencb(:channel_shell_request, on_shell_request,
-                                              Bool, false, ret -> Cint(ret ? 0 : 1),
-                                              Cint, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
-        auth_agent_req_cfunc        = @_gencb(:channel_auth_agent_req, on_auth_agent_req,
-                                              Nothing, nothing, identity,
-                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
-        x11_req_cfunc               = @_gencb(:channel_x11_req, on_x11_req,
-                                              Nothing, nothing, identity,
-                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Cint, Cstring, Cstring, Cuint, Ptr{Cvoid}))
-        pty_window_change_cfunc     = @_gencb(:channel_pty_window_change, on_pty_window_change,
-                                              Bool, false, ret -> Cint(ret ? 0 : -1),
-                                              Cint, (lib.ssh_session, lib.ssh_channel, Cint, Cint, Cint, Cint, Ptr{Cvoid}))
-
-        exec_request_cfunc          = @_gencb(:channel_exec_request, on_exec_request,
-                                              Bool, false, ret -> Cint(ret ? 0 : 1),
-                                              Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
-        env_request_cfunc           = @_gencb(:channel_env_request, on_env_request,
-                                              Bool, false, ret -> Cint(ret ? 0 : 1),
-                                              Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Cstring, Ptr{Cvoid}))
-
-        subsystem_request_cfunc     = @_gencb(:channel_subsystem_request, on_subsystem_request,
-                                              Bool, false, ret -> Cint(ret ? 0 : 1),
-                                              Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
-        write_wontblock_cfunc       = @_gencb(:channel_write_wontblock, on_write_wontblock,
-                                              Int, 0, Cint,
-                                              Cint, (lib.ssh_session, lib.ssh_channel, Cuint, Ptr{Cvoid}))
-        open_response_cfunc         = @_gencb(:channel_open_response, on_open_response,
-                                              Nothing, nothing, identity,
-                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Bool, Ptr{Cvoid}))
-        request_response_cfunc      = @_gencb(:channel_request_response, on_request_response,
-                                              Nothing, nothing, identity,
-                                              Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
-
         self.cb_struct = lib.ssh_channel_callbacks_struct(sizeof(lib.ssh_channel_callbacks_struct), # size (see: ssh_callback_init())
                                                           pointer_from_objref(self), # userdata points to self
-                                                          data_cfunc, eof_cfunc,
-                                                          close_cfunc, signal_cfunc,
-                                                          exit_status_cfunc, exit_signal_cfunc,
-                                                          pty_request_cfunc, shell_request_cfunc,
-                                                          auth_agent_req_cfunc, x11_req_cfunc,
-                                                          pty_window_change_cfunc, exec_request_cfunc,
-                                                          env_request_cfunc, subsystem_request_cfunc,
-                                                          write_wontblock_cfunc,
-                                                          open_response_cfunc,
-                                                          request_response_cfunc)
+                                                          C_NULL, C_NULL,
+                                                          C_NULL, C_NULL,
+                                                          C_NULL, C_NULL,
+                                                          C_NULL, C_NULL,
+                                                          C_NULL, C_NULL,
+                                                          C_NULL, C_NULL,
+                                                          C_NULL, C_NULL,
+                                                          C_NULL,
+                                                          C_NULL,
+                                                          C_NULL)
+        self.on_data = on_data
+        self.on_eof = on_eof
+        self.on_close = on_close
+        self.on_signal = on_signal
+        self.on_exit_status = on_exit_status
+        self.on_exit_signal = on_exit_signal
+        self.on_pty_request = on_pty_request
+        self.on_shell_request = on_shell_request
+        self.on_auth_agent_req = on_auth_agent_req
+        self.on_x11_req = on_x11_req
+        self.on_pty_window_change = on_pty_window_change
+        self.on_exec_request = on_exec_request
+        self.on_env_request = on_env_request
+        self.on_subsystem_request = on_subsystem_request
+        self.on_write_wontblock = on_write_wontblock
+        self.on_open_response = on_open_response
+        self.on_request_response = on_request_response
 
         return self
+    end
+end
+
+function Base.setproperty!(self::ChannelCallbacks, name::Symbol, value)
+    ptr = self.cb_struct
+
+    # Why do some of these callbacks use 1 for denied and some -1? Who knows ¯\_(ツ)_/¯
+    if name === :on_data
+        ptr.channel_data_function                  = @_gencb(:channel_data, value,
+                                                     Int, 0, Cint,
+                                                     Cint, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}, Cuint, Cint, Ptr{Cvoid}))
+    elseif name === :on_eof
+        ptr.channel_eof_function                   = @_gencb(:channel_eof, value,
+                                                     Nothing, nothing, identity,
+                                                     Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
+    elseif name === :on_close
+        ptr.channel_close_function                 = @_gencb(:channel_close, value,
+                                                     Nothing, nothing, identity,
+                                                     Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
+    elseif name === :on_signal
+        ptr.channel_signal_function                = @_gencb(:channel_signal, value,
+                                                     Nothing, nothing, identity,
+                                                     Cvoid, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
+
+    elseif name === :on_exit_status
+        ptr.channel_exit_status_function           = @_gencb(:channel_exit_status, value,
+                                                     Nothing, nothing, identity,
+                                                     Cvoid, (lib.ssh_session, lib.ssh_channel, Cint, Ptr{Cvoid}))
+    elseif name === :on_exit_signal
+        ptr.channel_exit_signal_function           = @_gencb(:channel_exit_signal, value,
+                                                     Nothing, nothing, identity,
+                                                     Cvoid, (lib.ssh_session, lib.ssh_channel, Cstring, Cint, Cstring, Cstring, Ptr{Cvoid}))
+
+    elseif name === :on_pty_request
+        ptr.channel_pty_request_function           = @_gencb(:channel_pty_request, value,
+                                                     Bool, false, ret -> Cint(ret ? 0 : -1),
+                                                     Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Cint, Cint, Cint, Cint, Ptr{Cvoid}))
+    elseif name === :on_shell_request
+        ptr.channel_shell_request_function         = @_gencb(:channel_shell_request, value,
+                                                     Bool, false, ret -> Cint(ret ? 0 : 1),
+                                                     Cint, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
+    elseif name === :on_auth_agent_req
+        ptr.channel_auth_agent_req_function        = @_gencb(:channel_auth_agent_req, value,
+                                                     Nothing, nothing, identity,
+                                                     Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
+    elseif name === :on_x11_req
+        ptr.channel_x11_req_function               = @_gencb(:channel_x11_req, value,
+                                                     Nothing, nothing, identity,
+                                                     Cvoid, (lib.ssh_session, lib.ssh_channel, Cint, Cstring, Cstring, Cuint, Ptr{Cvoid}))
+    elseif name === :on_pty_window_change
+        ptr.channel_pty_window_change_function     = @_gencb(:channel_pty_window_change, value,
+                                                     Bool, false, ret -> Cint(ret ? 0 : -1),
+                                                     Cint, (lib.ssh_session, lib.ssh_channel, Cint, Cint, Cint, Cint, Ptr{Cvoid}))
+
+    elseif name === :on_exec_request
+        ptr.channel_exec_request_function          = @_gencb(:channel_exec_request, value,
+                                                     Bool, false, ret -> Cint(ret ? 0 : 1),
+                                                     Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
+    elseif name === :on_env_request
+        ptr.channel_env_request_function           = @_gencb(:channel_env_request, value,
+                                                     Bool, false, ret -> Cint(ret ? 0 : 1),
+                                                     Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Cstring, Ptr{Cvoid}))
+
+    elseif name === :on_subsystem_request
+        ptr.channel_subsystem_request_function     = @_gencb(:channel_subsystem_request, value,
+                                                     Bool, false, ret -> Cint(ret ? 0 : 1),
+                                                     Cint, (lib.ssh_session, lib.ssh_channel, Cstring, Ptr{Cvoid}))
+    elseif name === :on_write_wontblock
+        ptr.channel_write_wontblock_function       = @_gencb(:channel_write_wontblock, value,
+                                                     Int, 0, Cint,
+                                                     Cint, (lib.ssh_session, lib.ssh_channel, Cuint, Ptr{Cvoid}))
+    elseif name === :on_open_response
+        ptr.channel_open_response_function         = @_gencb(:channel_open_response, value,
+                                                     Nothing, nothing, identity,
+                                                     Cvoid, (lib.ssh_session, lib.ssh_channel, Bool, Ptr{Cvoid}))
+    elseif name === :on_request_response
+        ptr.channel_request_response_function      = @_gencb(:channel_request_response, value,
+                                                     Nothing, nothing, identity,
+                                                     Cvoid, (lib.ssh_session, lib.ssh_channel, Ptr{Cvoid}))
+    else
+        setfield!(self, name, value)
     end
 end
 

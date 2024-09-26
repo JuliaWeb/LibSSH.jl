@@ -4886,6 +4886,25 @@ mutable struct ssh_server_callbacks_struct
     gssapi_accept_sec_ctx_function::ssh_gssapi_accept_sec_ctx_callback
     gssapi_verify_mic_function::ssh_gssapi_verify_mic_callback
 end
+function Base.getproperty(x::Ptr{ssh_server_callbacks_struct}, f::Symbol)
+    f === :size && return Ptr{Csize_t}(x + 0)
+    f === :userdata && return Ptr{Ptr{Cvoid}}(x + 8)
+    f === :auth_password_function && return Ptr{ssh_auth_password_callback}(x + 16)
+    f === :auth_none_function && return Ptr{ssh_auth_none_callback}(x + 24)
+    f === :auth_gssapi_mic_function && return Ptr{ssh_auth_gssapi_mic_callback}(x + 32)
+    f === :auth_pubkey_function && return Ptr{ssh_auth_pubkey_callback}(x + 40)
+    f === :service_request_function && return Ptr{ssh_service_request_callback}(x + 48)
+    f === :channel_open_request_session_function && return Ptr{ssh_channel_open_request_session_callback}(x + 56)
+    f === :gssapi_select_oid_function && return Ptr{ssh_gssapi_select_oid_callback}(x + 64)
+    f === :gssapi_accept_sec_ctx_function && return Ptr{ssh_gssapi_accept_sec_ctx_callback}(x + 72)
+    f === :gssapi_verify_mic_function && return Ptr{ssh_gssapi_verify_mic_callback}(x + 80)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{ssh_server_callbacks_struct}, f::Symbol, v)
+    unsafe_store!(getproperty(x, f), v)
+end
+
 
 const ssh_server_callbacks = Ptr{ssh_server_callbacks_struct}
 
@@ -5239,6 +5258,33 @@ mutable struct ssh_channel_callbacks_struct
     channel_open_response_function::ssh_channel_open_resp_callback
     channel_request_response_function::ssh_channel_request_resp_callback
 end
+function Base.getproperty(x::Ptr{ssh_channel_callbacks_struct}, f::Symbol)
+    f === :size && return Ptr{Csize_t}(x + 0)
+    f === :userdata && return Ptr{Ptr{Cvoid}}(x + 8)
+    f === :channel_data_function && return Ptr{ssh_channel_data_callback}(x + 16)
+    f === :channel_eof_function && return Ptr{ssh_channel_eof_callback}(x + 24)
+    f === :channel_close_function && return Ptr{ssh_channel_close_callback}(x + 32)
+    f === :channel_signal_function && return Ptr{ssh_channel_signal_callback}(x + 40)
+    f === :channel_exit_status_function && return Ptr{ssh_channel_exit_status_callback}(x + 48)
+    f === :channel_exit_signal_function && return Ptr{ssh_channel_exit_signal_callback}(x + 56)
+    f === :channel_pty_request_function && return Ptr{ssh_channel_pty_request_callback}(x + 64)
+    f === :channel_shell_request_function && return Ptr{ssh_channel_shell_request_callback}(x + 72)
+    f === :channel_auth_agent_req_function && return Ptr{ssh_channel_auth_agent_req_callback}(x + 80)
+    f === :channel_x11_req_function && return Ptr{ssh_channel_x11_req_callback}(x + 88)
+    f === :channel_pty_window_change_function && return Ptr{ssh_channel_pty_window_change_callback}(x + 96)
+    f === :channel_exec_request_function && return Ptr{ssh_channel_exec_request_callback}(x + 104)
+    f === :channel_env_request_function && return Ptr{ssh_channel_env_request_callback}(x + 112)
+    f === :channel_subsystem_request_function && return Ptr{ssh_channel_subsystem_request_callback}(x + 120)
+    f === :channel_write_wontblock_function && return Ptr{ssh_channel_write_wontblock_callback}(x + 128)
+    f === :channel_open_response_function && return Ptr{ssh_channel_open_resp_callback}(x + 136)
+    f === :channel_request_response_function && return Ptr{ssh_channel_request_resp_callback}(x + 144)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{ssh_channel_callbacks_struct}, f::Symbol, v)
+    unsafe_store!(getproperty(x, f), v)
+end
+
 
 const ssh_channel_callbacks = Ptr{ssh_channel_callbacks_struct}
 

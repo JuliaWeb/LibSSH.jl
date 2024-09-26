@@ -24,6 +24,7 @@ auto_mutability_includelist = ["ssh_server_callbacks_struct",
 
 [codegen]
 use_ccall_macro = true
+field_access_method_list = ["ssh_server_callbacks_struct", "ssh_channel_callbacks_struct"]
 
 [codegen.macro]
 functionlike_macro_includelist = ["SSH_VERSION", "SSH_VERSION_INT", "SSH_VERSION_DOT", "ssh_callbacks_init"]
