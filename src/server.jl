@@ -570,26 +570,7 @@ end
 
 function on_channel_exec_request(session, sshchan, command, client)::Bool
     _add_log_event!(client, :channel_exec_request, command)
-
-    # Note that we ignore the `sshchan` argument in favour of
-    # `demo_server.sshchan`. That's extremely important! `sshchan` is a
-    # non-owning SshChannel created by the callback over the underlying
-    # lib.ssh_channel pointer, which means that `sshchan` and
-    # `demo_server.sshchan` are two distinct Julia objects with pointers to the
-    # same lib.ssh_channel struct.
-    #
-    # If we were to pass `sshchan` instead, exec_command() would attempt to
-    # close `sshchan`, which would free the underlying lib.ssh_channel, which
-    # would cause a double-free later when we close
-    # `demo_server.sshchan`. That's why close()'ing non-owning SshChannels is
-    # forbidden.
-    idx = findfirst(x -> x.ptr == sshchan.ptr, client.unclaimed_channels)
-    if isnothing(idx)
-        @error "Couldn't find the requested SshChannel in the client"
-        return false
-    end
-
-    owning_sshchan = popat!(client.unclaimed_channels, idx)
+    owning_sshchan = find_unclaimed_channel(client, sshchan)
     push!(client.channel_operations, CommandExecutor(command, owning_sshchan, client.env))
 
     return true
@@ -597,6 +578,14 @@ end
 
 function on_channel_eof(session, sshchan, client)::Nothing
     _add_log_event!(client, :channel_eof, true)
+
+    # For SFTP clients, close the channel as soon as we get an EOF
+    for op in client.channel_operations
+        if op isa SftpOperation && op.sshchan.ptr == sshchan.ptr
+            close(op)
+        end
+    end
+
     return nothing
 end
 
@@ -702,6 +691,8 @@ end
     unclaimed_channels::Vector{ssh.SshChannel} = ssh.SshChannel[]
     channel_operations::Vector{Any} = []
 
+    sftp_session::Union{lib.sftp_session, Nothing} = nothing
+
     env::Dict{String, String} = Dict{String, String}()
 
     task::Union{Task, Nothing} = nothing
@@ -723,6 +714,31 @@ function Base.close(client::Client)
     close(client.session_event)
     close(client.session)
     wait(client.task)
+end
+
+#=
+This is a helper function to find an unclaimed, owning SshChannel in a
+Client. It's meant to be called from within callbacks.
+
+Note that we ignore the callbacks usual `sshchan` argument in favour of the
+Client's owning SshChannel. That's extremely important! `sshchan` is a
+non-owning SshChannel created by the callback over the underlying
+lib.ssh_channel pointer, which means that `sshchan` and some owning
+`client.sshchan` are two distinct Julia objects with pointers to the same
+lib.ssh_channel struct.
+
+If we were to pass `sshchan` instead, exec_command() would attempt to close
+`sshchan`, which would free the underlying lib.ssh_channel, which would cause a
+double-free later when we close `client.sshchan`. That's why close()'ing
+non-owning SshChannels is forbidden.
+=#
+function find_unclaimed_channel(client::Client, sshchan)
+    idx = findfirst(x -> x.ptr == sshchan.ptr, client.unclaimed_channels)
+    if isnothing(idx)
+        error("Couldn't find the requested SshChannel in the client")
+    end
+
+    return popat!(client.unclaimed_channels, idx)
 end
 
 """
@@ -863,7 +879,8 @@ function _handle_client(session::ssh.Session, ds::DemoServer)
                                                 on_close=on_channel_close,
                                                 on_pty_request=on_channel_pty_request,
                                                 on_exec_request=on_channel_exec_request,
-                                                on_env_request=on_channel_env_request)
+                                                on_env_request=on_channel_env_request,
+                                                on_subsystem_request=on_channel_subsystem_request)
     client.task = current_task()
 
     ssh.set_server_callbacks(session, server_callbacks)
@@ -1102,6 +1119,55 @@ function _forward_socket_data(forwarder::Forwarder)
             close(sock)
         end
     end
+end
+
+## SFTP
+
+function on_channel_subsystem_request(session, sshchan, subsystem, client)::Bool
+    _add_log_event!(client, :channel_subsystem_request, subsystem)
+
+    if subsystem == "sftp"
+        ptr = lib.sftp_server_new(session, sshchan)
+        if ptr == C_NULL
+            @error "Call to lib.sftp_server_new() failed"
+            return false
+        end
+
+        owning_sshchan = find_unclaimed_channel(client, sshchan)
+        client.sftp_session = ptr
+        client.channel_callbacks.on_data = on_sftp_data
+
+        push!(client.channel_operations, SftpOperation(ptr, owning_sshchan))
+
+        return true
+    end
+
+    return false
+end
+
+function on_sftp_data(session, sshchan, data, is_stderr, client)
+    _add_log_event!(client, :channel_sftp_data, "$(length(data)) bytes")
+
+    lib.sftp_channel_default_data_callback(session, sshchan,
+                                           pointer(data), length(data),
+                                           is_stderr,
+                                           Ref(Ptr{Cvoid}(client.sftp_session)))
+end
+
+mutable struct SftpOperation
+    sftp_session::Union{lib.sftp_session, Nothing}
+    sshchan::ssh.SshChannel
+end
+
+getchannels(op::SftpOperation) = [op.sshchan]
+
+function Base.close(op::SftpOperation)
+    if !isnothing(op.sftp_session)
+        lib.sftp_server_free(op.sftp_session)
+        op.sftp_session = nothing
+    end
+
+    close(op.sshchan)
 end
 
 end
