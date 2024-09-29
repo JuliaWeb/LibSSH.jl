@@ -21,6 +21,8 @@ Changelog](https://keepachangelog.com).
 
 - Fixed segfaults that would occur in [`SshChannel`](@ref) when its
   [`Session`](@ref) is disconnected by the remote end ([#13]).
+- Fixed some concurrency bugs in the [`Demo.DemoServer`](@ref) and
+  [`SessionEvent`](@ref) ([#15]).
 
 ## [v0.5.0] - 2024-08-10
 
