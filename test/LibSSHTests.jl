@@ -56,6 +56,30 @@ function http_server(f::Function, port)
     end
 end
 
+# Helper function to start a DemoServer and create a session connected to it
+function demo_server_with_session(f::Function, port, args...;
+                                  timeout=10,
+                                  kill_timeout=3,
+                                  password="foo",
+                                  log_verbosity=lib.SSH_LOG_NOLOG,
+                                  kwargs...)
+    demo_server = DemoServer(port, args...; password, timeout, kill_timeout, kwargs...) do
+        # Create a session
+        session = ssh.Session("127.0.0.1", port; log_verbosity)
+        @test ssh.isconnected(session)
+        @test ssh.userauth_password(session, password) == ssh.AuthStatus_Success
+
+        try
+            f(session)
+        finally
+            ssh.disconnect(session)
+            close(session)
+        end
+    end
+
+    return demo_server
+end
+
 @testset "Server" begin
     hostkey = joinpath(@__DIR__, "ed25519_test_key")
 
@@ -84,6 +108,21 @@ end
 
         finalize(server)
         @test server.ptr == nothing
+    end
+
+    @testset "SessionEvent" begin
+        demo_server_with_session(2222; timeout=10) do session
+            event = ssh.SessionEvent(session)
+
+            @test event.ptr isa lib.ssh_event
+
+            close(event)
+            @test isnothing(event.ptr)
+
+            event = ssh.SessionEvent(session)
+            finalize(event)
+            @test isnothing(event.ptr)
+        end
     end
 
     # Helper function to set up an `ssh` command. Slightly ugly workaround to
@@ -388,30 +427,6 @@ end
             end
         end
     end
-end
-
-# Helper function to start a DemoServer and create a session connected to it
-function demo_server_with_session(f::Function, port, args...;
-                                  timeout=10,
-                                  kill_timeout=3,
-                                  password="foo",
-                                  log_verbosity=lib.SSH_LOG_NOLOG,
-                                  kwargs...)
-    demo_server = DemoServer(port, args...; password, timeout, kill_timeout, kwargs...) do
-        # Create a session
-        session = ssh.Session("127.0.0.1", port; log_verbosity)
-        @test ssh.isconnected(session)
-        @test ssh.userauth_password(session, password) == ssh.AuthStatus_Success
-
-        try
-            f(session)
-        finally
-            ssh.disconnect(session)
-            close(session)
-        end
-    end
-
-    return demo_server
 end
 
 @testset "SshChannel" begin

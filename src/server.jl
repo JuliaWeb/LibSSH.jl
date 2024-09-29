@@ -6,11 +6,12 @@ $(TYPEDEF)
 $(TYPEDFIELDS)
 
 This object wraps a `lib.ssh_event`, but it's designed to only allow adding a
-single session to it. Use this in a server to poll the session.
+single session to it. Use this in a server to poll the session. It is threadsafe.
 """
 mutable struct SessionEvent
     ptr::Union{lib.ssh_event, Nothing}
     session::Session
+    lock::ReentrantLock
 
     @doc """
     $(TYPEDSIGNATURES)
@@ -29,18 +30,12 @@ mutable struct SessionEvent
             throw(LibSSHException("Could not add Session to SessionEvent: $(ret)"))
         end
 
-        self = new(ptr, session)
-        finalizer(close, self)
+        self = new(ptr, session, ReentrantLock())
+        finalizer(_finalizer, self)
     end
 end
 
-function _finalizer(event::SessionEvent)
-    try
-        close(event)
-    catch ex
-        Threads.@spawn @error "Exception when finalizing SessionEvent" exception=(ex, catch_backtrace())
-    end
-end
+_finalizer(event::SessionEvent) = close(event; unsafe=true)
 
 function Base.unsafe_convert(::Type{lib.ssh_event}, event::SessionEvent)
     if !isassigned(event)
@@ -49,6 +44,9 @@ function Base.unsafe_convert(::Type{lib.ssh_event}, event::SessionEvent)
 
     return event.ptr
 end
+
+Base.lock(event::SessionEvent) = lock(event.lock)
+Base.unlock(event::SessionEvent) = unlock(event.lock)
 
 """
 $(TYPEDSIGNATURES)
@@ -74,7 +72,7 @@ function event_dopoll(event::SessionEvent)
 
         # Always check if the event is still assigned within the loop since it
         # may be closed at any time.
-        ret = if isassigned(event)
+        ret = @lock event if isassigned(event)
             lib.ssh_event_dopoll(event, 0)
         else
             SSH_ERROR
@@ -97,11 +95,11 @@ Removes the [`Session`](@ref) from the underlying `ssh_event` and frees the
 event memory. This function may be safely called multiple times, and the event
 will be unusable afterwards.
 """
-function Base.close(event::SessionEvent)
+function Base.close(event::SessionEvent; unsafe=false)
     # Developer note: this function is called by the finalizer so we can't do
-    # any task switches, including print statements.
+    # any task switches if `unsafe=true`, including print statements.
 
-    if isassigned(event)
+    _close =  () -> if isassigned(event)
         # Attempt to remove the session. Note that we don't bother checking the
         # return code because some other callback may have already removed the
         # session, which will cause this to return SSH_ERROR.
@@ -112,6 +110,12 @@ function Base.close(event::SessionEvent)
         # Free the ssh_event
         lib.ssh_event_free(event)
         event.ptr = nothing
+    end
+
+    if unsafe
+        _close()
+    else
+        @lock event _close()
     end
 end
 
