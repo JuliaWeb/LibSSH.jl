@@ -48,6 +48,10 @@ end
 Base.lock(event::SessionEvent) = lock(event.lock)
 Base.unlock(event::SessionEvent) = unlock(event.lock)
 
+function Base.show(io::IO, event::SessionEvent)
+    print(io, SessionEvent, "(ptr=$(event.ptr), session=$(event.session))")
+end
+
 """
 $(TYPEDSIGNATURES)
 

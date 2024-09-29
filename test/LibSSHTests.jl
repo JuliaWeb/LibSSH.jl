@@ -114,6 +114,9 @@ end
         demo_server_with_session(2222; timeout=10) do session
             event = ssh.SessionEvent(session)
 
+            # Smoke test
+            show(IOBuffer(), event)
+
             @test event.ptr isa lib.ssh_event
 
             close(event)
