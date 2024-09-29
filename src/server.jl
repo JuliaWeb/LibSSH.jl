@@ -833,8 +833,13 @@ function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
     start(demo_server)
 
     timer = Timer(timeout)
+    parent_testsets = get(task_local_storage(), :__BASETESTNEXT__, [])
     still_running = true
     t = Threads.@spawn try
+        # Copy the testsets from the parent task so all @test uses in f() get
+        # reported properly.
+        task_local_storage(:__BASETESTNEXT__, parent_testsets)
+
         f()
     finally
         still_running = false
