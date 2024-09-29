@@ -712,8 +712,8 @@ function Base.close(client::Client)
     end
 
     close(client.session_event)
-    close(client.session)
     wait(client.task)
+    close(client.session)
 end
 
 #=
