@@ -857,7 +857,7 @@ function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
     # If the function is still running, we attempt to kill it explicitly
     kill_failed = nothing
     if still_running
-        @async Base.throwto(t, InterruptException())
+        Threads.@spawn Base.throwto(t, InterruptException())
         result = timedwait(() -> istaskdone(t), kill_timeout)
         kill_failed = result == :timed_out
     end

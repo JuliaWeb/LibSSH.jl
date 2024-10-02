@@ -54,7 +54,7 @@ function _finalizer(sshchan::SshChannel)
     try
         close(sshchan)
     catch ex
-        # Note the use of @async to avoid a task switch, which is forbidden in a
+        # Note the use of @spawn to avoid a task switch, which is forbidden in a
         # finalizer.
         Threads.@spawn @error "Caught exception while finalizing SshChannel" exception=(ex, catch_backtrace())
     end
