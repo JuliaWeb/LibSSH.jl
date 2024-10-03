@@ -23,6 +23,8 @@ Changelog](https://keepachangelog.com).
   [`Session`](@ref) is disconnected by the remote end ([#13]).
 - Fixed some concurrency bugs in the [`Demo.DemoServer`](@ref) and
   [`SessionEvent`](@ref) ([#15]).
+- Fixed a race condition in the [`Demo.DemoServer`](@ref) that could cause
+  segfaults ([#16]).
 
 ## [v0.5.0] - 2024-08-10
 

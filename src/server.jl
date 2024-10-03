@@ -711,6 +711,9 @@ end
 end
 
 function Base.close(client::Client)
+    close(client.session_event)
+    wait(client.task)
+
     for op in client.channel_operations
         close(op)
     end
@@ -719,8 +722,6 @@ function Base.close(client::Client)
         close(sshchan)
     end
 
-    close(client.session_event)
-    wait(client.task)
     close(client.session)
 end
 
