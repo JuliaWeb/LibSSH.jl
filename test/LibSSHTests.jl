@@ -454,7 +454,7 @@ end
 
             close(sshchan)
             @test isnothing(sshchan.ptr)
-            @test isempty(session.channels)
+            @test isempty(session.closeables)
         end
     end
 

@@ -40,7 +40,7 @@ mutable struct SshChannel
         self = new(ptr, own, session, ReentrantLock(), false, nothing)
 
         if own
-            push!(session.channels, self)
+            push!(session.closeables, self)
             finalizer(_finalizer, self)
         end
 
@@ -163,9 +163,9 @@ function Base.close(sshchan::SshChannel)
             # Remove from the sessions list of active channels. findfirst()
             # should only return nothing if the function is being called
             # recursively (i.e. through a callback) and it was already removed.
-            idx = findfirst(x -> x === sshchan, sshchan.session.channels)
+            idx = findfirst(x -> x === sshchan, sshchan.session.closeables)
             if !isnothing(idx)
-                popat!(sshchan.session.channels, idx)
+                popat!(sshchan.session.closeables, idx)
             end
 
             if !isnothing(sshchan.session) && !isconnected(sshchan.session)

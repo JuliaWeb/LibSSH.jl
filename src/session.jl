@@ -16,7 +16,7 @@ be owning or non-owning of its internal pointer to a `lib.ssh_session`.
 mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
     owning::Bool
-    channels::Vector{Any}
+    closeables::Vector{Any}
     server_callbacks::Union{Callbacks.ServerCallbacks, Nothing}
 
     log_verbosity::Int
@@ -49,7 +49,9 @@ mutable struct Session
         # Set to non-blocking mode
         lib.ssh_set_blocking(ptr, 0)
 
-        session = new(ptr, own, [], nothing, -1, nothing, nothing, nothing, nothing, AuthMethod[], true)
+        session = new(ptr, own, [], nothing,
+                      -1, nothing, nothing, nothing,
+                      ReentrantLock(), nothing, AuthMethod[], true)
         if !isnothing(log_verbosity)
             session.log_verbosity = log_verbosity
         end
@@ -231,7 +233,7 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
 const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :known_hosts)
 
 function Base.propertynames(::Session, private::Bool=false)
-    private_fields = (:ptr, :channels, :server_callbacks,
+    private_fields = (:ptr, :closeables, :server_callbacks,
                       :_lock, :_auth_methods, :_attempted_auth_methods,
                       :_kbdint_prompts, :_require_init_kbdint)
     libssh_options = tuple(keys(SESSION_PROPERTY_OPTIONS)...)
@@ -398,15 +400,15 @@ Wrapper around [`lib.ssh_disconnect()`](@ref).
 """
 function disconnect(session::Session)
     if isconnected(session)
-        # We close all the channels in reverse order because close(::SshChannel)
-        # deletes each channel from the vector and we don't want to invalidate
-        # any indices while deleting. The channels need to be closed here
-        # because lib.ssh_disconnect() will free all of them.
-        for i in reverse(eachindex(session.channels))
-            # Note that only owning channels are added to session.channels, which
+        # We close all the closeables in reverse order because closing them will
+        # delete each object from the vector and we don't want to invalidate any
+        # indices while deleting. The channels in particular need to be closed
+        # here because lib.ssh_disconnect() will free all of them.
+        for i in reverse(eachindex(session.closeables))
+            # Note that only owning channels are added to session.closeables, which
             # means that this should never throw because the channel is non-owning
             # (of course it may still throw for other reasons).
-            close(session.channels[i])
+            close(session.closeables[i])
         end
 
         lib.ssh_disconnect(session)

@@ -69,9 +69,11 @@ function event_dopoll(event::SessionEvent)
         # during the poll, trying to unlock an unlocked channel will cause an
         # error.
         locked_channels = SshChannel[]
-        for sshchan in event.session.channels
-            lock(sshchan.close_lock)
-            push!(locked_channels, sshchan)
+        for obj in event.session.closeables
+            if obj isa SshChannel
+                lock(obj.close_lock)
+                push!(locked_channels, obj)
+            end
         end
 
         # Always check if the event is still assigned within the loop since it
