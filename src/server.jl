@@ -1170,12 +1170,14 @@ function on_channel_subsystem_request(session, sshchan, subsystem, client)::Bool
 end
 
 function on_sftp_data(session, sshchan, data, is_stderr, client)
-    _add_log_event!(client, :channel_sftp_data, "$(length(data)) bytes")
 
-    lib.sftp_channel_default_data_callback(session, sshchan,
-                                           pointer(data), length(data),
-                                           is_stderr,
-                                           Ref(Ptr{Cvoid}(client.sftp_session)))
+    ret = lib.sftp_channel_default_data_callback(session, sshchan,
+                                                 pointer(data), length(data),
+                                                 is_stderr,
+                                                 Ref(Ptr{Cvoid}(client.sftp_session)))
+    _add_log_event!(client, :channel_sftp_data, "$(length(data)) bytes received, $(ret) bytes processed")
+
+    return ret
 end
 
 mutable struct SftpOperation
