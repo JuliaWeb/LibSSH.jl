@@ -952,7 +952,7 @@ function stop(demo_server::DemoServer)
     end
 end
 
-function _add_log_event!(client::Client, callback_name::Symbol, event)
+function _add_log_event!(client::Client, callback_name::Symbol, event; printf=false)
     @lock client.log_lock begin
         if !haskey(client.callback_log, callback_name)
             client.callback_log[callback_name] = []
@@ -964,8 +964,15 @@ function _add_log_event!(client::Client, callback_name::Symbol, event)
 
         if client.verbose
             timestamp = Dates.format(Dates.now(), Dates.ISOTimeFormat)
-            @info "$timestamp DemoServer client $(client.id): $callback_name $event"
-            flush(stdout)
+            msg = "$timestamp DemoServer client $(client.id): $callback_name $event"
+
+            if printf
+                @ccall printf("[ Info: $(msg)\n"::Cstring)::Cint
+                Libc.flush_cstdio()
+            else
+                @info msg
+                flush(stdout)
+            end
         end
     end
 end
