@@ -430,7 +430,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
         end
 
         # Pass off to the handler
-        Threads.@spawn :interactive try
+        t = Threads.@spawn :interactive try
             handler(session)
         catch ex
             @error "Error handling SSH session!" exception=(ex, catch_backtrace())
@@ -438,6 +438,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
             disconnect(session)
             close(session)
         end
+        errormonitor(t)
     end
 end
 
