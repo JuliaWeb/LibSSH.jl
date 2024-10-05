@@ -142,8 +142,15 @@ $(TYPEDSIGNATURES)
 Closes the channel, and then frees its memory. To avoid the risk of
 double-frees, this function may only be called on *owning* `SshChannel`s. It
 will hold the `close_lock` of the channel during execution.
+
+# Arguments
+- `sshchan`: The [`SshChannel`](@ref) to close.
+- `allow_fail=false`: Whether to throw an exception if the call to
+  [`lib.ssh_channel_close()`](@ref) fails. In some cases it can fail for valid
+  reasons, such as the socket already having been closed by the other end (this
+  will result in a `Socket error: disconnected` error).
 """
-function Base.close(sshchan::SshChannel)
+function Base.close(sshchan::SshChannel; allow_fail=false)
     # Developer note: this function is called by the SshChannel finalizer, which
     # means we aren't allowed to do task switches.
 
@@ -176,13 +183,19 @@ function Base.close(sshchan::SshChannel)
                 sshchan.ptr = nothing
             elseif isopen(sshchan)
                 # This will trigger callbacks
-                closewrite(sshchan)
+                closewrite(sshchan; allow_fail)
 
                 if isopen(sshchan)
                     # This will trigger callbacks
                     ret = lib.ssh_channel_close(sshchan)
                     if ret != SSH_OK
-                        throw(LibSSHException("Closing SshChannel failed: $(ret)"))
+                        msg = "Closing SshChannel failed with $(ret): '$(get_error(sshchan.session))'"
+                        if allow_fail
+                            # Note that we spawn to avoid task switches
+                            Threads.@spawn @warn msg
+                        else
+                            throw(LibSSHException(msg))
+                        end
                     end
                 end
             end
@@ -291,8 +304,15 @@ Sends an EOF message. Calling this function will trigger any waiting callbacks.
 - `ArgumentError`: if the channel is not writable.
 
 Wrapper around [`lib.ssh_channel_send_eof()`](@ref).
+
+# Arguments
+- `sshchan`: The [`SshChannel`](@ref) to send an EOF on.
+- `allow_fail=false`: Whether to throw an exception if the call to
+  [`lib.ssh_channel_send_eof()`](@ref) fails. In some cases it can fail for
+  valid reasons, such as the socket already having been closed by the other end
+  (this will result in a `Socket error: disconnected` error).
 """
-function Base.closewrite(sshchan::SshChannel)
+function Base.closewrite(sshchan::SshChannel; allow_fail=false)
     # If we've already sent an EOF, do nothing
     if sshchan.local_eof
         return
@@ -304,8 +324,14 @@ function Base.closewrite(sshchan::SshChannel)
 
     ret = lib.ssh_channel_send_eof(sshchan)
     if ret != SSH_OK
-        throw(LibSSHException("Error when sending EOF on channel: $(ret)"))
+        error_msg = get_error(sshchan.session)
+        if allow_fail
+            Threads.@spawn @warn "closewrite() on SshChannel failed: '$(error_msg)'"
+        else
+            throw(LibSSHException("Error when sending EOF on channel: '$(error_msg)'"))
+        end
     end
+
     sshchan.local_eof = true
 end
 

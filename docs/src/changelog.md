@@ -16,6 +16,9 @@ Changelog](https://keepachangelog.com).
   [`Base.run(::Cmd)`](@ref) ([#12]).
 - Made it possible to assign callbacks to [`Callbacks.ServerCallbacks`](@ref) and
   [`Callbacks.ChannelCallbacks`](@ref) by property ([#14]).
+- [`close(::SshChannel)`](@ref) and [`closewrite(::SshChannel)`](@ref) now
+  support an `allow_fail` argument that will print a warning instead of throw an
+  exception if modifying the `lib.ssh_channel` fails ([#16]).
 
 ### Fixed
 

@@ -1191,7 +1191,7 @@ function Base.close(op::SftpOperation)
         op.sftp_session = nothing
     end
 
-    close(op.sshchan)
+    close(op.sshchan; allow_fail=true)
 end
 
 end
