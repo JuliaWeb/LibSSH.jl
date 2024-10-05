@@ -24,6 +24,7 @@ mutable struct Session
     known_hosts::Union{String, Nothing}
     gssapi_server_identity::Union{String, Nothing}
 
+    _lock::ReentrantLock
     _auth_methods::Union{Vector{AuthMethod}, Nothing}
     _attempted_auth_methods::Vector{AuthMethod}
     _require_init_kbdint::Bool
@@ -78,6 +79,9 @@ function Base.show(io::IO, session::Session)
         print(io, Session, "()")
     end
 end
+
+Base.lock(session::Session) = lock(session._lock)
+Base.unlock(session::Session) = unlock(session._lock)
 
 # Non-throwing finalizer for Session objects
 function _finalizer(session::Session)
@@ -181,7 +185,7 @@ function Base.close(session::Session)
         throw(ArgumentError("Calling close() on a non-owning Session is not allowed to avoid accidental double-frees, see the docs for more information."))
     end
 
-    if isopen(session)
+    @lock session if isopen(session)
         disconnect(session)
         lib.ssh_free(session)
         session.ptr = nothing
@@ -228,7 +232,7 @@ const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :kn
 
 function Base.propertynames(::Session, private::Bool=false)
     private_fields = (:ptr, :channels, :server_callbacks,
-                      :_auth_methods, :_attempted_auth_methods,
+                      :_lock, :_auth_methods, :_attempted_auth_methods,
                       :_kbdint_prompts, :_require_init_kbdint)
     libssh_options = tuple(keys(SESSION_PROPERTY_OPTIONS)...)
     public_fields = (:owning,)
@@ -337,17 +341,13 @@ function Base.wait(session::Session; poll_timeout=0.1)
         throw(ArgumentError("poll_timeout=$(poll_timeout), it must be greater than 0"))
     end
 
-    if lib.ssh_is_blocking(session) == 1
-        return
-    end
-
     poll_flags = lib.ssh_get_poll_flags(session)
     readable = (poll_flags & lib.SSH_READ_PENDING) > 0
     writable = (poll_flags & lib.SSH_WRITE_PENDING) > 0
 
     fd = RawFD(lib.ssh_get_fd(session))
     while isopen(session)
-        result = _safe_poll_fd(fd, poll_timeout; readable, writable)
+        result = @lock session _safe_poll_fd(fd, poll_timeout; readable, writable)
         if isnothing(result)
             # This means the session's file descriptor has been closed (see the
             # comments for _safe_poll_fd()).
@@ -1019,7 +1019,7 @@ function _session_trywait(f::Function, session::Session)
     ret = SSH_ERROR
 
     while true
-        ret = f()
+        ret = @lock session f()
 
         if ret != SSH_AGAIN && ret != lib.SSH_AUTH_AGAIN
             break
