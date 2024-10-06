@@ -4,8 +4,7 @@ Libssh is a fairly large project and most of the API still doesn't have
 high-level wrappers in LibSSH.jl. For example:
 - Reverse port forwarding
 - Unix socket forwarding
-- SFTP support
-- SCP support
+- Complete SFTP/SCP support
 
 If you'd like to contribute new wrappers, the usual workflow is:
 1. Add support for the feature in the [Demo server](@ref) and test it with the

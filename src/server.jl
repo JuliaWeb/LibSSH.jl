@@ -69,9 +69,11 @@ function event_dopoll(event::SessionEvent)
         # during the poll, trying to unlock an unlocked channel will cause an
         # error.
         locked_channels = SshChannel[]
-        for sshchan in event.session.channels
-            lock(sshchan.close_lock)
-            push!(locked_channels, sshchan)
+        for obj in event.session.closeables
+            if obj isa SshChannel
+                lock(obj.close_lock)
+                push!(locked_channels, obj)
+            end
         end
 
         # Always check if the event is still assigned within the loop since it
@@ -428,7 +430,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
         end
 
         # Pass off to the handler
-        Threads.@spawn :interactive try
+        t = Threads.@spawn :interactive try
             handler(session)
         catch ex
             @error "Error handling SSH session!" exception=(ex, catch_backtrace())
@@ -436,6 +438,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
             disconnect(session)
             close(session)
         end
+        errormonitor(t)
     end
 end
 
@@ -711,6 +714,9 @@ end
 end
 
 function Base.close(client::Client)
+    close(client.session_event)
+    wait(client.task)
+
     for op in client.channel_operations
         close(op)
     end
@@ -719,8 +725,6 @@ function Base.close(client::Client)
         close(sshchan)
     end
 
-    close(client.session_event)
-    wait(client.task)
     close(client.session)
 end
 
@@ -857,7 +861,7 @@ function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
     # If the function is still running, we attempt to kill it explicitly
     kill_failed = nothing
     if still_running
-        @async Base.throwto(t, InterruptException())
+        Threads.@spawn Base.throwto(t, InterruptException())
         result = timedwait(() -> istaskdone(t), kill_timeout)
         kill_failed = result == :timed_out
     end
@@ -948,7 +952,7 @@ function stop(demo_server::DemoServer)
     end
 end
 
-function _add_log_event!(client::Client, callback_name::Symbol, event)
+function _add_log_event!(client::Client, callback_name::Symbol, event; printf=false)
     @lock client.log_lock begin
         if !haskey(client.callback_log, callback_name)
             client.callback_log[callback_name] = []
@@ -960,8 +964,15 @@ function _add_log_event!(client::Client, callback_name::Symbol, event)
 
         if client.verbose
             timestamp = Dates.format(Dates.now(), Dates.ISOTimeFormat)
-            @info "$timestamp DemoServer client $(client.id): $callback_name $event"
-            flush(stdout)
+            msg = "$timestamp DemoServer client $(client.id): $callback_name $event"
+
+            if printf
+                @ccall printf("[ Info: $(msg)\n"::Cstring)::Cint
+                Libc.flush_cstdio()
+            else
+                @info msg
+                flush(stdout)
+            end
         end
     end
 end
@@ -1159,12 +1170,14 @@ function on_channel_subsystem_request(session, sshchan, subsystem, client)::Bool
 end
 
 function on_sftp_data(session, sshchan, data, is_stderr, client)
-    _add_log_event!(client, :channel_sftp_data, "$(length(data)) bytes")
 
-    lib.sftp_channel_default_data_callback(session, sshchan,
-                                           pointer(data), length(data),
-                                           is_stderr,
-                                           Ref(Ptr{Cvoid}(client.sftp_session)))
+    ret = lib.sftp_channel_default_data_callback(session, sshchan,
+                                                 pointer(data), length(data),
+                                                 is_stderr,
+                                                 Ref(Ptr{Cvoid}(client.sftp_session)))
+    _add_log_event!(client, :channel_sftp_data, "$(length(data)) bytes received, $(ret) bytes processed")
+
+    return ret
 end
 
 mutable struct SftpOperation
@@ -1180,7 +1193,7 @@ function Base.close(op::SftpOperation)
         op.sftp_session = nothing
     end
 
-    close(op.sshchan)
+    close(op.sshchan; allow_fail=true)
 end
 
 end

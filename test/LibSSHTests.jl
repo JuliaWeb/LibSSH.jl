@@ -80,6 +80,22 @@ function demo_server_with_session(f::Function, port, args...;
     return demo_server
 end
 
+function demo_server_with_sftp(f::Function, args...; kwargs...)
+    demo_server = demo_server_with_session(args...; kwargs...) do session
+        # Create an SFTP session
+        sftp = ssh.SftpSession(session)
+
+        try
+            f(sftp)
+        finally
+            close(sftp)
+        end
+    end
+
+    return demo_server
+end
+
+
 @testset "Server" begin
     hostkey = joinpath(@__DIR__, "ed25519_test_key")
 
@@ -454,7 +470,7 @@ end
 
             close(sshchan)
             @test isnothing(sshchan.ptr)
-            @test isempty(session.channels)
+            @test isempty(session.closeables)
         end
     end
 
@@ -515,6 +531,234 @@ end
                     @test read(socket, String) == HTTP_200
                 end
             end
+        end
+    end
+end
+
+@testset "SFTP" begin
+    @testset "Initialization and finalizing" begin
+        demo_server_with_session(2222; verbose=false) do session
+            # session.log_verbosity = ssh.SSH_LOG_TRACE
+            sftp = ssh.SftpSession(session)
+
+            # Test state after creation
+            @test lib.ssh_is_blocking(session) == 0
+            @test sftp.ptr isa lib.sftp_session
+            @test isassigned(sftp)
+            @test ssh.get_error(sftp) == ssh.SftpError_Ok
+            @test Base.unsafe_convert(lib.sftp_session, sftp) isa lib.sftp_session
+
+            # And after closing
+            close(sftp)
+            @test isnothing(sftp.ptr)
+            @test !isassigned(sftp)
+            @test_throws ArgumentError ssh.get_error(sftp)
+            @test_throws ArgumentError Base.unsafe_convert(lib.sftp_session, sftp)
+
+            # Closing twice shouldn't cause an error
+            close(sftp)
+
+            # Test the finalizer
+            sftp = ssh.SftpSession(session)
+            finalize(sftp)
+            @test !isassigned(sftp)
+
+            # Test the do-constructor
+            ssh.SftpSession(session) do sftp
+                @test isopen(sftp)
+            end
+
+            # We shouldn't be able to create an SftpSession from a closed Session
+            close(session)
+            @test_throws ArgumentError ssh.SftpSession(session)
+        end
+    end
+
+    @testset "Opening" begin
+        # Test opening
+        demo_server_with_sftp(2222; verbose=false) do sftp
+            mktempdir() do tmpdir
+                # Opening a file that doesn't exist should throw
+                bad_file = joinpath(tmpdir, "no")
+                @test_throws ssh.LibSSHException open(bad_file, sftp)
+
+                # Create a dummy file
+                good_file = joinpath(tmpdir, "foo")
+                write(good_file, "foo")
+
+                # Opening it should work
+                file = open(good_file, sftp)
+
+                @test file.ptr isa lib.sftp_file
+                @test isassigned(file)
+                @test isopen(file)
+                @test isreadable(file)
+                @test isreadonly(file)
+                @test !iswritable(file)
+
+                @test position(file) == 0
+                seek(file, 1)
+                @test position(file) == 1
+
+                # Finalizing shouldn't actually do anything other than print an
+                # error because properly closing the file involves a task switch.
+                @test_logs (:error,) (finalize(file); flush(stdout))
+                @test isopen(file)
+
+                close(file)
+                @test !isassigned(file)
+                @test !isopen(file)
+                @test !isreadable(file)
+                @test_throws ArgumentError position(file)
+                @test_throws ArgumentError seek(file, 0)
+
+                # Test append mode, which doesn't have native support
+                file = open(good_file, sftp; append=true)
+                @test position(file) == 3
+                @test iswritable(file)
+
+                # Test the do-constructor
+                ret = open(good_file, sftp) do file
+                    @test isopen(file)
+
+                    42
+                end
+                @test ret == 42
+
+                # We shouldn't be able to open a file with a closed SftpSession
+                close(sftp)
+                @test_throws ArgumentError open(good_file, sftp)
+            end
+        end
+    end
+
+    @testset "Reading" begin
+        # Test reading
+        demo_server_with_sftp(2222; verbose=false) do sftp
+            # sftp.session.log_verbosity = ssh.SSH_LOG_TRACE
+            mktemp() do path, io
+                # Test reading an empty file
+                file = open(path, sftp)
+                @test read(file) == UInt8[]
+
+                # Read a file that's smaller than the server limit for a single
+                # request.
+                msg = "foo"
+                limits = ssh.get_limits(sftp)
+                @assert length(msg) < limits.max_read_length
+                write(path, msg)
+
+                @test read(file) == collect(UInt8, msg)
+                @test position(file) == 3
+                seekstart(file)
+                @test read(file, String) == msg
+
+                # Test behaviour when we aren't at the beginning of the file
+                data = rand(UInt8, 10)
+                write(path, data)
+                seek(file, 5)
+                @test read(file) == data[6:end]
+
+                # Test reading a file larger than the server limit for a single
+                # request.
+                data = rand(UInt8, limits.max_read_length + 1)
+                write(path, data)
+                seekstart(file)
+                @test read(file) == data
+
+                # Shouldn't be able to read from a closed file
+                close(file)
+                @test_throws ArgumentError read(file)
+            end
+        end
+    end
+
+    @testset "Writing" begin
+        # Test writing
+        demo_server_with_sftp(2222) do sftp
+            # sftp.session.log_verbosity = ssh.SSH_LOG_PROTOCOL
+
+            mktempdir() do tmpdir
+                path = joinpath(tmpdir, "foo")
+                file = open(path, sftp; write=true, mode=0o600)
+
+                # When we open a file for writing Base.open_flags() defaults to
+                # setting `create=true`, so the file should exist.
+                @test file.flags.create
+                @test isfile(path)
+                # Also test that the mode is set correctly
+                @test 0o777 & filemode(path) == 0o600
+
+                # Simple test
+                msg = "foo"
+                @test write(file, collect(UInt8, msg)) == 3
+                @test read(path, String) == msg
+
+                # Test writing strings directly, which should work without
+                # copying because we support writing DenseVector's and use
+                # codeunits().
+                @test write(file, "foo") == 3
+                # Also tests writing from somewhere other than the beginning of the file
+                @test read(path, String) == "foofoo"
+
+                # Test writing data larger than the server limit for a single request
+                limits = ssh.get_limits(sftp)
+                data = rand(UInt8, limits.max_write_length + 1)
+                seekstart(file)
+                @test write(file, data) == length(data)
+                @test read(path) == data
+
+                # Shouldn't be able to write to a closed file
+                close(file)
+                @test_throws ArgumentError write(file, data)
+            end
+        end
+    end
+
+    @testset "Misc" begin
+        demo_server_with_sftp(2222; verbose=false) do sftp
+            # Extensions
+            @test ssh.get_extensions(sftp) isa Dict
+            @test !isempty(ssh.get_extensions(sftp))
+
+            @test ssh.get_limits(sftp).max_read_length > 0
+
+            # Unfortunately our demo server doesn't support the home-directory
+            # extension.
+            @test_throws ErrorException homedir(sftp)
+
+            mktemp() do path, io
+                # stat()'ing a non-existent file should fail
+                @test_throws ssh.LibSSHException stat(path * "_bad", sftp)
+
+                attrs = stat(path, sftp)
+                @test isassigned(attrs)
+                @test attrs.size == 0
+
+                # Smoke test for Base.show()
+                show(IOBuffer(), attrs)
+
+                write(io, "foo")
+                flush(io)
+
+                attrs = stat(path, sftp)
+                @test attrs.size == 3
+
+                # Not entirely sure why, but the demo server won't return any strings
+                @test attrs.name == ""
+                @test attrs.extended_type == ""
+
+                # Test the finalizer
+                finalize(attrs)
+                @test !isassigned(attrs)
+            end
+
+            close(sftp)
+
+            @test_throws ArgumentError stat("/tmp", sftp)
+            @test_throws ArgumentError ssh.get_extensions(sftp)
+            @test_throws ArgumentError ssh.get_limits(sftp)
+            @test_throws ArgumentError homedir(sftp)
         end
     end
 end

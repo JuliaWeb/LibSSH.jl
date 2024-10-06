@@ -16,7 +16,7 @@ be owning or non-owning of its internal pointer to a `lib.ssh_session`.
 mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
     owning::Bool
-    channels::Vector{Any}
+    closeables::Vector{Any}
     server_callbacks::Union{Callbacks.ServerCallbacks, Nothing}
 
     log_verbosity::Int
@@ -24,6 +24,7 @@ mutable struct Session
     known_hosts::Union{String, Nothing}
     gssapi_server_identity::Union{String, Nothing}
 
+    _lock::ReentrantLock
     _auth_methods::Union{Vector{AuthMethod}, Nothing}
     _attempted_auth_methods::Vector{AuthMethod}
     _require_init_kbdint::Bool
@@ -48,7 +49,9 @@ mutable struct Session
         # Set to non-blocking mode
         lib.ssh_set_blocking(ptr, 0)
 
-        session = new(ptr, own, [], nothing, -1, nothing, nothing, nothing, nothing, AuthMethod[], true)
+        session = new(ptr, own, [], nothing,
+                      -1, nothing, nothing, nothing,
+                      ReentrantLock(), nothing, AuthMethod[], true)
         if !isnothing(log_verbosity)
             session.log_verbosity = log_verbosity
         end
@@ -78,6 +81,9 @@ function Base.show(io::IO, session::Session)
         print(io, Session, "()")
     end
 end
+
+Base.lock(session::Session) = lock(session._lock)
+Base.unlock(session::Session) = unlock(session._lock)
 
 # Non-throwing finalizer for Session objects
 function _finalizer(session::Session)
@@ -181,7 +187,7 @@ function Base.close(session::Session)
         throw(ArgumentError("Calling close() on a non-owning Session is not allowed to avoid accidental double-frees, see the docs for more information."))
     end
 
-    if isopen(session)
+    @lock session if isopen(session)
         disconnect(session)
         lib.ssh_free(session)
         session.ptr = nothing
@@ -227,8 +233,8 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
 const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :known_hosts)
 
 function Base.propertynames(::Session, private::Bool=false)
-    private_fields = (:ptr, :channels, :server_callbacks,
-                      :_auth_methods, :_attempted_auth_methods,
+    private_fields = (:ptr, :closeables, :server_callbacks,
+                      :_lock, :_auth_methods, :_attempted_auth_methods,
                       :_kbdint_prompts, :_require_init_kbdint)
     libssh_options = tuple(keys(SESSION_PROPERTY_OPTIONS)...)
     public_fields = (:owning,)
@@ -323,6 +329,22 @@ function Base.setproperty!(session::Session, name::Symbol, value)
     return value
 end
 
+# Helper macro to lock a session and temporarily set it to blocking mode while
+# executing some expression.
+macro lockandblock(session, expr)
+    quote
+        @lock $(esc(session)) begin
+            lib.ssh_set_blocking($(esc(session)), 1)
+
+            try
+                $(esc(expr))
+            finally
+                lib.ssh_set_blocking($(esc(session)), 0)
+            end
+        end
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -337,17 +359,13 @@ function Base.wait(session::Session; poll_timeout=0.1)
         throw(ArgumentError("poll_timeout=$(poll_timeout), it must be greater than 0"))
     end
 
-    if lib.ssh_is_blocking(session) == 1
-        return
-    end
-
     poll_flags = lib.ssh_get_poll_flags(session)
     readable = (poll_flags & lib.SSH_READ_PENDING) > 0
     writable = (poll_flags & lib.SSH_WRITE_PENDING) > 0
 
     fd = RawFD(lib.ssh_get_fd(session))
     while isopen(session)
-        result = _safe_poll_fd(fd, poll_timeout; readable, writable)
+        result = @lock session _safe_poll_fd(fd, poll_timeout; readable, writable)
         if isnothing(result)
             # This means the session's file descriptor has been closed (see the
             # comments for _safe_poll_fd()).
@@ -398,15 +416,15 @@ Wrapper around [`lib.ssh_disconnect()`](@ref).
 """
 function disconnect(session::Session)
     if isconnected(session)
-        # We close all the channels in reverse order because close(::SshChannel)
-        # deletes each channel from the vector and we don't want to invalidate
-        # any indices while deleting. The channels need to be closed here
-        # because lib.ssh_disconnect() will free all of them.
-        for i in reverse(eachindex(session.channels))
-            # Note that only owning channels are added to session.channels, which
+        # We close all the closeables in reverse order because closing them will
+        # delete each object from the vector and we don't want to invalidate any
+        # indices while deleting. The channels in particular need to be closed
+        # here because lib.ssh_disconnect() will free all of them.
+        for i in reverse(eachindex(session.closeables))
+            # Note that only owning channels are added to session.closeables, which
             # means that this should never throw because the channel is non-owning
             # (of course it may still throw for other reasons).
-            close(session.channels[i])
+            close(session.closeables[i])
         end
 
         lib.ssh_disconnect(session)
@@ -1019,7 +1037,7 @@ function _session_trywait(f::Function, session::Session)
     ret = SSH_ERROR
 
     while true
-        ret = f()
+        ret = @lock session f()
 
         if ret != SSH_AGAIN && ret != lib.SSH_AUTH_AGAIN
             break

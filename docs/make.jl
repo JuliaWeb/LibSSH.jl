@@ -84,6 +84,7 @@ makedocs(;
              "index.md",
              "Examples" => "examples.md",
              "sessions_and_channels.md",
+             "sftp.md",
              "server_support.md",
              "utilities.md",
              "bindings.md",

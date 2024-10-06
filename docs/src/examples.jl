@@ -2,7 +2,7 @@
 #md # CurrentModule = LibSSH
 #md # ```
 
-# # A simple client
+# ## Connecting and authenticating
 #
 # First we'll import the LibSSH package:
 
@@ -70,15 +70,61 @@ ssh.userauth_list(session)
 
 @assert ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
 
-# Now we're authenticated to the server and we can actually do something, like
+# Going through all the authentication methods can be quite complicated, in
+# practice it may be easier to use [`authenticate()`](@ref) which will handle
+# all of that for you.
+
+# ## Running commands
+# Now that we're authenticated to the server we can actually do something, like
 # running a command (see [Command execution](@ref)):
 
 @assert read(`echo 'Hello world!'`, session, String) == "Hello world!\n"
 
+# ## SFTP
+# LibSSH.jl allows reading and writing remote files with the same API as local
+# files with `Base`. Lets start by making a temporary directory and creating a
+# file in it 'remotely':
+
+tmpdir = mktempdir()
+path = joinpath(tmpdir, "foo")
+
+sftp = ssh.SftpSession(session)
+file = open(path, sftp; write=true)
+write(file, "foo") # this returns the number of bytes written
+
+# We can read the file 'remotely':
+
+open(path, sftp) do readonly_file
+    read(readonly_file, String)
+end
+
+# And do other IO-related things:
+
+seekstart(file)
+position(file)
+#-
+isreadable(file)
+#-
+iswritable(file)
+
+# After using it we have to close it explicitly because the finalizer won't do
+# it for us (see the [`Base.close(::SftpFile)`](@ref) docstring for details):
+
+close(file)
+
+# ## Disconnecting
 # Now we can disconnect our client session:
 
+close(sftp)
 close(session)
 
 # And stop the server:
 
 demo.stop(demo_server)
+
+# Note that sometimes the `DemoServer` will display a warning that closing an
+# `SshChannel` failed because of `Socket error: disconnected`. That can be
+# safely ignored, it just means that the socket was closed on the client side
+# before the server could close the `SshChannel`, but the `SshChannel` memory
+# will still be freed. It typically happens when doing SFTP operations since the
+# [`SftpSession`](@ref) manages its own `lib.ssh_channel`.

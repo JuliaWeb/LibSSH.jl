@@ -1426,7 +1426,7 @@ end
 """
     ssh_options_set(session, type, value; throw = true)
 
-Auto-generated wrapper around [`ssh_options_set`](https://api.libssh.org/stable/group__libssh__session.html#ga7a801b85800baa3f4e16f5b47db0a73d).
+Auto-generated wrapper around [`ssh_options_set()`](https://api.libssh.org/stable/group__libssh__session.html#ga7a801b85800baa3f4e16f5b47db0a73d).
 """
 function ssh_options_set(session, type, value; throw = true)
     ret = @ccall(libssh.ssh_options_set(session::ssh_session, type::ssh_options_e, value::Ptr{Cvoid})::Cint)
@@ -1439,7 +1439,7 @@ end
 """
     ssh_options_get(session, type, value; throw = true)
 
-Auto-generated wrapper around [`ssh_options_get`](https://api.libssh.org/stable/group__libssh__session.html#gaaa9d400920cad4d6e4a0fb09ff8c7b01).
+Auto-generated wrapper around [`ssh_options_get()`](https://api.libssh.org/stable/group__libssh__session.html#gaaa9d400920cad4d6e4a0fb09ff8c7b01).
 """
 function ssh_options_get(session, type, value; throw = true)
     ret = @ccall(libssh.ssh_options_get(session::ssh_session, type::ssh_options_e, value::Ptr{Ptr{Cchar}})::Cint)
@@ -1452,7 +1452,7 @@ end
 """
     ssh_options_get_port(session, port_target; throw = true)
 
-Auto-generated wrapper around [`ssh_options_get_port`](https://api.libssh.org/stable/group__libssh__session.html#gaa298d8445355420d80f2d968477ba86f).
+Auto-generated wrapper around [`ssh_options_get_port()`](https://api.libssh.org/stable/group__libssh__session.html#gaa298d8445355420d80f2d968477ba86f).
 """
 function ssh_options_get_port(session, port_target; throw = true)
     ret = @ccall(libssh.ssh_options_get_port(session::ssh_session, port_target::Ptr{Cuint})::Cint)
@@ -1943,7 +1943,7 @@ end
 """
     ssh_userauth_kbdint_getname(session; throw = true)
 
-Auto-generated wrapper around [`ssh_userauth_kbdint_getname`](https://api.libssh.org/stable/group__libssh__auth.html#ga5d6f5eb0ed09fe2c7a2ac69b972e130e).
+Auto-generated wrapper around [`ssh_userauth_kbdint_getname()`](https://api.libssh.org/stable/group__libssh__auth.html#ga5d6f5eb0ed09fe2c7a2ac69b972e130e).
 """
 function ssh_userauth_kbdint_getname(session; throw = true)
     ret = @ccall(libssh.ssh_userauth_kbdint_getname(session::ssh_session)::Ptr{Cchar})
@@ -1969,7 +1969,7 @@ end
 """
     ssh_userauth_kbdint_getprompt(session, i, echo; throw = true)
 
-Auto-generated wrapper around [`ssh_userauth_kbdint_getprompt`](https://api.libssh.org/stable/group__libssh__auth.html#ga15c0f954f79d73e1ac5981ac483efb75).
+Auto-generated wrapper around [`ssh_userauth_kbdint_getprompt()`](https://api.libssh.org/stable/group__libssh__auth.html#ga15c0f954f79d73e1ac5981ac483efb75).
 """
 function ssh_userauth_kbdint_getprompt(session, i, echo; throw = true)
     ret = @ccall(libssh.ssh_userauth_kbdint_getprompt(session::ssh_session, i::Cuint, echo::Ptr{Cchar})::Ptr{Cchar})
@@ -1995,7 +1995,7 @@ end
 """
     ssh_userauth_kbdint_getanswer(session, i; throw = true)
 
-Auto-generated wrapper around [`ssh_userauth_kbdint_getanswer`](https://api.libssh.org/stable/group__libssh__auth.html#ga4f55ed8bc6f553423ab1c92598d0194b).
+Auto-generated wrapper around [`ssh_userauth_kbdint_getanswer()`](https://api.libssh.org/stable/group__libssh__auth.html#ga4f55ed8bc6f553423ab1c92598d0194b).
 """
 function ssh_userauth_kbdint_getanswer(session, i; throw = true)
     ret = @ccall(libssh.ssh_userauth_kbdint_getanswer(session::ssh_session, i::Cuint)::Ptr{Cchar})
@@ -2645,6 +2645,36 @@ struct sftp_attributes_struct
     extended_type::ssh_string
     extended_data::ssh_string
 end
+function Base.getproperty(x::Ptr{sftp_attributes_struct}, f::Symbol)
+    f === :name && return Ptr{Ptr{Cchar}}(x + 0)
+    f === :longname && return Ptr{Ptr{Cchar}}(x + 8)
+    f === :flags && return Ptr{UInt32}(x + 16)
+    f === :type && return Ptr{UInt8}(x + 20)
+    f === :size && return Ptr{UInt64}(x + 24)
+    f === :uid && return Ptr{UInt32}(x + 32)
+    f === :gid && return Ptr{UInt32}(x + 36)
+    f === :owner && return Ptr{Ptr{Cchar}}(x + 40)
+    f === :group && return Ptr{Ptr{Cchar}}(x + 48)
+    f === :permissions && return Ptr{UInt32}(x + 56)
+    f === :atime64 && return Ptr{UInt64}(x + 64)
+    f === :atime && return Ptr{UInt32}(x + 72)
+    f === :atime_nseconds && return Ptr{UInt32}(x + 76)
+    f === :createtime && return Ptr{UInt64}(x + 80)
+    f === :createtime_nseconds && return Ptr{UInt32}(x + 88)
+    f === :mtime64 && return Ptr{UInt64}(x + 96)
+    f === :mtime && return Ptr{UInt32}(x + 104)
+    f === :mtime_nseconds && return Ptr{UInt32}(x + 108)
+    f === :acl && return Ptr{ssh_string}(x + 112)
+    f === :extended_count && return Ptr{UInt32}(x + 120)
+    f === :extended_type && return Ptr{ssh_string}(x + 128)
+    f === :extended_data && return Ptr{ssh_string}(x + 136)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{sftp_attributes_struct}, f::Symbol, v)
+    unsafe_store!(getproperty(x, f), v)
+end
+
 
 const sftp_attributes = Ptr{sftp_attributes_struct}
 
@@ -2822,8 +2852,19 @@ Base.unsafe_convert(::Type{Ptr{__JL_sftp_request_queue_struct}}, x::Base.RefValu
 Base.unsafe_convert(::Type{Ptr{__JL_sftp_request_queue_struct}}, x::Ptr{sftp_request_queue_struct}) = Ptr{__JL_sftp_request_queue_struct}(x)
 
 
+function _threadcall_sftp_new(session::ssh_session)
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_new(session::ssh_session)::sftp_session)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_new(session)
+    sftp_new(session::ssh_session)
+
+Auto-generated wrapper around `sftp_new()`. Original upstream documentation is below.
+
+---
 
 Creates a new sftp session.
 
@@ -2836,8 +2877,9 @@ A new sftp session or NULL on error.
 # See also
 [`sftp_free`](@ref)(), [`sftp_init`](@ref)()
 """
-function sftp_new(session)
-    @ccall libssh.sftp_new(session::ssh_session)::sftp_session
+function sftp_new(session::ssh_session)
+    cfunc = @cfunction(_threadcall_sftp_new, sftp_session, (ssh_session,))
+    return @threadcall(cfunc, sftp_session, (ssh_session,), session)
 end
 
 """
@@ -2869,8 +2911,19 @@ function sftp_free(sftp)
     @ccall libssh.sftp_free(sftp::sftp_session)::Cvoid
 end
 
+function _threadcall_sftp_init(sftp::sftp_session)
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_init(sftp::sftp_session)::Cint)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_init(sftp)
+    sftp_init(sftp::sftp_session)
+
+Auto-generated wrapper around `sftp_init()`. Original upstream documentation is below.
+
+---
 
 Initialize the sftp protocol with the server.
 
@@ -2883,8 +2936,9 @@ This function involves the SFTP protocol initialization (as described in the SFT
 # See also
 [`sftp_new`](@ref)()
 """
-function sftp_init(sftp)
-    @ccall libssh.sftp_init(sftp::sftp_session)::Cint
+function sftp_init(sftp::sftp_session)
+    cfunc = @cfunction(_threadcall_sftp_init, Cint, (sftp_session,))
+    return @threadcall(cfunc, Cint, (sftp_session,), sftp)
 end
 
 """
@@ -2920,7 +2974,11 @@ function sftp_extensions_get_count(sftp)
 end
 
 """
-    sftp_extensions_get_name(sftp, indexn)
+    sftp_extensions_get_name(sftp, indexn; throw = true)
+
+Auto-generated wrapper around `sftp_extensions_get_name()`. Original upstream documentation is below.
+
+---
 
 Get the name of the extension provided by the server.
 
@@ -2930,12 +2988,24 @@ Get the name of the extension provided by the server.
 # Returns
 The name of the extension.
 """
-function sftp_extensions_get_name(sftp, indexn)
-    @ccall libssh.sftp_extensions_get_name(sftp::sftp_session, indexn::Cuint)::Ptr{Cchar}
+function sftp_extensions_get_name(sftp, indexn; throw = true)
+    ret = @ccall(libssh.sftp_extensions_get_name(sftp::sftp_session, indexn::Cuint)::Ptr{Cchar})
+    if ret == C_NULL
+        if throw
+            Base.throw(LibSSHException("Error from sftp_extensions_get_name, no string found (returned C_NULL)"))
+        else
+            return ret
+        end
+    end
+    return unsafe_string(Ptr{UInt8}(ret))
 end
 
 """
-    sftp_extensions_get_data(sftp, indexn)
+    sftp_extensions_get_data(sftp, indexn; throw = true)
+
+Auto-generated wrapper around `sftp_extensions_get_data()`. Original upstream documentation is below.
+
+---
 
 Get the data of the extension provided by the server.
 
@@ -2947,8 +3017,16 @@ This is normally the version number of the extension.
 # Returns
 The data of the extension.
 """
-function sftp_extensions_get_data(sftp, indexn)
-    @ccall libssh.sftp_extensions_get_data(sftp::sftp_session, indexn::Cuint)::Ptr{Cchar}
+function sftp_extensions_get_data(sftp, indexn; throw = true)
+    ret = @ccall(libssh.sftp_extensions_get_data(sftp::sftp_session, indexn::Cuint)::Ptr{Cchar})
+    if ret == C_NULL
+        if throw
+            Base.throw(LibSSHException("Error from sftp_extensions_get_data, no string found (returned C_NULL)"))
+        else
+            return ret
+        end
+    end
+    return unsafe_string(Ptr{UInt8}(ret))
 end
 
 """
@@ -3023,8 +3101,19 @@ function sftp_dir_eof(dir)
     @ccall libssh.sftp_dir_eof(dir::sftp_dir)::Cint
 end
 
+function _threadcall_sftp_stat(session::sftp_session, path::Ptr{Cchar})
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_stat(session::sftp_session, path::Ptr{Cchar})::sftp_attributes)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_stat(session, path)
+    sftp_stat(session::sftp_session, path::Ptr{Cchar})
+
+Auto-generated wrapper around `sftp_stat()`. Original upstream documentation is below.
+
+---
 
 Get information about a file or directory.
 
@@ -3036,8 +3125,9 @@ The sftp attributes structure of the file or directory, NULL on error with ssh a
 # See also
 [`sftp_get_error`](@ref)()
 """
-function sftp_stat(session, path)
-    @ccall libssh.sftp_stat(session::sftp_session, path::Ptr{Cchar})::sftp_attributes
+function sftp_stat(session::sftp_session, path::Ptr{Cchar})
+    cfunc = @cfunction(_threadcall_sftp_stat, sftp_attributes, (sftp_session, Ptr{Cchar}))
+    return @threadcall(cfunc, sftp_attributes, (sftp_session, Ptr{Cchar}), session, path)
 end
 
 """
@@ -3101,8 +3191,19 @@ function sftp_closedir(dir)
     @ccall libssh.sftp_closedir(dir::sftp_dir)::Cint
 end
 
+function _threadcall_sftp_close(file::sftp_file)
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_close(file::sftp_file)::Cint)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_close(file)
+    sftp_close(file::sftp_file)
+
+Auto-generated wrapper around `sftp_close()`. Original upstream documentation is below.
+
+---
 
 Close an open file handle.
 
@@ -3113,12 +3214,24 @@ Returns SSH\\_NO\\_ERROR or [`SSH_ERROR`](@ref) if an error occurred.
 # See also
 [`sftp_open`](@ref)()
 """
-function sftp_close(file)
-    @ccall libssh.sftp_close(file::sftp_file)::Cint
+function sftp_close(file::sftp_file)
+    cfunc = @cfunction(_threadcall_sftp_close, Cint, (sftp_file,))
+    return @threadcall(cfunc, Cint, (sftp_file,), file)
+end
+
+function _threadcall_sftp_open(session::sftp_session, file::Ptr{Cchar}, accesstype::Cint, mode::mode_t)
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_open(session::sftp_session, file::Ptr{Cchar}, accesstype::Cint, mode::mode_t)::sftp_file)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
 end
 
 """
-    sftp_open(session, file, accesstype, mode)
+    sftp_open(session::sftp_session, file::Ptr{Cchar}, accesstype::Cint, mode::mode_t)
+
+Auto-generated wrapper around `sftp_open()`. Original upstream documentation is below.
+
+---
 
 Open a file on the server.
 
@@ -3132,8 +3245,9 @@ A sftp file handle, NULL on error with ssh and sftp error set.
 # See also
 [`sftp_get_error`](@ref)()
 """
-function sftp_open(session, file, accesstype, mode)
-    @ccall libssh.sftp_open(session::sftp_session, file::Ptr{Cchar}, accesstype::Cint, mode::mode_t)::sftp_file
+function sftp_open(session::sftp_session, file::Ptr{Cchar}, accesstype::Cint, mode::mode_t)
+    cfunc = @cfunction(_threadcall_sftp_open, sftp_file, (sftp_session, Ptr{Cchar}, Cint, mode_t))
+    return @threadcall(cfunc, sftp_file, (sftp_session, Ptr{Cchar}, Cint, mode_t), session, file, accesstype, mode)
 end
 
 """
@@ -3300,8 +3414,19 @@ function sftp_aio_begin_read(file, len, aio)
     @ccall libssh.sftp_aio_begin_read(file::sftp_file, len::Csize_t, aio::Ptr{sftp_aio})::Cssize_t
 end
 
+function _threadcall_sftp_aio_wait_read(aio::Ptr{sftp_aio}, buf::Ptr{Cvoid}, buf_size::Csize_t)
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_aio_wait_read(aio::Ptr{sftp_aio}, buf::Ptr{Cvoid}, buf_size::Csize_t)::Cssize_t)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_aio_wait_read(aio, buf, buf_size)
+    sftp_aio_wait_read(aio::Ptr{sftp_aio}, buf::Ptr{Cvoid}, buf_size::Csize_t)
+
+Auto-generated wrapper around `sftp_aio_wait_read()`. Original upstream documentation is below.
+
+---
 
 Wait for an asynchronous read to complete and store the read data in the supplied buffer.
 
@@ -3322,8 +3447,9 @@ Number of bytes read, 0 on EOF, [`SSH_ERROR`](@ref) if an error occurred, [`SSH_
 # See also
 [`sftp_aio_begin_read`](@ref)(), [`sftp_aio_free`](@ref)()
 """
-function sftp_aio_wait_read(aio, buf, buf_size)
-    @ccall libssh.sftp_aio_wait_read(aio::Ptr{sftp_aio}, buf::Ptr{Cvoid}, buf_size::Csize_t)::Cssize_t
+function sftp_aio_wait_read(aio::Ptr{sftp_aio}, buf::Ptr{Cvoid}, buf_size::Csize_t)
+    cfunc = @cfunction(_threadcall_sftp_aio_wait_read, Cssize_t, (Ptr{sftp_aio}, Ptr{Cvoid}, Csize_t))
+    return @threadcall(cfunc, Cssize_t, (Ptr{sftp_aio}, Ptr{Cvoid}, Csize_t), aio, buf, buf_size)
 end
 
 """
@@ -3369,8 +3495,19 @@ function sftp_aio_begin_write(file, buf, len, aio)
     @ccall libssh.sftp_aio_begin_write(file::sftp_file, buf::Ptr{Cvoid}, len::Csize_t, aio::Ptr{sftp_aio})::Cssize_t
 end
 
+function _threadcall_sftp_aio_wait_write(aio::Ptr{sftp_aio})
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_aio_wait_write(aio::Ptr{sftp_aio})::Cssize_t)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_aio_wait_write(aio)
+    sftp_aio_wait_write(aio::Ptr{sftp_aio})
+
+Auto-generated wrapper around `sftp_aio_wait_write()`. Original upstream documentation is below.
+
+---
 
 Wait for an asynchronous write to complete.
 
@@ -3389,8 +3526,9 @@ Number of bytes written on success, [`SSH_ERROR`](@ref) if an error occurred, [`
 # See also
 [`sftp_aio_begin_write`](@ref)(), [`sftp_aio_free`](@ref)()
 """
-function sftp_aio_wait_write(aio)
-    @ccall libssh.sftp_aio_wait_write(aio::Ptr{sftp_aio})::Cssize_t
+function sftp_aio_wait_write(aio::Ptr{sftp_aio})
+    cfunc = @cfunction(_threadcall_sftp_aio_wait_write, Cssize_t, (Ptr{sftp_aio},))
+    return @threadcall(cfunc, Cssize_t, (Ptr{sftp_aio},), aio)
 end
 
 """
@@ -3818,8 +3956,19 @@ function sftp_expand_path(sftp, path)
     @ccall libssh.sftp_expand_path(sftp::sftp_session, path::Ptr{Cchar})::Ptr{Cchar}
 end
 
+function _threadcall_sftp_home_directory(sftp::sftp_session, username::Ptr{Cchar})
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_home_directory(sftp::sftp_session, username::Ptr{Cchar})::Ptr{Cchar})
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_home_directory(sftp, username)
+    sftp_home_directory(sftp::sftp_session, username::Ptr{Cchar})
+
+Auto-generated wrapper around `sftp_home_directory()`. Original upstream documentation is below.
+
+---
 
 Get the specified user's home directory
 
@@ -3835,8 +3984,9 @@ This calls the "home-directory" extension. You should check if the extension is 
 # Returns
 On success, a newly allocated string containing the absolute real-path of the home directory of the user. NULL on error. The caller needs to free the memory using [`ssh_string_free_char`](@ref)().
 """
-function sftp_home_directory(sftp, username)
-    @ccall libssh.sftp_home_directory(sftp::sftp_session, username::Ptr{Cchar})::Ptr{Cchar}
+function sftp_home_directory(sftp::sftp_session, username::Ptr{Cchar})
+    cfunc = @cfunction(_threadcall_sftp_home_directory, Ptr{Cchar}, (sftp_session, Ptr{Cchar}))
+    return @threadcall(cfunc, Ptr{Cchar}, (sftp_session, Ptr{Cchar}), sftp, username)
 end
 
 """
@@ -4264,7 +4414,7 @@ end
 """
     ssh_message_reply_default(msg; throw = true)
 
-Auto-generated wrapper around `ssh_message_reply_default`. Original upstream documentation is below.
+Auto-generated wrapper around `ssh_message_reply_default()`. Original upstream documentation is below.
 
 ---
 
@@ -4290,7 +4440,7 @@ end
 """
     ssh_message_auth_user(msg; throw = true)
 
-Auto-generated wrapper around `ssh_message_auth_user`. Original upstream documentation is below.
+Auto-generated wrapper around `ssh_message_auth_user()`. Original upstream documentation is below.
 
 ---
 
@@ -4318,7 +4468,7 @@ end
 """
     ssh_message_auth_password(msg; throw = true)
 
-Auto-generated wrapper around `ssh_message_auth_password`. Original upstream documentation is below.
+Auto-generated wrapper around `ssh_message_auth_password()`. Original upstream documentation is below.
 
 ---
 
@@ -4370,11 +4520,11 @@ function ssh_message_auth_pubkey(msg)
 end
 
 """
-    ssh_message_auth_kbdint_is_response(msg; throw = true)
+    ssh_message_auth_kbdint_is_response(msg)
 
-Auto-generated wrapper around [`ssh_message_auth_kbdint_is_response`](https://api.libssh.org/stable/group__libssh__server.html#ga5132c82c49de985e9e10f51f393e52a4).
+Auto-generated wrapper around [`ssh_message_auth_kbdint_is_response()`](https://api.libssh.org/stable/group__libssh__server.html#ga5132c82c49de985e9e10f51f393e52a4).
 """
-function ssh_message_auth_kbdint_is_response(msg; throw = true)
+function ssh_message_auth_kbdint_is_response(msg)
     ret = @ccall(libssh.ssh_message_auth_kbdint_is_response(msg::ssh_message)::Cint)
     return Bool(ret)
 end
@@ -4396,7 +4546,7 @@ end
 """
     ssh_message_auth_reply_success(msg, partial; throw = true)
 
-Auto-generated wrapper around `ssh_message_auth_reply_success`.
+Auto-generated wrapper around `ssh_message_auth_reply_success()`.
 """
 function ssh_message_auth_reply_success(msg, partial; throw = true)
     ret = @ccall(libssh.ssh_message_auth_reply_success(msg::ssh_message, partial::Cint)::Cint)
@@ -4427,7 +4577,7 @@ end
 """
     ssh_message_auth_set_methods(msg, methods; throw = true)
 
-Auto-generated wrapper around [`ssh_message_auth_set_methods`](https://api.libssh.org/stable/group__libssh__server.html#gab993157d98e5b4b3399d216c9243effc).
+Auto-generated wrapper around [`ssh_message_auth_set_methods()`](https://api.libssh.org/stable/group__libssh__server.html#gab993157d98e5b4b3399d216c9243effc).
 """
 function ssh_message_auth_set_methods(msg, methods; throw = true)
     ret = @ccall(libssh.ssh_message_auth_set_methods(msg::ssh_message, methods::Cint)::Cint)

@@ -58,6 +58,6 @@ so <3).
 
 ## Contents
 ```@contents
-Pages = ["examples.md", "sessions_and_channels.md", "server_support.md", "utilities.md", "bindings.md"]
+Pages = ["examples.md", "sessions_and_channels.md", "sftp.md", "server_support.md", "utilities.md", "bindings.md"]
 Depth = 10
 ```

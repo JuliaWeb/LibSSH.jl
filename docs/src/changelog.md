@@ -16,6 +16,10 @@ Changelog](https://keepachangelog.com).
   [`Base.run(::Cmd)`](@ref) ([#12]).
 - Made it possible to assign callbacks to [`Callbacks.ServerCallbacks`](@ref) and
   [`Callbacks.ChannelCallbacks`](@ref) by property ([#14]).
+- [`close(::SshChannel)`](@ref) and [`closewrite(::SshChannel)`](@ref) now
+  support an `allow_fail` argument that will print a warning instead of throw an
+  exception if modifying the `lib.ssh_channel` fails ([#16]).
+- Basic [SFTP](sftp.md) support.
 
 ### Fixed
 
@@ -23,6 +27,8 @@ Changelog](https://keepachangelog.com).
   [`Session`](@ref) is disconnected by the remote end ([#13]).
 - Fixed some concurrency bugs in the [`Demo.DemoServer`](@ref) and
   [`SessionEvent`](@ref) ([#15]).
+- Fixed a race condition in the [`Demo.DemoServer`](@ref) that could cause
+  segfaults ([#16]).
 
 ## [v0.5.0] - 2024-08-10
 

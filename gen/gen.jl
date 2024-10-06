@@ -4,7 +4,7 @@ import XML
 import MacroTools
 import MacroTools: @capture
 import Clang
-import Clang.Generators: ExprNode, AbstractFunctionNodeType
+import Clang.Generators: ExprNode, AbstractFunctionNodeType, FunctionProto
 
 include("../doc_utils.jl")
 import .DocUtils: read_tags, get_url
@@ -15,12 +15,19 @@ ctx_objects = Dict{Symbol, Any}()
 # These are lists of functions that we'll rewrite to return Julia types
 string_functions = [:ssh_message_auth_user, :ssh_message_auth_password,
                     :ssh_userauth_kbdint_getname, :ssh_userauth_kbdint_getanswer,
-                    :ssh_userauth_kbdint_getprompt]
+                    :ssh_userauth_kbdint_getprompt,
+                    :sftp_extensions_get_name, :sftp_extensions_get_data]
 bool_functions = [:ssh_message_auth_kbdint_is_response]
 ssh_ok_functions = [:ssh_message_auth_reply_success, :ssh_message_auth_set_methods,
                     :ssh_message_reply_default,
                     :ssh_options_get, :ssh_options_set, :ssh_options_get_port]
-all_rewritable_functions = vcat(string_functions, bool_functions, ssh_ok_functions)
+
+# These functions require the ssh_session to be in blocking mode, so we always
+# call them with @threadcall.
+threadcall_functions = [:sftp_new, :sftp_init, :sftp_open, :sftp_close,
+                        :sftp_home_directory, :sftp_stat,
+                        :sftp_aio_wait_read, :sftp_aio_wait_write]
+all_rewritable_functions = vcat(string_functions, bool_functions, ssh_ok_functions, threadcall_functions)
 
 """
 Helper function to generate documentation for symbols with missing docstrings.
@@ -60,12 +67,13 @@ function get_docs(node::ExprNode, doc::Vector{String})
     elseif node.id == :sftp_limits_t
         String["Pointer to a [`sftp_limits_struct`](@ref)"]
 
-    # Internal Clang.jl structs start with '__' and we don't want to document them
-    elseif startswith(string(node.id), "__")
+    # Internal Clang.jl structs and helper functions from us start with '_' and
+    # we don't want to document them.
+    elseif startswith(string(node.id), "_")
         String[]
 
     elseif node.id in all_rewritable_functions
-        symbol_ref = isempty(doc) && haskey(tags, node.id) ? "[`$(node.id)`]($url)" : "`$(node.id)`"
+        symbol_ref = isempty(doc) && haskey(tags, node.id) ? "[`$(node.id)()`]($url)" : "`$(node.id)()`"
         original_docs_mention = isempty(doc) ? "" : " Original upstream documentation is below."
         autogen_line = String["Auto-generated wrapper around $symbol_ref.$original_docs_mention"]
 
@@ -85,59 +93,140 @@ function get_docs(node::ExprNode, doc::Vector{String})
     end
 end
 
+function rewrite_string_function(name, args, body)
+    quote
+        function $name($(args...); throw=true)
+            ret = $body
+
+            if ret == C_NULL
+                if throw
+                    Base.throw(LibSSHException($("Error from $name, no string found (returned C_NULL)")))
+                else
+                    return ret
+                end
+            end
+
+            return unsafe_string(Ptr{UInt8}(ret))
+        end
+    end
+end
+
+function rewrite_bool_function(name, args, body)
+    quote
+        function $name($(args...))
+            ret = $body
+            return Bool(ret)
+        end
+    end
+end
+
+function rewrite_ssh_ok_function(name, args, body)
+    quote
+        function $name($(args...); throw=true)
+            ret = $body
+
+            if ret != SSH_OK && throw
+                # This ugly concatenation is necessary because we
+                # have to interpolate the function name into the
+                # error string but also keep the return value
+                # interpolation from being escaped.
+                Base.throw(LibSSHException($("Error from $name, did not return SSH_OK: ") * "$(ret)"))
+            end
+
+            return ret
+        end
+    end
+end
+
+"""
+Rewrites a blocking libssh function into one that uses @threadcall. Some parts
+of the libssh API don't support the non-blocking API, so to avoid these calls
+blocking a whole thread we call them with @threadcall.
+
+The problem is that @threadcall will not mark the calling region as GC safe,
+which means that if the @threadcall returning depends on some other Julia code
+executing (i.e. with the DemoServer) we'll likely deadlock when the other Julia
+code tries to allocate and hits the GC.
+
+To get around this we rewrite the original wrapper to call a @cfunction that
+will create a safe region around the @ccall. In some future Julia release this
+will be unnecessary and we'll be able to directly @threadcall blocking
+functions: https://github.com/JuliaLang/julia/pull/55956
+"""
+function rewrite_threadcall_function!(dag, node, name, args, body)
+    if !@capture(body, @ccall ccall_func_(ccall_args__)::ccall_ret_)
+        error("Couldn't parse @ccall expr")
+    end
+
+    # We require the exact argument types to be passed because @ccall's
+    # automatic type conversion may allocate. It's easier to just require the
+    # user to do the right thing.
+    arg_types = [expr.args[2] for expr in ccall_args]
+
+    cfunc_name = Symbol(:_threadcall_, name)
+    cfunc_expr = quote
+        function $cfunc_name($(ccall_args...))
+            gc_state = @ccall jl_gc_safe_enter()::Int8
+            ret = $body
+            @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+
+            return ret
+        end
+    end
+    cfunc_expr = MacroTools.prettify(cfunc_expr)
+
+    new_node = ExprNode(cfunc_name, FunctionProto(), node.cursor, [cfunc_expr], Int[])
+
+    wrapper = quote
+        function $name($(ccall_args...))
+            cfunc = @cfunction($cfunc_name, $ccall_ret, ($(arg_types...),))
+            return @threadcall(cfunc, $ccall_ret, ($(arg_types...),), $(args...))
+        end
+    end
+
+    return wrapper, new_node
+end
+
 function rewrite!(ctx)
     dag = ctx.dag
 
-    for node in dag.nodes
+    nodes_to_insert = []
+    for node_idx in eachindex(dag.nodes)
+        node = dag.nodes[node_idx]
+
         for i in eachindex(node.exprs)
             expr = node.exprs[i]
 
             # Look for function expressions
             if @capture(expr, function name_(args__) body_ end)
                 wrapper = nothing
+                name_str = string(name)
 
                 # Check if we can rewrite the function
                 if name in string_functions
-                    wrapper = quote
-                        if ret == C_NULL
-                            if throw
-                                Base.throw(LibSSHException($("Error from $name, no string found (returned C_NULL)")))
-                            else
-                                return ret
-                            end
-                        end
-
-                        return unsafe_string(Ptr{UInt8}(ret))
-                    end
+                    wrapper = rewrite_string_function(name, args, body)
                 elseif name in bool_functions
-                    wrapper = :(return Bool(ret))
+                    wrapper = rewrite_bool_function(name, args, body)
                 elseif name in ssh_ok_functions
-                    wrapper = quote
-                        if ret != SSH_OK && throw
-                            # This ugly concatenation is necessary because we
-                            # have to interpolate the function name into the
-                            # error string but also keep the return value
-                            # interpolation from being escaped.
-                            Base.throw(LibSSHException($("Error from $name, did not return SSH_OK: ") * "$(ret)"))
-                        end
+                    wrapper = rewrite_ssh_ok_function(name, args, body)
+                elseif name in threadcall_functions
+                    wrapper, new_node = rewrite_threadcall_function!(dag, node, name, args, body)
 
-                        return ret
-                    end
+                    push!(nodes_to_insert, (node_idx, new_node))
                 end
 
                 if !isnothing(wrapper)
-                    new_expr = quote
-                        function $name($(args...); throw=true)
-                            ret = $body
-                            $wrapper
-                        end
-                    end
-
                     # Note that the node retains the old ID, only the expression changed
-                    node.exprs[i] = MacroTools.prettify(new_expr)
+                    node.exprs[i] = MacroTools.prettify(wrapper)
                 end
             end
         end
+    end
+
+    # Iterate over the nodes to insert in reverse so we don't invalidate their
+    # indices.
+    for (idx, node) in reverse(nodes_to_insert)
+        insert!(dag.nodes, idx, node)
     end
 end
 
