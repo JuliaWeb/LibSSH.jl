@@ -3495,8 +3495,19 @@ function sftp_aio_begin_write(file, buf, len, aio)
     @ccall libssh.sftp_aio_begin_write(file::sftp_file, buf::Ptr{Cvoid}, len::Csize_t, aio::Ptr{sftp_aio})::Cssize_t
 end
 
+function _threadcall_sftp_aio_wait_write(aio::Ptr{sftp_aio})
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_aio_wait_write(aio::Ptr{sftp_aio})::Cssize_t)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_aio_wait_write(aio)
+    sftp_aio_wait_write(aio::Ptr{sftp_aio})
+
+Auto-generated wrapper around `sftp_aio_wait_write()`. Original upstream documentation is below.
+
+---
 
 Wait for an asynchronous write to complete.
 
@@ -3515,8 +3526,9 @@ Number of bytes written on success, [`SSH_ERROR`](@ref) if an error occurred, [`
 # See also
 [`sftp_aio_begin_write`](@ref)(), [`sftp_aio_free`](@ref)()
 """
-function sftp_aio_wait_write(aio)
-    @ccall libssh.sftp_aio_wait_write(aio::Ptr{sftp_aio})::Cssize_t
+function sftp_aio_wait_write(aio::Ptr{sftp_aio})
+    cfunc = @cfunction(_threadcall_sftp_aio_wait_write, Cssize_t, (Ptr{sftp_aio},))
+    return @threadcall(cfunc, Cssize_t, (Ptr{sftp_aio},), aio)
 end
 
 """

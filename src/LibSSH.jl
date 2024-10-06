@@ -185,4 +185,7 @@ include("channel.jl")
 include("message.jl")
 include("server.jl")
 
+import Base: Filesystem
+include("sftp.jl")
+
 end

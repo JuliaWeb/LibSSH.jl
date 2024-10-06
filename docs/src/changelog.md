@@ -19,6 +19,7 @@ Changelog](https://keepachangelog.com).
 - [`close(::SshChannel)`](@ref) and [`closewrite(::SshChannel)`](@ref) now
   support an `allow_fail` argument that will print a warning instead of throw an
   exception if modifying the `lib.ssh_channel` fails ([#16]).
+- Basic [SFTP](sftp.md) support.
 
 ### Fixed
 

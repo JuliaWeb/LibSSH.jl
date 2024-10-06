@@ -329,6 +329,22 @@ function Base.setproperty!(session::Session, name::Symbol, value)
     return value
 end
 
+# Helper macro to lock a session and temporarily set it to blocking mode while
+# executing some expression.
+macro lockandblock(session, expr)
+    quote
+        @lock $(esc(session)) begin
+            lib.ssh_set_blocking($(esc(session)), 1)
+
+            try
+                $(esc(expr))
+            finally
+                lib.ssh_set_blocking($(esc(session)), 0)
+            end
+        end
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 

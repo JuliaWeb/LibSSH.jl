@@ -25,7 +25,8 @@ ssh_ok_functions = [:ssh_message_auth_reply_success, :ssh_message_auth_set_metho
 # These functions require the ssh_session to be in blocking mode, so we always
 # call them with @threadcall.
 threadcall_functions = [:sftp_new, :sftp_init, :sftp_open, :sftp_close,
-                        :sftp_home_directory, :sftp_stat, :sftp_aio_wait_read]
+                        :sftp_home_directory, :sftp_stat,
+                        :sftp_aio_wait_read, :sftp_aio_wait_write]
 all_rewritable_functions = vcat(string_functions, bool_functions, ssh_ok_functions, threadcall_functions)
 
 """
