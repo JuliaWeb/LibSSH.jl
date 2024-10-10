@@ -23,7 +23,7 @@ mutable struct CloseableCondition
 end
 
 function Base.wait(cond::CloseableCondition)
-    if @atomic cond.closed
+    if !isopen(cond)
         throw(InvalidStateException("Condition has been closed", :closed))
     end
 
@@ -39,3 +39,4 @@ end
 Base.notify(cond::CloseableCondition, args...; kwargs...) = notify(cond.cond, args...; kwargs...)
 Base.lock(cond::CloseableCondition) = lock(cond.cond)
 Base.unlock(cond::CloseableCondition) = unlock(cond.cond)
+Base.isopen(cond::CloseableCondition) = !(@atomic cond.closed)

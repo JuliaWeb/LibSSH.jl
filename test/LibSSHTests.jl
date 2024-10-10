@@ -96,6 +96,27 @@ function demo_server_with_sftp(f::Function, args...; kwargs...)
     return demo_server
 end
 
+@testset "CloseableCondition" begin
+    cond = ssh.CloseableCondition()
+    @test isopen(cond)
+
+    # Test that normal waiting works
+    t = Threads.@spawn @lock cond wait(cond)
+    @test timedwait(() -> istaskstarted(t), 5) == :ok
+    @test_throws ConcurrencyViolationError notify(cond)
+    @lock cond notify(cond)
+    @test timedwait(() -> istaskdone(t), 5) == :ok
+
+    # Test that closing works
+    t = Threads.@spawn @lock cond wait(cond)
+    @test timedwait(() -> istaskstarted(t), 5) == :ok
+    @lock cond close(cond)
+    @test timedwait(() -> istaskdone(t), 5) == :ok
+    @test current_exceptions(t)[1][1] isa InvalidStateException
+
+    # We shouldn't be able to wait on a closed condition
+    @test_throws InvalidStateException wait(cond)
+end
 
 @testset "Server" begin
     hostkey = joinpath(@__DIR__, "ed25519_test_key")
@@ -108,6 +129,9 @@ end
                                             key=pki.generate(pki.KeyType_rsa))
 
         server = ssh.Bind(2222; hostkey)
+
+        # Smoke test
+        show(IOBuffer(), server)
 
         # Unsetting a ssh_bind option shouldn't be allowed
         @test_throws ArgumentError server.port = nothing
@@ -125,6 +149,9 @@ end
 
         finalize(server)
         @test server.ptr == nothing
+
+        # Getting an error from a closed Bind should fail
+        @test_throws ArgumentError ssh.get_error(server)
     end
 
     @testset "SessionEvent" begin
@@ -181,6 +208,10 @@ end
 
         client = demo_server.clients[1]
         logs = client.callback_log
+
+        # Smoke tests
+        show(IOBuffer(), demo_server)
+        show(IOBuffer(), client)
 
         # Check that the authentication methods were called
         @test logs[:auth_none] == [true]
