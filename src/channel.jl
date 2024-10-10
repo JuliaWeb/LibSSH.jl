@@ -636,6 +636,7 @@ function Base.run(cmd::Cmd, session::Session;
     set_channel_callbacks(process._sshchan, callbacks)
 
     process._task = Threads.@spawn _exec_command(process)
+    errormonitor(process._task)
     if wait
         # Note the use of Base.wait() to avoid aliasing with the `wait` argument
         Base.wait(process._task)

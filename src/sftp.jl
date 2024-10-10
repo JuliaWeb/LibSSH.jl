@@ -44,7 +44,9 @@ end
 $(TYPEDEF)
 
 This represents a SFTP session, through which one can do SFTP operations. It is
-only usable while its parent [`Session`](@ref) is still open.
+only usable while its parent [`Session`](@ref) is still open, and it must be
+closed explicitly with [`Base.close(::SftpSession)`](@ref) or it will leak
+memory.
 """
 mutable struct SftpSession
     ptr::Union{lib.sftp_session, Nothing}
@@ -84,7 +86,13 @@ mutable struct SftpSession
 
         push!(session.closeables, self)
 
-        finalizer(close, self)
+        finalizer(_finalizer, self)
+    end
+end
+
+function _finalizer(sftp::SftpSession)
+    if isopen(sftp)
+        Threads.@spawn @error "$(sftp) has not been closed, this is a memory leak!"
     end
 end
 
@@ -141,8 +149,19 @@ Close an `SftpSession`. This will also close any open files.
 """
 function Base.close(sftp::SftpSession)
     if isassigned(sftp)
+        # Close all open files
         for i in reverse(eachindex(sftp.files))
             close(sftp.files[i])
+        end
+
+        # Remove from the parent session
+        @lock sftp.session begin
+            idx = findfirst(x -> x === sftp, sftp.session.closeables)
+            if !isnothing(idx)
+                popat!(sftp.session.closeables, idx)
+            else
+                Threads.@spawn @error "Couldn't find $(sftp) in the parent Session, this may be a memory leak."
+            end
         end
 
         lib.sftp_free(sftp.ptr)

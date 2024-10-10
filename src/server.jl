@@ -713,7 +713,17 @@ end
     callback_log::Dict{Symbol, Vector} = Dict{Symbol, Vector}()
 end
 
+function Base.show(io::IO, client::Client)
+    print(io, Client, "(id=$(client.id), session=$(client.session))")
+end
+
 function Base.close(client::Client)
+    # Wake up all existing waiters on the session. We have to do this before
+    # closing the SessionEvent because wait(::SessionEvent) involves waiting on
+    # the session. It's not great. Ideally it would be possible to close() a
+    # SessionEvent without closing its session.
+    ssh.closewait(client.session)
+
     close(client.session_event)
     wait(client.task)
 
@@ -878,7 +888,7 @@ function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
         wait(t)
     end
 
-    return demo_server
+    return demo_server, fetch(t)
 end
 
 function _handle_client(session::ssh.Session, ds::DemoServer)
@@ -910,7 +920,16 @@ function _handle_client(session::ssh.Session, ds::DemoServer)
 
     client.session_event = ssh.SessionEvent(session)
     while true
-        ret = ssh.event_dopoll(client.session_event)
+        ret = try
+            ssh.event_dopoll(client.session_event)
+        catch ex
+            if ex isa InvalidStateException
+                break
+            else
+                rethrow()
+            end
+        end
+
         if ret != ssh.SSH_OK
             break
         end
