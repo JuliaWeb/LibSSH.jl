@@ -3051,8 +3051,19 @@ function sftp_extension_supported(sftp, name, data)
     @ccall libssh.sftp_extension_supported(sftp::sftp_session, name::Ptr{Cchar}, data::Ptr{Cchar})::Cint
 end
 
+function _threadcall_sftp_opendir(session::sftp_session, path::Ptr{Cchar})
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_opendir(session::sftp_session, path::Ptr{Cchar})::sftp_dir)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_opendir(session, path)
+    sftp_opendir(session::sftp_session, path::Ptr{Cchar})
+
+Auto-generated wrapper around `sftp_opendir()`. Original upstream documentation is below.
+
+---
 
 Open a directory used to obtain directory entries.
 
@@ -3064,12 +3075,24 @@ A sftp directory handle or NULL on error with ssh and sftp error set.
 # See also
 [`sftp_readdir`](@ref), [`sftp_closedir`](@ref)
 """
-function sftp_opendir(session, path)
-    @ccall libssh.sftp_opendir(session::sftp_session, path::Ptr{Cchar})::sftp_dir
+function sftp_opendir(session::sftp_session, path::Ptr{Cchar})
+    cfunc = @cfunction(_threadcall_sftp_opendir, sftp_dir, (sftp_session, Ptr{Cchar}))
+    return @threadcall(cfunc, sftp_dir, (sftp_session, Ptr{Cchar}), session, path)
+end
+
+function _threadcall_sftp_readdir(session::sftp_session, dir::sftp_dir)
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_readdir(session::sftp_session, dir::sftp_dir)::sftp_attributes)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
 end
 
 """
-    sftp_readdir(session, dir)
+    sftp_readdir(session::sftp_session, dir::sftp_dir)
+
+Auto-generated wrapper around `sftp_readdir()`. Original upstream documentation is below.
+
+---
 
 Get a single file attributes structure of a directory.
 
@@ -3081,8 +3104,9 @@ A file attribute structure or NULL at the end of the directory.
 # See also
 [`sftp_opendir`](@ref)(), sftp\\_attribute\\_free(), [`sftp_closedir`](@ref)()
 """
-function sftp_readdir(session, dir)
-    @ccall libssh.sftp_readdir(session::sftp_session, dir::sftp_dir)::sftp_attributes
+function sftp_readdir(session::sftp_session, dir::sftp_dir)
+    cfunc = @cfunction(_threadcall_sftp_readdir, sftp_attributes, (sftp_session, sftp_dir))
+    return @threadcall(cfunc, sftp_attributes, (sftp_session, sftp_dir), session, dir)
 end
 
 """
@@ -3177,8 +3201,19 @@ function sftp_attributes_free(file)
     @ccall libssh.sftp_attributes_free(file::sftp_attributes)::Cvoid
 end
 
+function _threadcall_sftp_closedir(dir::sftp_dir)
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_closedir(dir::sftp_dir)::Cint)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_closedir(dir)
+    sftp_closedir(dir::sftp_dir)
+
+Auto-generated wrapper around `sftp_closedir()`. Original upstream documentation is below.
+
+---
 
 Close a directory handle opened by [`sftp_opendir`](@ref)().
 
@@ -3187,8 +3222,9 @@ Close a directory handle opened by [`sftp_opendir`](@ref)().
 # Returns
 Returns SSH\\_NO\\_ERROR or [`SSH_ERROR`](@ref) if an error occurred.
 """
-function sftp_closedir(dir)
-    @ccall libssh.sftp_closedir(dir::sftp_dir)::Cint
+function sftp_closedir(dir::sftp_dir)
+    cfunc = @cfunction(_threadcall_sftp_closedir, Cint, (sftp_dir,))
+    return @threadcall(cfunc, Cint, (sftp_dir,), dir)
 end
 
 function _threadcall_sftp_close(file::sftp_file)

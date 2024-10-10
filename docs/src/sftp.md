@@ -30,7 +30,6 @@ Depth = 3
 
 ## SftpSession
 ```@docs
-SftpError
 SftpSession
 SftpSession(::Session)
 SftpSession(::Function)
@@ -39,6 +38,7 @@ Base.isopen(::SftpSession)
 Base.lock(::SftpSession)
 Base.unlock(::SftpSession)
 Base.stat(::String, ::SftpSession)
+Base.readdir(::AbstractString, ::SftpSession)
 get_extensions(::SftpSession)
 get_limits(::SftpSession)
 get_error(::SftpSession)
@@ -64,4 +64,10 @@ Base.position(::SftpFile)
 Base.seek(::SftpFile, ::Integer)
 Base.seekstart(::SftpFile)
 Base.seekend(::SftpFile)
+```
+
+## Other types
+```@docs
+SftpError
+SftpAttributes
 ```
