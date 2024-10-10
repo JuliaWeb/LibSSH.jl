@@ -163,18 +163,15 @@ end
 # poll_fd() in a try-catch in case the bind (and thus the file descriptor) has
 # been closed in the meantime, which would cause poll_fd() to throw an IOError:
 # https://github.com/JuliaLang/julia/pull/52377.
-#
-# Note: the whole polling design is bad. We should only have one task polling
-# the session and waking up other listeners.
 function _safe_poll_fd(args...; kwargs...)
     result = nothing
-    # try
+    try
         result = FileWatching.poll_fd(args...; kwargs...)
-    # catch ex
-    #     if !(ex isa Base.IOError)
-    #         rethrow()
-    #     end
-    # end
+    catch ex
+        if !(ex isa Base.IOError) && !(ex isa TypeError)
+            rethrow()
+        end
+    end
 
     return result
 end

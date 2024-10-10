@@ -12,6 +12,9 @@ Represents an SSH session. Note that some properties such as the host and port a
 implemented in `getproperty()`/`setproperty!()` by using the internal values of
 the `ssh_session`, i.e. they aren't simply fields of the struct. A `Session` may
 be owning or non-owning of its internal pointer to a `lib.ssh_session`.
+
+It must be closed explicitly with [`Base.close(::Session)`](@ref) or it will
+leak memory.
 """
 mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
@@ -28,6 +31,21 @@ mutable struct Session
     _auth_methods::Union{Vector{AuthMethod}, Nothing}
     _attempted_auth_methods::Vector{AuthMethod}
     _require_init_kbdint::Bool
+
+    # Event to notify the waiter task when someone wants to wait() on the Session
+    _waiter_request::Threads.Event
+    # Condition for callers to wait() on
+    _wakeup::CloseableCondition
+    # Tell the waiter task when to stop
+    @atomic _waiter_stop_flag::Bool
+    # The waiter task runs for as long as the Session is open. Its only job is
+    # to wakeup when requested by other tasks calling wait(::Session), poll the
+    # Session, and then wakeup all waiting tasks to let them know that they can
+    # run their callbacks. It's important that only one task is doing the
+    # waiting on the file descriptor, because if there's multiple tasks waiting
+    # then one task might 'catch' an event that was intended for some other
+    # task.
+    _waiter_task::Task
 
     @doc """
     $(TYPEDSIGNATURES)
@@ -51,7 +69,13 @@ mutable struct Session
 
         session = new(ptr, own, [], nothing,
                       -1, nothing, nothing, nothing,
-                      ReentrantLock(), nothing, AuthMethod[], true)
+                      ReentrantLock(), nothing, AuthMethod[], true,
+                      Threads.Event(true), CloseableCondition(), false)
+
+        # Start the waiter task
+        session._waiter_task = Threads.@spawn _wait_loop(session)
+        errormonitor(session._waiter_task)
+
         if !isnothing(log_verbosity)
             session.log_verbosity = log_verbosity
         end
@@ -74,11 +98,26 @@ end
 
 Base.unsafe_convert(::Type{Ptr{Cvoid}}, session::Session) = Ptr{Cvoid}(Base.unsafe_convert(lib.ssh_session, session))
 
+function _safe_getproperty(session::Session, name::Symbol)
+    try
+        getproperty(session, name)
+    catch ex
+        if ex isa LibSSHException
+            "<unset>"
+        else
+            rethrow()
+        end
+    end
+end
+
 function Base.show(io::IO, session::Session)
     if isopen(session)
-        print(io, Session, "(host=$(session.host), port=$(session.port), user=$(session.user), connected=$(isconnected(session)))")
+        host = _safe_getproperty(session, :host)
+        user = _safe_getproperty(session, :user)
+
+        print(io, Session, "(host=$(host), port=$(session.port), user=$(user), connected=$(isconnected(session)))")
     else
-        print(io, Session, "()")
+        print(io, Session, "([closed])")
     end
 end
 
@@ -87,10 +126,8 @@ Base.unlock(session::Session) = unlock(session._lock)
 
 # Non-throwing finalizer for Session objects
 function _finalizer(session::Session)
-    try
-        close(session)
-    catch ex
-        Threads.@spawn @error "Error when finalizing Session" exception=(ex, catch_backtrace())
+    if isopen(session)
+        Threads.@spawn @error "$(session) has not been explicitly closed, this is a memory leak!"
     end
 end
 
@@ -131,22 +168,30 @@ function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
     host_str = host isa AbstractString ? host : string(host)
 
     session = Session(session_ptr; log_verbosity)
-    session.host = host_str
-    session.port = port
 
-    if isnothing(user)
-        # Explicitly initialize the user, otherwise an error will be thrown when
-        # retrieving it. Passing null will set it to the current user (see docs).
-        lib.ssh_options_set(session, SSH_OPTIONS_USER, C_NULL)
-    else
-        session.user = user
+    # Put this section in a try-catch block so that the session will be free'd
+    # if initialization fails for some reason.
+    try
+        session.host = host_str
+        session.port = port
+
+        if isnothing(user)
+            # Explicitly initialize the user, otherwise an error will be thrown when
+            # retrieving it. Passing null will set it to the current user (see docs).
+            lib.ssh_options_set(session, SSH_OPTIONS_USER, C_NULL)
+        else
+            session.user = user
+        end
+
+        if auto_connect
+            connect(session)
+        end
+
+        return session
+    catch
+        close(session)
+        rethrow()
     end
-
-    if auto_connect
-        connect(session)
-    end
-
-    return session
 end
 
 """
@@ -172,6 +217,18 @@ be `false` if the session has been closed.
 """
 Base.isassigned(session::Session) = !isnothing(session.ptr)
 
+# Make the Session closed for wait()'ing and wake up any existing waiting
+# tasks. This is probably only useful in servers.
+function closewait(session::Session)
+    # Close the waiter task so it will never notify again
+    @atomic session._waiter_stop_flag = true
+    notify(session._waiter_request)
+    wait(session._waiter_task)
+
+    # Wake up any tasks that were already waiting
+    @lock session._wakeup close(session._wakeup)
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -188,6 +245,7 @@ function Base.close(session::Session)
     end
 
     @lock session if isopen(session)
+        closewait(session)
         disconnect(session)
         lib.ssh_free(session)
         session.ptr = nothing
@@ -233,13 +291,10 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
 const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :known_hosts)
 
 function Base.propertynames(::Session, private::Bool=false)
-    private_fields = (:ptr, :closeables, :server_callbacks,
-                      :_lock, :_auth_methods, :_attempted_auth_methods,
-                      :_kbdint_prompts, :_require_init_kbdint)
+    fields = fieldnames(Session)
     libssh_options = tuple(keys(SESSION_PROPERTY_OPTIONS)...)
-    public_fields = (:owning,)
 
-    return (libssh_options..., public_fields..., (private ? private_fields : ())...)
+    return (libssh_options..., fields...)
 end
 
 function Base.getproperty(session::Session, name::Symbol)
@@ -290,7 +345,7 @@ function Base.setproperty!(session::Session, name::Symbol, value)
     end
 
     if name in (:ptr, :server_callbacks, :_auth_methods, :_attempted_auth_methods,
-                :_kbdint_prompts, :_require_init_kbdint)
+                :_kbdint_prompts, :_require_init_kbdint, :_waiter_task, :_waiter_stop_flag)
         return setfield!(session, name, value)
     end
 
@@ -348,30 +403,49 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Waits for a session in non-blocking mode. If the session is in blocking mode the
-function will return immediately.
+Waits for data to be readable/writable on a session.
 
-The `poll_timeout` argument has the same meaning as [`listen(::Function,
-::Bind)`](@ref).
+# Throws
+- `InvalidStateException`: If the session is already closed, or is closed while
+  waiting.
 """
-function Base.wait(session::Session; poll_timeout=0.1)
-    if poll_timeout <= 0
-        throw(ArgumentError("poll_timeout=$(poll_timeout), it must be greater than 0"))
+function Base.wait(session::Session)
+    if !isopen(session)
+        throw(InvalidStateException("Session is closed, cannot wait() on it", :closed))
     end
 
-    poll_flags = lib.ssh_get_poll_flags(session)
-    readable = (poll_flags & lib.SSH_READ_PENDING) > 0
-    writable = (poll_flags & lib.SSH_WRITE_PENDING) > 0
+    @lock session._wakeup begin
+        # Tell the waiter task we want the session to be polled
+        notify(session._waiter_request)
 
-    fd = RawFD(lib.ssh_get_fd(session))
+        wait(session._wakeup)
+    end
+end
+
+# This is run for as long as the session is open
+function _wait_loop(session::Session)
     while isopen(session)
-        result = @lock session _safe_poll_fd(fd, poll_timeout; readable, writable)
-        if isnothing(result)
-            # This means the session's file descriptor has been closed (see the
-            # comments for _safe_poll_fd()).
-            continue
-        elseif !result.timedout
+        wait(session._waiter_request)
+        if @atomic session._waiter_stop_flag
             break
+        end
+
+        poll_flags = lib.ssh_get_poll_flags(session)
+        readable = (poll_flags & lib.SSH_READ_PENDING) > 0
+        writable = (poll_flags & lib.SSH_WRITE_PENDING) > 0
+
+        fd = RawFD(lib.ssh_get_fd(session))
+        while !(@atomic session._waiter_stop_flag) && isopen(session)
+            result = @lock session _safe_poll_fd(fd, 0.1; readable, writable)
+            if isnothing(result)
+                # This means the session's file descriptor has been closed (see the
+                # comments for _safe_poll_fd()).
+                break
+            elseif !result.timedout
+                # Wakeup waiting tasks
+                @lock session._wakeup notify(session._wakeup)
+                break
+            end
         end
     end
 

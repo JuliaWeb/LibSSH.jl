@@ -24,28 +24,29 @@ const HTTP_200 = "HTTP/1.1 200 OK\r\n\r\n"
 function http_server(f::Function, port)
     start_event = Base.Event()
     server = listen(IPv4(0), port)
-    t = errormonitor(@async while isopen(server)
-                         notify(start_event)
-                         local sock
-                         try
-                             sock = accept(server)
-                         catch ex
-                             if ex isa Base.IOError
-                                 break
-                             else
-                                 rethrow()
-                             end
-                         end
+    t = Threads.@spawn while isopen(server)
+        notify(start_event)
+        local sock
+        try
+            sock = accept(server)
+        catch ex
+            if ex isa Base.IOError
+                break
+            else
+                rethrow()
+            end
+        end
 
-                         # Wait for any request, doesn't matter what
-                         data = readavailable(sock)
-                         if !isempty(data)
-                             write(sock, HTTP_200)
-                         end
+        # Wait for any request, doesn't matter what
+        data = readavailable(sock)
+        if !isempty(data)
+            write(sock, HTTP_200)
+        end
 
-                         closewrite(sock)
-                         close(sock)
-                     end)
+        closewrite(sock)
+        close(sock)
+    end
+    errormonitor(t)
 
     wait(start_event)
     try
@@ -114,7 +115,7 @@ end
         @test ssh.get_error(server) == ""
 
         # Basic listener test
-        t = errormonitor(@async ssh.listen(_ -> nothing, server))
+        t = errormonitor(Threads.@spawn ssh.listen(_ -> nothing, server))
         ssh.wait_for_listener(server)
 
         @test istaskstarted(t)
@@ -127,7 +128,7 @@ end
     end
 
     @testset "SessionEvent" begin
-        demo_server_with_session(2222; timeout=10) do session
+        demo_server_with_session(2222; verbose=false) do session
             event = ssh.SessionEvent(session)
 
             # Smoke test
@@ -152,7 +153,7 @@ end
     ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`sshpass -p bar $(openssh_cmd.exec) -F none -o NoHostAuthenticationForLocalhost=yes -p 2222 $cmd`; env=openssh_cmd.env))
 
     @testset "Command execution" begin
-        demo_server = DemoServer(2222; password="bar") do
+        DemoServer(2222; password="bar") do
             # Test exitcodes
             @test run(ssh_cmd(`foo@localhost exit 0`)).exitcode == 0
             @test run(ssh_cmd(`foo@localhost exit 42`)).exitcode == 42
@@ -169,7 +170,7 @@ end
 
     @testset "Password authentication and session channels" begin
         # More complicated test, where we run a command and check the output
-        demo_server = DemoServer(2222; password="bar") do
+        demo_server, _ = DemoServer(2222; password="bar") do
             cmd_out = IOBuffer()
             cmd = ssh_cmd(`foo@localhost whoami`)
             cmd_result = run(pipeline(cmd; stdout=cmd_out))
@@ -204,7 +205,7 @@ end
         end
 
         # Test direct port forwarding
-        demo_server = DemoServer(2222; password="bar") do
+        demo_server, _ = DemoServer(2222; password="bar") do
             mktempdir() do tmpdir
                 tmpfile = joinpath(tmpdir, "foo")
 
@@ -236,7 +237,7 @@ end
     end
 
     @testset "Keyboard-interactive authentication" begin
-        demo_server = DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
+        demo_server, _ = DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
             # Run the script
             script_path = joinpath(@__DIR__, "interactive_ssh.sh")
             proc = run(`expect -f $script_path`; wait=false)
@@ -253,7 +254,7 @@ end
     end
 
     @testset "Multiple connections" begin
-        demo_server = DemoServer(2222; password="bar") do
+        demo_server, _ = DemoServer(2222; password="bar") do
             run(ssh_cmd(`foo@localhost exit 0`))
             run(ssh_cmd(`foo@localhost exit 0`))
         end
@@ -277,10 +278,13 @@ end
     end
 
     # Test that the DemoServer cleans up lingering sessions
-    server_task = Threads.@spawn DemoServer(2222; timeout=10) do
-        session = ssh.Session("127.0.0.1", 2222)
+    server_task = Threads.@spawn DemoServer(2222; password="foo") do
+        ssh.Session("127.0.0.1", 2222; auto_connect=false)
     end
     @test timedwait(() -> istaskdone(server_task), 5) == :ok
+    @test !istaskfailed(server_task)
+    _, session = fetch(server_task)
+    close(session)
 end
 
 @testset "Session" begin
@@ -321,13 +325,24 @@ end
         @test session.gssapi_server_identity == "foo.com"
 
         # Test setting an initial user
-        session2 = ssh.Session("localhost"; user="foo", auto_connect=false)
-        @test session2.user == "foo"
+        ssh.Session("localhost"; user="foo", auto_connect=false) do session2
+            @test session2.user == "foo"
+        end
     end
 
-    # Test the finalizer
-    finalize(session)
-    @test session.ptr == nothing
+    # Test close() and wait()
+    waiter = Threads.@spawn wait(session)
+    close(session)
+    @test isnothing(session.ptr)
+    @test !isassigned(session)
+    @test !isopen(session)
+
+    # wait() should throw when the session is closed
+    @test timedwait(() -> istaskdone(waiter), 5) == :ok
+    @test current_exceptions(waiter)[1][1] isa InvalidStateException
+
+    # And we shouldn't be able to wait on a closed session
+    @test_throws InvalidStateException wait(session)
 
     @testset "Password authentication" begin
         # Test connecting to a server and doing password authentication
@@ -449,10 +464,10 @@ end
 end
 
 @testset "SshChannel" begin
-    session = ssh.Session("localhost"; auto_connect=false)
-
-    # We shouldn't be able to create a channel on an unconnected session
-    @test_throws ArgumentError ssh.SshChannel(session)
+    ssh.Session("localhost"; auto_connect=false) do session
+        # We shouldn't be able to create a channel on an unconnected session
+        @test_throws ArgumentError ssh.SshChannel(session)
+    end
 
     @testset "Creating/closing channels" begin
         # Test creating and closing channels
@@ -559,9 +574,11 @@ end
             close(sftp)
 
             # Test the finalizer
-            sftp = ssh.SftpSession(session)
-            finalize(sftp)
-            @test !isassigned(sftp)
+            ssh.SftpSession(session) do sftp
+                # We yield() to allow the spawned task from the finalizer to
+                # print its message.
+                @test_logs (:error, r".+memory leak.+") (finalize(sftp); yield())
+            end
 
             # Test the do-constructor
             ssh.SftpSession(session) do sftp

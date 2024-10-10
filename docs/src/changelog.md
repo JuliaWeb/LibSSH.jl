@@ -30,6 +30,11 @@ Changelog](https://keepachangelog.com).
 - Fixed a race condition in the [`Demo.DemoServer`](@ref) that could cause
   segfaults ([#16]).
 
+### Changed
+
+- **Breaking**: [`Session`](@ref) now needs to be closed explictly instead of
+  relying on the finalizer for the memory to be freed.
+
 ## [v0.5.0] - 2024-08-10
 
 ### Added
