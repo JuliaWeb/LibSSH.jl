@@ -141,8 +141,19 @@ Close an `SftpSession`. This will also close any open files.
 """
 function Base.close(sftp::SftpSession)
     if isassigned(sftp)
+        # Close all open files
         for i in reverse(eachindex(sftp.files))
             close(sftp.files[i])
+        end
+
+        # Remove from the parent session
+        @lock sftp.session begin
+            idx = findfirst(x -> x === sftp, sftp.session.closeables)
+            if !isnothing(idx)
+                popat!(sftp.session.closeables, idx)
+            else
+                Threads.@spawn @error "Couldn't find $(sftp) in the parent Session, this may be a memory leak."
+            end
         end
 
         lib.sftp_free(sftp.ptr)
