@@ -111,6 +111,14 @@ function SftpSession(f::Function, args...; kwargs...)
     end
 end
 
+function Base.show(io::IO, sftp::SftpSession)
+    if isopen(sftp)
+        print(io, SftpSession, "(session=$(sftp.session))")
+    else
+        print(io, SftpSession, "([closed])")
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -265,30 +273,73 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Get information about the file object at `path`. This will return an object with
-the following properties:
-- `name::String`
-- `longname::String`
-- `flags::UInt32`
-- `type::UInt8`
-- `size::UInt64`
-- `uid::UInt32`
-- `gid::UInt32`
-- `owner::String`
-- `group::String`
-- `permissions::UInt32`
-- `atime64::UInt64`
-- `atime::UInt32`
-- `atime_nseconds::UInt32`
-- `createtime::UInt64`
-- `createtime_nseconds::UInt32`
-- `mtime64::UInt64`
-- `mtime::UInt32`
-- `mtime_nseconds::UInt32`
-- `acl::String`
-- `extended_count::UInt32`
-- `extended_type::String`
-- `extended_data::String`
+Read the contents of a remote directory. By default this will behave the same as
+`Base.readdir()` and return a list of names, but if `only_names=false` it will
+return a list of [`SftpAttributes`](@ref). The `join` and `sort` arguments
+are the same as in `Base.readdir()` but only apply when `only_names=true`.
+
+# Throws
+- `ArgumentError`: If `sftp` is closed.
+- [`LibSSHException`](@ref): If retrieving the directory contents failed.
+"""
+function Base.readdir(dir::AbstractString, sftp::SftpSession;
+                      only_names=true, join::Bool=false, sort::Bool=true)
+    if !isopen(sftp)
+        throw(ArgumentError("$(sftp) is closed, cannot call readdir() on it"))
+    end
+
+    entries = SftpAttributes[]
+
+    # Open directory
+    dir_ptr = GC.@preserve dir begin
+        cstr = Base.unsafe_convert(Ptr{Cchar}, dir)
+        @lockandblock sftp.session lib.sftp_opendir(sftp.ptr, cstr)
+    end
+    if dir_ptr == C_NULL
+        error_code = get_error(sftp)
+        throw(LibSSHException("Couldn't open path $(dir) on $(sftp): $(error_code)"))
+    end
+
+    # Read contents
+    while isopen(sftp)
+        attr_ptr = @lockandblock sftp.session lib.sftp_readdir(sftp.ptr, dir_ptr)
+        if attr_ptr != C_NULL
+            attr = SftpAttributes(attr_ptr)
+
+            # Skip the current and parent entries to be compatible with Base.readdir()
+            if attr.name != "." && attr.name != ".."
+                push!(entries, attr)
+            end
+        else
+            break
+        end
+    end
+
+    # Close directory
+    ret = @lockandblock sftp.session lib.sftp_closedir(dir_ptr)
+    if ret == SSH_ERROR
+        throw(LibSSHException("Closing remote directory failed: $(ret)"))
+    end
+
+    if only_names
+        entry_names = [x.name for x in entries]
+        if join
+            map!(x -> joinpath(dir, x), entry_names, entry_names)
+        end
+        if sort
+            sort!(entry_names)
+        end
+
+        return entry_names
+    else
+        return entries
+    end
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get information about the file object at `path`.
 
 Note: the [`Demo.DemoServer`](@ref) does not support setting all of these
 properties.
@@ -319,7 +370,33 @@ end
 
 ## SftpAttributes
 
+"""
+$(TYPEDEF)
 
+Attributes of remote file objects. This has the following (read-only) properties:
+- `name::String`
+- `longname::String`
+- `flags::UInt32`
+- `type::UInt8`
+- `size::UInt64`
+- `uid::UInt32`
+- `gid::UInt32`
+- `owner::String`
+- `group::String`
+- `permissions::UInt32`
+- `atime64::UInt64`
+- `atime::UInt32`
+- `atime_nseconds::UInt32`
+- `createtime::UInt64`
+- `createtime_nseconds::UInt32`
+- `mtime64::UInt64`
+- `mtime::UInt32`
+- `mtime_nseconds::UInt32`
+- `acl::String`
+- `extended_count::UInt32`
+- `extended_type::String`
+- `extended_data::String`
+"""
 mutable struct SftpAttributes
     ptr::Union{lib.sftp_attributes, Nothing}
 
@@ -340,7 +417,7 @@ end
 
 function _show_attrs(io::IO, attrs::SftpAttributes)
     mode = string(attrs.permissions, base=8, pad=6)
-    print(io, SftpAttributes, "(size=$(attrs.size) bytes, owner=$(attrs.owner), uid=$(attrs.uid), gid=$(attrs.gid), permissions=0o$(mode))")
+    print(io, SftpAttributes, "(name='$(attrs.name)', size=$(attrs.size) bytes, owner=$(attrs.owner), permissions=0o$(mode))")
 end
 
 Base.show(io::IO, attrs::SftpAttributes) = _show_attrs(io, attrs)

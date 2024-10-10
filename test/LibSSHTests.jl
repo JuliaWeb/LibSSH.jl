@@ -801,12 +801,30 @@ end
                 @test !isassigned(attrs)
             end
 
+            # Test readdir()
+            mktempdir() do tmpdir
+                # Test reading an empty directory
+                @test isempty(readdir(tmpdir, sftp))
+
+                # And a non-empty directory
+                write(joinpath(tmpdir, "foo"), "foo")
+                write(joinpath(tmpdir, "bar"), "bar")
+
+                @test readdir(tmpdir, sftp) == ["bar", "foo"]
+                @test readdir(tmpdir, sftp; join=true) == [joinpath(tmpdir, "bar"), joinpath(tmpdir, "foo")]
+                @test readdir(tmpdir, sftp; only_names=false) isa Vector{ssh.SftpAttributes}
+
+                # And a non-existent directory
+                @test_throws ssh.LibSSHException readdir(tmpdir * "_bad", sftp)
+            end
+
             close(sftp)
 
             @test_throws ArgumentError stat("/tmp", sftp)
             @test_throws ArgumentError ssh.get_extensions(sftp)
             @test_throws ArgumentError ssh.get_limits(sftp)
             @test_throws ArgumentError homedir(sftp)
+            @test_throws ArgumentError readdir("/tmp", sftp)
         end
     end
 end
