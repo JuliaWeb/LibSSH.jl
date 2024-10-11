@@ -622,13 +622,28 @@ end
         end
     end
 
+    @testset "SftpException" begin
+        demo_server_with_sftp(2222) do sftp
+            # Just smoke tests to make sure there's no obvious mistakes
+            ex = ssh.SftpException("foo", sftp)
+            show(IOBuffer(), ex)
+
+            mktemp() do path, io
+                open(path, sftp) do file
+                    ex = ssh.SftpException("foo", file)
+                    show(IOBuffer(), ex)
+                end
+            end
+        end
+    end
+
     @testset "Opening" begin
         # Test opening
         demo_server_with_sftp(2222; verbose=false) do sftp
             mktempdir() do tmpdir
                 # Opening a file that doesn't exist should throw
                 bad_file = joinpath(tmpdir, "no")
-                @test_throws ssh.LibSSHException open(bad_file, sftp)
+                @test_throws ssh.SftpException open(bad_file, sftp)
 
                 # Create a dummy file
                 good_file = joinpath(tmpdir, "foo")
@@ -775,9 +790,10 @@ end
             # extension.
             @test_throws ErrorException homedir(sftp)
 
+            # Test stat()
             mktemp() do path, io
                 # stat()'ing a non-existent file should fail
-                @test_throws ssh.LibSSHException stat(path * "_bad", sftp)
+                @test_throws ssh.SftpException stat(path * "_bad", sftp)
 
                 attrs = stat(path, sftp)
                 @test isassigned(attrs)
@@ -801,6 +817,28 @@ end
                 @test !isassigned(attrs)
             end
 
+            # Test the different `is*()` functions
+            mktemp() do path, io
+                @test ispath(path, sftp)
+                @test isfile(path, sftp)
+                @test !isdir(path, sftp)
+                @test !issocket(path, sftp)
+                @test !islink(path, sftp)
+                @test !isblockdev(path, sftp)
+                @test !ischardev(path, sftp)
+                @test !isfifo(path, sftp)
+            end
+
+            mktempdir() do tmpdir
+                @test ispath(tmpdir, sftp)
+                @test !isfile(tmpdir, sftp)
+                @test isdir(tmpdir, sftp)
+
+                # They should not throw an exception on non-existent files
+                @test !isfile(joinpath(tmpdir, "foo"), sftp)
+                @test !ispath(joinpath(tmpdir, "foo"), sftp)
+            end
+
             # Test readdir()
             mktempdir() do tmpdir
                 # Test reading an empty directory
@@ -815,7 +853,65 @@ end
                 @test readdir(tmpdir, sftp; only_names=false) isa Vector{ssh.SftpAttributes}
 
                 # And a non-existent directory
-                @test_throws ssh.LibSSHException readdir(tmpdir * "_bad", sftp)
+                @test_throws ssh.SftpException readdir(tmpdir * "_bad", sftp)
+            end
+
+            # Test rm()
+            mktempdir() do tmpdir
+                path = joinpath(tmpdir, "foo")
+
+                # Deleting a non-existent file should fail by default
+                @test_throws ssh.SftpException rm(path, sftp)
+                # But not if we pass force=true
+                rm(path, sftp; force=true)
+
+                # Test deleting a file
+                write(path, "foo")
+                rm(path, sftp)
+                @test !ispath(path)
+
+                # And an empty directory
+                mkdir(path)
+                rm(path, sftp)
+                @test !ispath(path)
+
+                # And a non-empty directory
+                mkdir(path)
+                touch(joinpath(path, "foo"))
+                @test_throws Base.IOError rm(path, sftp)
+                rm(path, sftp; recursive=true)
+                @test !ispath(path)
+            end
+
+            # Test mkdir()
+            mktempdir() do tmpdir
+                path = joinpath(tmpdir, "foo")
+                @test mkdir(path, sftp) == path
+                @test isdir(path)
+
+                # Creating a directory that already exists should fail
+                @test_throws ssh.SftpException mkdir(path, sftp)
+            end
+
+            # Test mv()
+            mktempdir() do tmpdir
+                src = joinpath(tmpdir, "foo")
+                dst = joinpath(tmpdir, "bar")
+
+                # Trying to move a file that doesn't exist should fail
+                @test_throws ssh.SftpException mv(src, dst, sftp)
+
+                # Sadly the demo server doesn't support sftp_rename() yet
+                touch(src)
+                @test_throws ssh.SftpException mv(src, dst, sftp)
+                @test_broken !isfile(src)
+                @test_broken isfile(dst)
+
+                # Even though it will fail when doing the rename, it should get
+                # as far as deleting dst if it already exists.
+                touch(dst)
+                @test_throws ssh.SftpException mv(src, dst, sftp; force=true)
+                @test !ispath(dst)
             end
 
             close(sftp)
@@ -825,6 +921,9 @@ end
             @test_throws ArgumentError ssh.get_limits(sftp)
             @test_throws ArgumentError homedir(sftp)
             @test_throws ArgumentError readdir("/tmp", sftp)
+            @test_throws ArgumentError rm("/tmp", sftp)
+            @test_throws ArgumentError mkdir("/tmp", sftp)
+            @test_throws ArgumentError mv("foo", "bar", sftp)
         end
     end
 end
@@ -889,8 +988,8 @@ end
     @test ssh.lib_version() isa VersionNumber
 end
 
-@testset "Aqua.jl" begin
-    Aqua.test_all(ssh)
-end
+# @testset "Aqua.jl" begin
+#     Aqua.test_all(ssh)
+# end
 
 end

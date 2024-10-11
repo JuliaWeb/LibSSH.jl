@@ -3637,8 +3637,19 @@ function sftp_rewind(file)
     @ccall libssh.sftp_rewind(file::sftp_file)::Cvoid
 end
 
+function _threadcall_sftp_unlink(sftp::sftp_session, file::Ptr{Cchar})
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_unlink(sftp::sftp_session, file::Ptr{Cchar})::Cint)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_unlink(sftp, file)
+    sftp_unlink(sftp::sftp_session, file::Ptr{Cchar})
+
+Auto-generated wrapper around `sftp_unlink()`. Original upstream documentation is below.
+
+---
 
 Unlink (delete) a file.
 
@@ -3650,12 +3661,24 @@ Unlink (delete) a file.
 # See also
 [`sftp_get_error`](@ref)()
 """
-function sftp_unlink(sftp, file)
-    @ccall libssh.sftp_unlink(sftp::sftp_session, file::Ptr{Cchar})::Cint
+function sftp_unlink(sftp::sftp_session, file::Ptr{Cchar})
+    cfunc = @cfunction(_threadcall_sftp_unlink, Cint, (sftp_session, Ptr{Cchar}))
+    return @threadcall(cfunc, Cint, (sftp_session, Ptr{Cchar}), sftp, file)
+end
+
+function _threadcall_sftp_rmdir(sftp::sftp_session, directory::Ptr{Cchar})
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_rmdir(sftp::sftp_session, directory::Ptr{Cchar})::Cint)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
 end
 
 """
-    sftp_rmdir(sftp, directory)
+    sftp_rmdir(sftp::sftp_session, directory::Ptr{Cchar})
+
+Auto-generated wrapper around `sftp_rmdir()`. Original upstream documentation is below.
+
+---
 
 Remove a directory.
 
@@ -3667,12 +3690,24 @@ Remove a directory.
 # See also
 [`sftp_get_error`](@ref)()
 """
-function sftp_rmdir(sftp, directory)
-    @ccall libssh.sftp_rmdir(sftp::sftp_session, directory::Ptr{Cchar})::Cint
+function sftp_rmdir(sftp::sftp_session, directory::Ptr{Cchar})
+    cfunc = @cfunction(_threadcall_sftp_rmdir, Cint, (sftp_session, Ptr{Cchar}))
+    return @threadcall(cfunc, Cint, (sftp_session, Ptr{Cchar}), sftp, directory)
+end
+
+function _threadcall_sftp_mkdir(sftp::sftp_session, directory::Ptr{Cchar}, mode::mode_t)
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_mkdir(sftp::sftp_session, directory::Ptr{Cchar}, mode::mode_t)::Cint)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
 end
 
 """
-    sftp_mkdir(sftp, directory, mode)
+    sftp_mkdir(sftp::sftp_session, directory::Ptr{Cchar}, mode::mode_t)
+
+Auto-generated wrapper around `sftp_mkdir()`. Original upstream documentation is below.
+
+---
 
 Create a directory.
 
@@ -3685,12 +3720,24 @@ Create a directory.
 # See also
 [`sftp_get_error`](@ref)()
 """
-function sftp_mkdir(sftp, directory, mode)
-    @ccall libssh.sftp_mkdir(sftp::sftp_session, directory::Ptr{Cchar}, mode::mode_t)::Cint
+function sftp_mkdir(sftp::sftp_session, directory::Ptr{Cchar}, mode::mode_t)
+    cfunc = @cfunction(_threadcall_sftp_mkdir, Cint, (sftp_session, Ptr{Cchar}, mode_t))
+    return @threadcall(cfunc, Cint, (sftp_session, Ptr{Cchar}, mode_t), sftp, directory, mode)
+end
+
+function _threadcall_sftp_rename(sftp::sftp_session, original::Ptr{Cchar}, newname::Ptr{Cchar})
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_rename(sftp::sftp_session, original::Ptr{Cchar}, newname::Ptr{Cchar})::Cint)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
 end
 
 """
-    sftp_rename(sftp, original, newname)
+    sftp_rename(sftp::sftp_session, original::Ptr{Cchar}, newname::Ptr{Cchar})
+
+Auto-generated wrapper around `sftp_rename()`. Original upstream documentation is below.
+
+---
 
 Rename or move a file or directory.
 
@@ -3703,8 +3750,9 @@ Rename or move a file or directory.
 # See also
 [`sftp_get_error`](@ref)()
 """
-function sftp_rename(sftp, original, newname)
-    @ccall libssh.sftp_rename(sftp::sftp_session, original::Ptr{Cchar}, newname::Ptr{Cchar})::Cint
+function sftp_rename(sftp::sftp_session, original::Ptr{Cchar}, newname::Ptr{Cchar})
+    cfunc = @cfunction(_threadcall_sftp_rename, Cint, (sftp_session, Ptr{Cchar}, Ptr{Cchar}))
+    return @threadcall(cfunc, Cint, (sftp_session, Ptr{Cchar}, Ptr{Cchar}), sftp, original, newname)
 end
 
 """

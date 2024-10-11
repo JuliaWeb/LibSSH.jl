@@ -7,7 +7,7 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
-## Unreleased
+## [v0.6.0] - 2024-10-11
 
 ### Added
 
@@ -19,7 +19,7 @@ Changelog](https://keepachangelog.com).
 - [`close(::SshChannel)`](@ref) and [`closewrite(::SshChannel)`](@ref) now
   support an `allow_fail` argument that will print a warning instead of throw an
   exception if modifying the `lib.ssh_channel` fails ([#16]).
-- Basic [SFTP](sftp.md) support.
+- Initial [SFTP](sftp.md) client support ([#16], [#18], [#19]).
 
 ### Fixed
 

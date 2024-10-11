@@ -13,6 +13,8 @@ function _socketpair()
     return sock1, sock2
 end
 
+# This may result in double slashes //, but those are still valid paths
+_joinpath_linux(parts...) = join(parts, "/")
 
 # Helper type to allow closing a Threads.Condition
 mutable struct CloseableCondition
