@@ -9,6 +9,11 @@ API](https://api.libssh.org/stable/group__libssh__sftp.html) is wrapped and
 available in LibSSH.jl. See the [SFTP example](examples.md#SFTP) for an example
 of basic usage.
 
+!!! warning
+    When it comes to handling paths, the library currently assumes that the
+    server is running on a *NIX system. Some functions will not work when
+    connecting to a Windows server.
+
 Unlike the rest of the API, the SFTP C functions are blocking and only work with
 blocking [`Session`](@ref)'s. This means that the library has to lock the
 session while calling them and no other operations (blocking or unblocking) can
