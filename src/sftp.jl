@@ -37,6 +37,83 @@ does not indicate an error.
 end
 
 
+## SftpAttributes
+
+
+"""
+$(TYPEDEF)
+
+Attributes of remote file objects. This has the following (read-only) properties:
+- `name::String`
+- `longname::String`
+- `flags::UInt32`
+- `type::UInt8`
+- `size::UInt64`
+- `uid::UInt32`
+- `gid::UInt32`
+- `owner::String`
+- `group::String`
+- `permissions::UInt32`
+- `atime64::UInt64`
+- `atime::UInt32`
+- `atime_nseconds::UInt32`
+- `createtime::UInt64`
+- `createtime_nseconds::UInt32`
+- `mtime64::UInt64`
+- `mtime::UInt32`
+- `mtime_nseconds::UInt32`
+- `acl::String`
+- `extended_count::UInt32`
+- `extended_type::String`
+- `extended_data::String`
+"""
+mutable struct SftpAttributes
+    ptr::Union{lib.sftp_attributes, Nothing}
+
+    function SftpAttributes(ptr::lib.sftp_attributes)
+        self = new(ptr)
+        finalizer(close, self)
+    end
+end
+
+Base.isassigned(attrs::SftpAttributes) = !isnothing(attrs.ptr)
+
+function Base.close(attrs::SftpAttributes)
+    if isassigned(attrs)
+        lib.sftp_attributes_free(attrs.ptr)
+        attrs.ptr = nothing
+    end
+end
+
+function _show_attrs(io::IO, attrs::SftpAttributes)
+    mode = string(attrs.permissions, base=8, pad=6)
+    print(io, SftpAttributes, "(name='$(attrs.name)', size=$(attrs.size) bytes, owner=$(attrs.owner), permissions=0o$(mode))")
+end
+
+Base.show(io::IO, attrs::SftpAttributes) = _show_attrs(io, attrs)
+
+function _load_attr(x::Ptr{Ptr{Cchar}})
+    x = unsafe_load(x)
+    x == C_NULL ? "" : unsafe_string(Ptr{UInt8}(x))
+end
+
+function _load_attr(x::Ptr{lib.ssh_string})
+    x = unsafe_load(x)
+    x == C_NULL ? "" : unsafe_string(Ptr{UInt8}(lib.ssh_string_get_char(x)))
+end
+
+_load_attr(x) = unsafe_load(x)
+
+function Base.getproperty(attrs::SftpAttributes, name::Symbol)
+    if name in fieldnames(lib.sftp_attributes_struct)
+        ptr = getfield(attrs, :ptr)
+        _load_attr(getproperty(ptr, name))
+    else
+        getfield(attrs, name)
+    end
+end
+
+
 ## SftpSession
 
 
@@ -226,7 +303,7 @@ Get the server limits. The returned object has the following fields:
 
 # Throws
 - `ArgumentError`: If `sftp` is closed.
-- [`LibSSHException`](@ref): If getting the limits failed.
+- [`SftpException`](@ref): If getting the limits failed.
 """
 function get_limits(sftp::SftpSession)
     if !isassigned(sftp)
@@ -235,7 +312,7 @@ function get_limits(sftp::SftpSession)
 
     ptr = lib.sftp_limits(sftp)
     if ptr == C_NULL
-        throw(LibSSHException("Couldn't get limits for $sftp"))
+        throw(SftpException("Couldn't get SFTP limits", sftp))
     end
 
     limits = unsafe_load(ptr)
@@ -244,6 +321,7 @@ function get_limits(sftp::SftpSession)
     return limits
 end
 
+# Undocumented for now because it's difficult to test
 function Base.homedir(sftp::SftpSession, username=nothing)
     if !isassigned(sftp)
         throw(ArgumentError("The SftpSession doesn't have a valid pointer, cannot get the home directory"))
@@ -260,8 +338,7 @@ function Base.homedir(sftp::SftpSession, username=nothing)
     end
 
     if ret == C_NULL
-        error_code = get_error(sftp)
-        throw(LibSSHException("Couldn't get the home directory: $(error_code)"))
+        throw(SftpException("Couldn't get the home directory", sftp))
     end
 
     path = unsafe_string(Ptr{UInt8}(ret))
@@ -280,7 +357,7 @@ are the same as in `Base.readdir()` but only apply when `only_names=true`.
 
 # Throws
 - `ArgumentError`: If `sftp` is closed.
-- [`LibSSHException`](@ref): If retrieving the directory contents failed.
+- [`SftpException`](@ref): If retrieving the directory contents failed.
 """
 function Base.readdir(dir::AbstractString, sftp::SftpSession;
                       only_names=true, join::Bool=false, sort::Bool=true)
@@ -296,8 +373,7 @@ function Base.readdir(dir::AbstractString, sftp::SftpSession;
         @lockandblock sftp.session lib.sftp_opendir(sftp.ptr, cstr)
     end
     if dir_ptr == C_NULL
-        error_code = get_error(sftp)
-        throw(LibSSHException("Couldn't open path $(dir) on $(sftp): $(error_code)"))
+        throw(SftpException("Couldn't open path", dir, sftp))
     end
 
     # Read contents
@@ -318,13 +394,13 @@ function Base.readdir(dir::AbstractString, sftp::SftpSession;
     # Close directory
     ret = @lockandblock sftp.session lib.sftp_closedir(dir_ptr)
     if ret == SSH_ERROR
-        throw(LibSSHException("Closing remote directory failed: $(ret)"))
+        throw(SftpException("Closing remote directory failed", dir, sftp))
     end
 
     if only_names
         entry_names = [x.name for x in entries]
         if join
-            map!(x -> joinpath(dir, x), entry_names, entry_names)
+            map!(x -> _joinpath_linux(dir, x), entry_names, entry_names)
         end
         if sort
             sort!(entry_names)
@@ -336,17 +412,158 @@ function Base.readdir(dir::AbstractString, sftp::SftpSession;
     end
 end
 
+function _rmfile(path, sftp, force=false)
+    ret = GC.@preserve path begin
+        cstr = Base.unsafe_convert(Ptr{Cchar}, path)
+        @lockandblock sftp.session lib.sftp_unlink(sftp.ptr, cstr)
+    end
+    if ret != 0
+        session = sftp.session
+        throw(SftpException("Couldn't delete file", path, sftp))
+    end
+end
+
+function _rmdir(path, sftp, recursive)
+    contents = readdir(path, sftp; only_names=false)
+    if !isempty(contents)
+        if recursive
+            for attrs in contents
+                rm(_joinpath_linux(path, attrs.name), sftp; attrs, recursive)
+            end
+        else
+            session = sftp.session
+            throw(Base.IOError("Cannot delete $(session.user)@$(session.host):$(path), directory not empty", Base.UV_ENOTEMPTY))
+        end
+    end
+
+    ret = GC.@preserve path begin
+        cstr = Base.unsafe_convert(Ptr{Cchar}, path)
+        @lockandblock sftp.session lib.sftp_rmdir(sftp.ptr, cstr)
+    end
+    if ret != 0
+        throw(SftpException("Couldn't delete directory", path, sftp))
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 
-Get information about the file object at `path`.
+Delete remote file and directories. This has the same behaviour as `Base.rm()`,
+and the `recursive` and `force` options mean the same thing.
+
+Internally the function will call [`Base.stat(::String, ::SftpSession)`](@ref)
+to determine how to delete `path`, but if you already have the result of that it
+can be passed to the `attrs` keyword argument to avoid the extra blocking call.
+
+# Throws
+- `ArgumentError`: If `sftp` is closed.
+- `Base.IOError`: If `path` is a non-empty directory and `recursive=false`.
+- [`SftpException`](@ref) if deletion fails for some reason.
+"""
+function Base.rm(path::AbstractString, sftp::SftpSession; attrs=nothing, recursive=false, force=false)
+    if !isopen(sftp)
+        throw(ArgumentError("$(sftp) is closed, cannot use it to rm()"))
+    end
+
+    if isnothing(attrs)
+        attrs = try
+            stat(path, sftp)
+        catch ex
+            if ex isa SftpException && ex.error_code == SftpError_NoSuchFile && force
+                return
+            else
+                rethrow()
+            end
+        end
+    end
+
+    if isdir(attrs)
+        _rmdir(path, sftp, recursive)
+    else
+        _rmfile(path, sftp, force)
+    end
+
+    return nothing
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Make a remote directory. This behaves in exactly the same way as
+`Base.mkdir()`.
+
+# Throws
+- `ArgumentError`: If `sftp` is closed.
+- [`SftpException`](@ref): If making the directory fails.
+"""
+function Base.mkdir(path::AbstractString, sftp::SftpSession; mode=0o777)
+    if !isopen(sftp)
+        throw(ArgumentError("$(sftp) is closed, cannot use it to mkdir()"))
+    end
+
+    ret = GC.@preserve path begin
+        cstr = Base.unsafe_convert(Ptr{Cchar}, path)
+        @lockandblock sftp.session lib.sftp_mkdir(sftp.ptr, cstr, lib.mode_t(mode))
+    end
+    if ret != 0
+        throw(SftpException("Creating path failed", path, sftp))
+    end
+
+    return path
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Move `src` to `dst` remotely. Has the same behaviour as `Base.mv()`.
+
+# Throws
+- `ArgumentError`: If `sftp` is closed.
+- [`SftpException`](@ref): If the operation fails for some reason.
+"""
+function Base.mv(src::AbstractString, dst::AbstractString, sftp::SftpSession; force=false)
+    if !isopen(sftp)
+        throw(ArgumentError("$(sftp) is closed, cannot use it to mv()"))
+    end
+
+    if force
+        attrs = nothing
+        try
+            attrs = stat(dst, sftp)
+        catch ex
+            if !(ex isa SftpException && ex.error_code == SftpError_NoSuchFile)
+                rethrow()
+            end
+        end
+
+        if !isnothing(attrs)
+            rm(dst, sftp; attrs, recursive=true)
+        end
+    end
+
+    ret = GC.@preserve src dst begin
+        src_ptr = Base.unsafe_convert(Ptr{Cchar}, src)
+        dst_ptr = Base.unsafe_convert(Ptr{Cchar}, dst)
+        @lockandblock sftp.session lib.sftp_rename(sftp.ptr, src_ptr, dst_ptr)
+    end
+    if ret != 0
+        throw(SftpException("Renaming path to $(dst) failed", src, sftp))
+    end
+
+    return dst
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get information about the file object at `path` as a [`SftpAttributes`](@ref).
 
 Note: the [`Demo.DemoServer`](@ref) does not support setting all of these
 properties.
 
 # Throws
 - `ArgumentError`: If `sftp` is closed.
-- [`LibSSHException`](@ref): If retrieving the file object information failed
+- [`SftpException`](@ref): If retrieving the file object information failed
   (e.g. if the path doesn't exist).
 """
 function Base.stat(path::String, sftp::SftpSession)
@@ -360,88 +577,67 @@ function Base.stat(path::String, sftp::SftpSession)
     end
 
     if ptr == C_NULL
-        error_code = get_error(sftp)
-        throw(LibSSHException("Couldn't stat '$path': $error_code"))
+        throw(SftpException("Couldn't stat path", path, sftp))
     end
 
     SftpAttributes(ptr)
 end
 
+_ismode(attrs, type) = (Filesystem.S_IFMT & attrs.permissions) == type
+function _is_file_type(func, path, sftp)
+    attrs = nothing
 
-## SftpAttributes
-
-"""
-$(TYPEDEF)
-
-Attributes of remote file objects. This has the following (read-only) properties:
-- `name::String`
-- `longname::String`
-- `flags::UInt32`
-- `type::UInt8`
-- `size::UInt64`
-- `uid::UInt32`
-- `gid::UInt32`
-- `owner::String`
-- `group::String`
-- `permissions::UInt32`
-- `atime64::UInt64`
-- `atime::UInt32`
-- `atime_nseconds::UInt32`
-- `createtime::UInt64`
-- `createtime_nseconds::UInt32`
-- `mtime64::UInt64`
-- `mtime::UInt32`
-- `mtime_nseconds::UInt32`
-- `acl::String`
-- `extended_count::UInt32`
-- `extended_type::String`
-- `extended_data::String`
-"""
-mutable struct SftpAttributes
-    ptr::Union{lib.sftp_attributes, Nothing}
-
-    function SftpAttributes(ptr::lib.sftp_attributes)
-        self = new(ptr)
-        finalizer(close, self)
+    try
+        attrs = stat(path, sftp)
+    catch ex
+        if !(ex isa SftpException
+             && ex.error_code in (SftpError_NoSuchFile, SftpError_NoSuchPath))
+            rethrow()
+        end
     end
+
+    isnothing(attrs) ? false : func(attrs)
 end
 
-Base.isassigned(attrs::SftpAttributes) = !isnothing(attrs.ptr)
+"$(TYPEDSIGNATURES)"
+Base.ispath(path::AbstractString, sftp::SftpSession) = _is_file_type(ispath, path, sftp)
+"$(TYPEDSIGNATURES)"
+Base.ispath(::SftpAttributes) = true
 
-function Base.close(attrs::SftpAttributes)
-    if isassigned(attrs)
-        lib.sftp_attributes_free(attrs.ptr)
-        attrs.ptr = nothing
-    end
-end
+"$(TYPEDSIGNATURES)"
+Base.isdir(path::AbstractString, sftp::SftpSession) = _is_file_type(isdir, path, sftp)
+"$(TYPEDSIGNATURES)"
+Base.isdir(attrs::SftpAttributes) = _ismode(attrs, Filesystem.S_IFDIR)
 
-function _show_attrs(io::IO, attrs::SftpAttributes)
-    mode = string(attrs.permissions, base=8, pad=6)
-    print(io, SftpAttributes, "(name='$(attrs.name)', size=$(attrs.size) bytes, owner=$(attrs.owner), permissions=0o$(mode))")
-end
+"$(TYPEDSIGNATURES)"
+Base.isfile(path::AbstractString, sftp::SftpSession) = _is_file_type(isfile, path, sftp)
+"$(TYPEDSIGNATURES)"
+Base.isfile(attrs::SftpAttributes) = _ismode(attrs, Filesystem.S_IFREG)
 
-Base.show(io::IO, attrs::SftpAttributes) = _show_attrs(io, attrs)
+"$(TYPEDSIGNATURES)"
+Base.issocket(path::AbstractString, sftp::SftpSession) = _is_file_type(issocket, path, sftp)
+"$(TYPEDSIGNATURES)"
+Base.issocket(attrs::SftpAttributes) = _ismode(attrs, Filesystem.S_IFSOCK)
 
-function _load_attr(x::Ptr{Ptr{Cchar}})
-    x = unsafe_load(x)
-    x == C_NULL ? "" : unsafe_string(Ptr{UInt8}(x))
-end
+"$(TYPEDSIGNATURES)"
+Base.islink(path::AbstractString, sftp::SftpSession) = _is_file_type(islink, path, sftp)
+"$(TYPEDSIGNATURES)"
+Base.islink(attrs::SftpAttributes) = _ismode(attrs, Filesystem.S_IFLNK)
 
-function _load_attr(x::Ptr{lib.ssh_string})
-    x = unsafe_load(x)
-    x == C_NULL ? "" : unsafe_string(Ptr{UInt8}(lib.ssh_string_get_char(x)))
-end
+"$(TYPEDSIGNATURES)"
+Base.isblockdev(path::AbstractString, sftp::SftpSession) = _is_file_type(isblockdev, path, sftp)
+"$(TYPEDSIGNATURES)"
+Base.isblockdev(attrs::SftpAttributes) = _ismode(attrs, Filesystem.S_IFBLK)
 
-_load_attr(x) = unsafe_load(x)
+"$(TYPEDSIGNATURES)"
+Base.ischardev(path::AbstractString, sftp::SftpSession) = _is_file_type(ischardev, path, sftp)
+"$(TYPEDSIGNATURES)"
+Base.ischardev(attrs::SftpAttributes) = _ismode(attrs, Filesystem.S_IFCHR)
 
-function Base.getproperty(attrs::SftpAttributes, name::Symbol)
-    if name in fieldnames(lib.sftp_attributes_struct)
-        ptr = getfield(attrs, :ptr)
-        _load_attr(getproperty(ptr, name))
-    else
-        getfield(attrs, name)
-    end
-end
+"$(TYPEDSIGNATURES)"
+Base.isfifo(path::AbstractString, sftp::SftpSession) = _is_file_type(isfifo, path, sftp)
+"$(TYPEDSIGNATURES)"
+Base.isfifo(attrs::SftpAttributes) = _ismode(attrs, Filesystem.S_IFIFO)
 
 
 ## SftpFile
@@ -560,7 +756,7 @@ as their counterparts in `Base.open(::String)`, except for `exclusive` and
 
 # Throws
 - `ArgumentError`: If `sftp` is closed.
-- [`LibSSHException`](@ref): If opening the file fails.
+- [`SftpException`](@ref): If opening the file fails.
 """
 function Base.open(path::String, sftp::SftpSession;
                    read::Union{Bool, Nothing}=nothing,
@@ -600,8 +796,7 @@ function Base.open(path::String, sftp::SftpSession;
     end
 
     if ret == C_NULL
-        error_code = get_error(sftp)
-        throw(LibSSHException("Couldn't open file '$path' on host $(sftp.session.host): $error_code"))
+        throw(SftpException("Couldn't open file", path, sftp))
     end
 
     file = SftpFile(ret, sftp, path, (; flags..., exclusive))
@@ -684,7 +879,7 @@ Read at most `nb` bytes from the remote [`SftpFile`](@ref). Uses
 
 # Throws
 - `ArgumentError`: If `file` is closed.
-- [`LibSSHException`](@ref): If reading failed.
+- [`SftpException`](@ref): If reading failed.
 """
 function Base.read(file::SftpFile, nb::Integer=typemax(Int))
     if !isopen(file)
@@ -710,7 +905,7 @@ parallel requests.
 
 # Throws
 - `ArgumentError`: If `file` is closed.
-- [`LibSSHException`](@ref): If reading failed.
+- [`SftpException`](@ref): If reading failed.
 """
 function Base.read!(file::SftpFile, out::Vector{UInt8})
     if !isopen(file)
@@ -728,9 +923,7 @@ function Base.read!(file::SftpFile, out::Vector{UInt8})
             handle = Ref{lib.sftp_aio}()
             ret = lib.sftp_aio_begin_read(file, nb - bytes_requested, handle)
             if ret == SSH_ERROR
-                error_code = get_error(file.sftp)
-                error_msg = get_error(file.sftp.session)
-                throw(LibSSHException("Read of $file failed with code $error_code: '$error_msg'"))
+                throw(SftpException("Reading file failed", file))
             end
 
             push!(handles, (bytes_requested + 1, ret, handle))
@@ -751,7 +944,7 @@ function Base.read!(file::SftpFile, out::Vector{UInt8})
                     @lockandblock file.sftp.session lib.sftp_aio_wait_read(handle_ptr, buffer_ptr, Csize_t(chunk_size))
                 end
                 if ret == SSH_ERROR
-                    throw(LibSSHException("Reading $(file) from $(pos):$(pos + chunk_size - 1) failed: $(ret)"))
+                    throw(SftpException("Reading file from $(pos):$(pos + chunk_size - 1)", file))
                 end
             end
         end
@@ -777,7 +970,7 @@ uses libssh's asynchronous IO API so it may launch multiple parallel requests.
 
 # Throws
 - `ArgumentError`: If `file` is closed.
-- [`LibSSHException`](@ref): If writing fails.
+- [`SftpException`](@ref): If writing fails.
 """
 function Base.write(file::SftpFile, data::T) where T <: DenseVector
     if !isopen(file)
@@ -795,9 +988,7 @@ function Base.write(file::SftpFile, data::T) where T <: DenseVector
             offset = length(data) - bytes_left
             ret = GC.@preserve data lib.sftp_aio_begin_write(file, Ptr{Cvoid}(pointer(data)) + offset, bytes_left, handle)
             if ret == SSH_ERROR
-                error_code = get_error(file.sftp)
-                error_msg = get_error(file.sftp.session)
-                throw(LibSSHException("Attempted write to $file failed with code $error_code: '$error_msg'"))
+                throw(SftpException("Attempted write to file failed", file))
             end
 
             push!(handles, handle)
@@ -817,7 +1008,7 @@ function Base.write(file::SftpFile, data::T) where T <: DenseVector
                     @lockandblock file.sftp.session lib.sftp_aio_wait_write(handle_ptr)
                 end
                 if ret == SSH_ERROR
-                    throw(LibSSHException("Write to $(file) failed: $(ret)"))
+                    throw(SftpException("Write to file failed", file))
                 end
             end
         end
@@ -836,3 +1027,44 @@ Write a string directly to `file`. Uses [`Base.write(::SftpFile,
 ::DenseVector)`](@ref) internally.
 """
 Base.write(file::SftpFile, data::AbstractString) = write(file, codeunits(data))
+
+## SftpException
+
+"""
+$(TYPEDEF)
+$(TYPEDFIELDS)
+
+Represents an error from the SFTP subsystem.
+"""
+struct SftpException <: Exception
+    msg::String
+    path::Union{String, Nothing}
+    error_code::SftpError
+    session_error::String
+    session_userhost::String
+end
+
+function SftpException(msg::AbstractString, path, sftp::SftpSession)
+    userhost = "$(sftp.session.user)@$(sftp.session.host)"
+    return SftpException(msg, path, get_error(sftp), get_error(sftp.session), userhost)
+end
+
+function SftpException(msg::AbstractString, sftp::SftpSession)
+    SftpException(msg, nothing, sftp)
+end
+
+function SftpException(msg::AbstractString, file::SftpFile)
+    SftpException(msg, file.path, file.sftp)
+end
+
+function Base.show(io::IO, ex::SftpException)
+    print(io,
+          """
+          SftpException: $(ex.msg) ($(ex.error_code))
+            Session error: '$(ex.session_error)'
+            User/host: $(ex.session_userhost)
+          """)
+    if !isnothing(ex.path)
+        print(io, "  Remote path: $(ex.path)")
+    end
+end

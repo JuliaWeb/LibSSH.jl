@@ -37,8 +37,11 @@ Base.close(::SftpSession)
 Base.isopen(::SftpSession)
 Base.lock(::SftpSession)
 Base.unlock(::SftpSession)
-Base.stat(::String, ::SftpSession)
 Base.readdir(::AbstractString, ::SftpSession)
+Base.rm(::AbstractString, ::SftpSession)
+Base.mkdir(::AbstractString, ::SftpSession)
+Base.mv(::AbstractString, ::AbstractString, ::SftpSession)
+Base.stat(::String, ::SftpSession)
 get_extensions(::SftpSession)
 get_limits(::SftpSession)
 get_error(::SftpSession)
@@ -66,8 +69,39 @@ Base.seekstart(::SftpFile)
 Base.seekend(::SftpFile)
 ```
 
+## File type helpers
+
+```@docs
+Base.ispath(::AbstractString, ::SftpSession)
+Base.ispath(::SftpAttributes)
+Base.isdir(::AbstractString, ::SftpSession)
+Base.isdir(::SftpAttributes)
+Base.isfile(::AbstractString, ::SftpSession)
+Base.isfile(::SftpAttributes)
+Base.issocket(::AbstractString, ::SftpSession)
+Base.issocket(::SftpAttributes)
+Base.islink(::AbstractString, ::SftpSession)
+Base.islink(::SftpAttributes)
+Base.isblockdev(::AbstractString, ::SftpSession)
+Base.isblockdev(::SftpAttributes)
+Base.ischardev(::AbstractString, ::SftpSession)
+Base.ischardev(::SftpAttributes)
+Base.isfifo(::AbstractString, ::SftpSession)
+Base.isfifo(::SftpAttributes)
+```
+
 ## Other types
 ```@docs
-SftpError
 SftpAttributes
+SftpError
+SftpException
 ```
+
+When an [`SftpException`](@ref) is printed it will be displayed like this:
+```@repl
+import LibSSH as ssh
+ssh.SftpException("Failure", "/tmp/foo", ssh.SftpError_GenericFailure, "SFTP failed", "foo@bar")
+```
+
+Note that the SFTP subsystem doesn't always set an error on the
+[`Session`](@ref), so take the `Session error` with a grain of salt.
