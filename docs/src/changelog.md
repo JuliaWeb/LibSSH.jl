@@ -7,6 +7,12 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## Unreleased
+
+### Fixed
+
+- Improved handling of possible errors in [`Base.readdir()`](@ref).
+
 ## [v0.6.0] - 2024-10-11
 
 ### Added

@@ -376,6 +376,14 @@ function Base.readdir(dir::AbstractString, sftp::SftpSession;
         throw(SftpException("Couldn't open path", dir, sftp))
     end
 
+    # Helper function to close the lib.sftp_dir
+    close_directory = () -> begin
+        ret = @lockandblock sftp.session lib.sftp_closedir(dir_ptr)
+        if ret == SSH_ERROR
+            throw(SftpException("Closing remote directory failed", dir, sftp))
+        end
+    end
+
     # Read contents
     while isopen(sftp)
         attr_ptr = @lockandblock sftp.session lib.sftp_readdir(sftp.ptr, dir_ptr)
@@ -387,15 +395,18 @@ function Base.readdir(dir::AbstractString, sftp::SftpSession;
                 push!(entries, attr)
             end
         else
-            break
+            if lib.sftp_dir_eof(dir_ptr) == 1
+                # We've reached the end of the directories
+                break
+            else
+                # Something's gone wrong
+                close_directory()
+                throw(SftpException("Couldn't get directory contents", dir, sftp))
+            end
         end
     end
 
-    # Close directory
-    ret = @lockandblock sftp.session lib.sftp_closedir(dir_ptr)
-    if ret == SSH_ERROR
-        throw(SftpException("Closing remote directory failed", dir, sftp))
-    end
+    close_directory()
 
     if only_names
         entry_names = [x.name for x in entries]
