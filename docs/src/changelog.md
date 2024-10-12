@@ -9,9 +9,14 @@ Changelog](https://keepachangelog.com).
 
 ## Unreleased
 
+### Added
+
+- Added support for setting the file descriptor for a [`Session`](@ref) during
+  construction ([#21]).
+
 ### Fixed
 
-- Improved handling of possible errors in [`Base.readdir()`](@ref).
+- Improved handling of possible errors in [`Base.readdir()`](@ref) ([#20]).
 
 ## [v0.6.0] - 2024-10-11
 

@@ -354,6 +354,7 @@ end
         @test session.known_hosts == "/tmp/foo"
         session.gssapi_server_identity = "foo.com"
         @test session.gssapi_server_identity == "foo.com"
+        @test session.fd == RawFD(-1)
 
         # Test setting an initial user
         ssh.Session("localhost"; user="foo", auto_connect=false) do session2
@@ -374,6 +375,24 @@ end
 
     # And we shouldn't be able to wait on a closed session
     @test_throws InvalidStateException wait(session)
+
+    # Test initializing with a socket instead of a port. We do this by setting
+    # up two dummy servers, the one on port 2222 is what we want to connect to
+    # and the one on port 2223 is the simulated jump host we have to go
+    # through. It has to be done this way because we only know whether setting
+    # the socket worked after connecting.
+    demo_server_with_session(2222) do server_session
+        demo_server_with_session(2223; verbose=false) do jump_session
+            # Make the jump session forward the desired server port and connect
+            # to it directly by its socket.
+            ssh.Forwarder(jump_session, "localhost", 2222) do forwarder
+                client_session = ssh.Session("localhost"; socket=forwarder.out)
+                @test ssh.isconnected(client_session)
+                @test client_session.fd == Base._fd(forwarder.out)
+                close(client_session)
+            end
+        end
+    end
 
     @testset "Password authentication" begin
         # Test connecting to a server and doing password authentication
@@ -555,6 +574,9 @@ end
         # Test forwarding to a port
         demo_server_with_session(2222) do session
             ssh.Forwarder(session, 8080, "localhost", 9090) do forwarder
+                # Smoke test
+                show(IOBuffer(), forwarder)
+
                 http_server(9090) do
                     curl_proc = run(ignorestatus(`$(curl()) localhost:8080`); wait=false)
                     try
@@ -571,6 +593,9 @@ end
         # Test forwarding to a socket
         demo_server_with_session(2222) do session
             ssh.Forwarder(session, "localhost", 9090) do forwarder
+                # Smoke test
+                show(IOBuffer(), forwarder)
+
                 http_server(9090) do
                     socket = forwarder.out
                     write(socket, "foo")

@@ -144,6 +144,9 @@ server.
 # Arguments
 - `host`: The host to connect to.
 - `port=22`: The port to connect to.
+- `socket=nothing`: Can be an open `TCPSocket` or `RawFD` to connect to
+  directly. If this is not `nothing` it will be used instead of `port`. You will
+  need to close the socket afterwards, the `Session` will not do it for you.
 - `user=nothing`: Set the user to connect as. If unset the current
    username will be used.
 - `log_verbosity=nothing`: Set the log verbosity for the session.
@@ -159,6 +162,7 @@ julia> session = ssh.Session(ip"12.34.56.78", 2222)
 ```
 """
 function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
+                 socket::Union{Sockets.TCPSocket, RawFD, Nothing}=nothing,
                  user=nothing, log_verbosity=nothing, auto_connect=true)
     session_ptr = lib.ssh_new()
     if session_ptr == C_NULL
@@ -173,7 +177,12 @@ function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
     # if initialization fails for some reason.
     try
         session.host = host_str
-        session.port = port
+
+        if isnothing(socket)
+            session.port = port
+        else
+            session.fd = socket isa RawFD ? socket : Base._fd(socket)
+        end
 
         if isnothing(user)
             # Explicitly initialize the user, otherwise an error will be thrown when
@@ -281,6 +290,7 @@ end
 # Mapping from option name to the corresponding enum and C type
 const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
                                       :port => (SSH_OPTIONS_PORT, Cuint),
+                                      :fd => (SSH_OPTIONS_FD, Cint),
                                       :user => (SSH_OPTIONS_USER, Cstring),
                                       :ssh_dir => (SSH_OPTIONS_SSH_DIR, Cstring),
                                       :known_hosts => (SSH_OPTIONS_KNOWNHOSTS, Cstring),
@@ -312,11 +322,13 @@ function Base.getproperty(session::Session, name::Symbol)
     value = nothing
     is_string = false
 
-    if name == :port
+    if name === :port
         # The port is a special option with its own function
         port = Ref{Cuint}(0)
         ret = lib.ssh_options_get_port(session, port; throw=false)
         value = UInt(port[])
+    elseif name === :fd
+        value = RawFD(lib.ssh_get_fd(session))
     else
         # All properties supported by ssh_options_get() are strings, so we know
         # that this option must be a string.
@@ -434,9 +446,8 @@ function _wait_loop(session::Session)
         readable = (poll_flags & lib.SSH_READ_PENDING) > 0
         writable = (poll_flags & lib.SSH_WRITE_PENDING) > 0
 
-        fd = RawFD(lib.ssh_get_fd(session))
         while !(@atomic session._waiter_stop_flag) && isopen(session)
-            result = @lock session _safe_poll_fd(fd, 0.1; readable, writable)
+            result = @lock session _safe_poll_fd(session.fd, 0.1; readable, writable)
             if isnothing(result)
                 # This means the session's file descriptor has been closed (see the
                 # comments for _safe_poll_fd()).
