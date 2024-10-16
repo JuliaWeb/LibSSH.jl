@@ -42,3 +42,10 @@ Base.notify(cond::CloseableCondition, args...; kwargs...) = notify(cond.cond, ar
 Base.lock(cond::CloseableCondition) = lock(cond.cond)
 Base.unlock(cond::CloseableCondition) = unlock(cond.cond)
 Base.isopen(cond::CloseableCondition) = !(@atomic cond.closed)
+
+# Blocking wrapper for printf(). Useful for debugging when you want to ensure
+# that printing doesn't cause a task switch.
+function printstr(x::AbstractString)
+    @ccall printf("$(x)\n"::Cstring)::Cint
+    Libc.flush_cstdio()
+end
