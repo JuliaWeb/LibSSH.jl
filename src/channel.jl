@@ -537,7 +537,7 @@ function _exec_command(process::SshProcess)
 
             if ret != SSH_OK
                 err = get_error(session)
-                throw(LibSSHException("Error from lib.ssh_channel_request_env(), could not set environment variable: '$(env_var)'"))
+                throw(LibSSHException("Error from lib.ssh_channel_request_env(), could not set environment variable '$(env_var)': '$(err)'. Hint: check that the server has an `AcceptEnv` config that allows setting this variable, otherwise it will fail."))
             end
         end
     end
@@ -579,6 +579,10 @@ Run a command on the remote host over an SSH session. Things that aren't
 supported compared to `run()`:
 - Pipelined commands (use a regular pipe like `foo | bar` instead).
 - Setting the directory to execute the command in.
+
+!!! note
+    Setting environment variables is supported, but will fail if the server
+    forbids setting them.
 
 # Throws
 - [`SshProcessFailedException`](@ref): if the command fails and `ignorestatus()`
