@@ -923,7 +923,7 @@ end
 
 function Base.show(io::IO, f::Forwarder)
     if !isopen(f)
-        print(io, Forwarder, "()")
+        print(io, Forwarder, "([closed])")
     else
         if isnothing(f.out)
             print(io, Forwarder, "($(f.localinterface):$(f.localport) → $(f.remotehost):$(f.remoteport))")
