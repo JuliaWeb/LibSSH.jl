@@ -461,7 +461,7 @@ strings using e.g. `String(copy(process.out))`.
     out::Vector{UInt8} = Vector{UInt8}()
     err::Vector{UInt8} = Vector{UInt8}()
 
-    cmd::Union{Cmd, Nothing} = nothing
+    cmd::Union{Cmd, String, Nothing} = nothing
     exitcode::Int = typemin(Int)
 
     _sshchan::Union{SshChannel, Nothing} = nothing
@@ -494,7 +494,7 @@ function Base.wait(process::SshProcess)
     try
         wait(process._task)
     catch ex
-        if !process.cmd.ignorestatus
+        if process.cmd isa Cmd && !process.cmd.ignorestatus
             rethrow()
         end
     end
@@ -513,7 +513,8 @@ end
 function _exec_command(process::SshProcess)
     sshchan = process._sshchan
     session = sshchan.session
-    cmd_str = Base.shell_escape(process.cmd)
+    is_cmd = process.cmd isa Cmd
+    cmd_str = is_cmd ? Base.shell_escape(process.cmd) : process.cmd
 
     # Open the session channel
     ret = _session_trywait(session) do
@@ -524,7 +525,7 @@ function _exec_command(process::SshProcess)
     end
 
     # Set environment variables
-    if !isnothing(process.cmd.env)
+    if is_cmd && !isnothing(process.cmd.env)
         for env_var in process.cmd.env
             # We explicitly convert the SubString's returned from split() to
             # String's so that they're each separate and null-terminated in
@@ -567,7 +568,7 @@ function _exec_command(process::SshProcess)
         throw(LibSSHException("Error while reading data from channel: $(ret)"))
     end
 
-    if !process.cmd.ignorestatus && process.exitcode != 0
+    if (!is_cmd || !process.cmd.ignorestatus) && process.exitcode != 0
         throw(SshProcessFailedException(process))
     end
 end
@@ -579,6 +580,9 @@ Run a command on the remote host over an SSH session. Things that aren't
 supported compared to `run()`:
 - Pipelined commands (use a regular pipe like `foo | bar` instead).
 - Setting the directory to execute the command in.
+
+An easy way of getting around these restrictions is to pass the command as a
+`String` instead of `Cmd`.
 
 !!! note
     Setting environment variables is supported, but will fail if the server
@@ -615,15 +619,23 @@ julia> ssh.Demo.DemoServer(2222; password="foo") do
            println()
            @info "2"
            run(ignorestatus(`foo`), session)
+
+           println()
+           @info "3"
+           # Pass a string to avoid hacking around Cmd syntax
+           run("cd /tmp && pwd", session)
        end
 [ Info: 1
 foo
 
 [ Info: 2
 sh: line 1: foo: command not found
+
+[ Info: 3
+/tmp
 ```
 """
-function Base.run(cmd::Cmd, session::Session;
+function Base.run(cmd::Union{Cmd, String}, session::Session;
                   wait::Bool=true, verbose::Bool=false,
                   combine_outputs::Bool=true, print_out::Bool=true)
     process = SshProcess(; cmd, _verbose=verbose)
@@ -658,7 +670,7 @@ $(TYPEDSIGNATURES)
 
 Read the output from the command in bytes.
 """
-function Base.read(cmd::Cmd, session::Session)
+function Base.read(cmd::Union{Cmd, String}, session::Session)
     process = run(cmd, session; print_out=false)
     return process.out
 end
@@ -681,21 +693,21 @@ julia> ssh.Demo.DemoServer(2222; password="foo") do
 read(`echo foo`, session, String) = "foo\\n"
 ```
 """
-Base.read(cmd::Cmd, session::Session, ::Type{String}) = String(read(cmd, session))
+Base.read(cmd::Union{Cmd, String}, session::Session, ::Type{String}) = String(read(cmd, session))
 
 """
 $(TYPEDSIGNATURES)
 
 `readchomp()` for remote commands.
 """
-Base.readchomp(cmd::Cmd, session::Session) = chomp(read(cmd, session, String))
+Base.readchomp(cmd::Union{Cmd, String}, session::Session) = chomp(read(cmd, session, String))
 
 """
 $(TYPEDSIGNATURES)
 
 Check the command succeeded.
 """
-Base.success(cmd::Cmd, session::Session) = success(run(cmd, session; print_out=false))
+Base.success(cmd::Union{Cmd, String}, session::Session) = success(run(cmd, session; print_out=false))
 
 ## Direct port forwarding
 

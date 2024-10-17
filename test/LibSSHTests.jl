@@ -561,6 +561,11 @@ end
             # Test setting environment variables
             cmd = setenv(`echo \$foo`, "foo" => "bar")
             @test readchomp(cmd, session) == "bar"
+
+            # Test passing a String instead of a Cmd
+            mktempdir() do tmpdir
+                @test readchomp("cd $(tmpdir) && pwd", session) == tmpdir
+            end
         end
     end
 
