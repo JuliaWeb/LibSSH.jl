@@ -13,6 +13,8 @@ Changelog](https://keepachangelog.com).
 
 - Added support for setting the file descriptor for a [`Session`](@ref) during
   construction ([#21]).
+- Our [`Base.run()`](@ref) methods now accept plain `String`s as well as `Cmd`s
+  ([#24]).
 
 ### Fixed
 
