@@ -24,6 +24,9 @@ Changelog](https://keepachangelog.com).
 ### Fixed
 
 - Improved handling of possible errors in [`Base.readdir()`](@ref) ([#20]).
+- Fixed exception handling for [`Base.run()`](@ref), now it throws a
+  [`SshProcessFailedException`](@ref) or [`LibSSHException`](@ref) on command
+  failure instead of a plain `TaskFailedException` ([#25]).
 
 ## [v0.6.0] - 2024-10-11
 

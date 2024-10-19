@@ -493,8 +493,18 @@ $(TYPEDSIGNATURES)
 function Base.wait(process::SshProcess)
     try
         wait(process._task)
-    catch ex
-        if process.cmd isa Cmd && !process.cmd.ignorestatus
+    catch task_ex
+        ex = process._task.exception
+
+        # The idea is that SshProcessFailedException's and LibSSHException's are
+        # somewhat expected so we always unwrap them from the
+        # TaskFailedException before throwing, which is a slightly nicer API to
+        # work with.
+        if ex isa SshProcessFailedException || ex isa LibSSHException
+            if !(process.cmd isa Cmd && process.cmd.ignorestatus)
+                throw(process._task.exception)
+            end
+        else
             rethrow()
         end
     end
@@ -591,6 +601,8 @@ An easy way of getting around these restrictions is to pass the command as a
 # Throws
 - [`SshProcessFailedException`](@ref): if the command fails and `ignorestatus()`
   wasn't used.
+- [`LibSSHException`](@ref): if running the command fails for some other
+  reason.
 
 # Arguments
 - `cmd`: The command to run. This will be converted to a string for running
@@ -652,10 +664,10 @@ function Base.run(cmd::Union{Cmd, String}, session::Session;
     set_channel_callbacks(process._sshchan, callbacks)
 
     process._task = Threads.@spawn _exec_command(process)
-    errormonitor(process._task)
+
     if wait
         # Note the use of Base.wait() to avoid aliasing with the `wait` argument
-        Base.wait(process._task)
+        Base.wait(process)
 
         if print_out
             print(String(copy(process.out)))

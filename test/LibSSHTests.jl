@@ -564,16 +564,8 @@ end
             cmd = setenv(`echo \$foo`, "foo" => "bar")
             @test readchomp(cmd, session) == "bar"
 
-            # Test command failure. We redirect error output to devnull to hide
-            # the errors displayed by the errormonitor() task.
-            try
-                redirect_stderr(devnull) do
-                    run(`foo`, session)
-                end
-            catch ex
-                @test ex isa TaskFailedException
-                @test current_exceptions(ex.task)[1][1] isa ssh.SshProcessFailedException
-            end
+            # Test command failure
+            @test_throws ssh.SshProcessFailedException run(`foo`, session)
 
             # Test passing a String instead of a Cmd
             mktempdir() do tmpdir
