@@ -355,6 +355,8 @@ end
         session.gssapi_server_identity = "foo.com"
         @test session.gssapi_server_identity == "foo.com"
         @test session.fd == RawFD(-1)
+        session.process_config = false
+        @test !session.process_config
 
         # Test setting an initial user
         ssh.Session("localhost"; user="foo", auto_connect=false) do session2

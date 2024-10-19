@@ -18,6 +18,8 @@ Changelog](https://keepachangelog.com).
 - Implemented convenience [`Base.read(::String, ::SftpSession)`](@ref) methods
   that will take a `String` filename without having to open the file explicitly
   ([#25]).
+- Added support for specifying whether a [`Session`](@ref) should use the users
+  SSH config with the `process_config` option ([#25]).
 
 ### Fixed
 
