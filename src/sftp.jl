@@ -907,6 +907,9 @@ function Base.read(file::SftpFile, nb::Integer=typemax(Int))
     return out
 end
 
+"$(TYPEDSIGNATURES)"
+Base.read(filename::AbstractString, sftp::SftpSession) = open(read, filename, sftp)
+
 """
 $(TYPEDSIGNATURES)
 
@@ -972,6 +975,10 @@ $(TYPEDSIGNATURES)
 Read the whole file as a `String`.
 """
 Base.read(file::SftpFile, ::Type{String}) = String(read(file))
+
+"$(TYPEDSIGNATURES)"
+Base.read(filename::AbstractString, sftp::SftpSession, ::Type{String}) = String(read(filename, sftp))
+
 
 """
 $(TYPEDSIGNATURES)

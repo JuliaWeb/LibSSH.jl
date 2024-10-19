@@ -773,6 +773,10 @@ end
                 # Shouldn't be able to read from a closed file
                 close(file)
                 @test_throws ArgumentError read(file)
+
+                # Test reading by passing just a filename
+                write(path, msg)
+                @test read(path, sftp, String) == msg
             end
         end
     end

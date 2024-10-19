@@ -15,6 +15,9 @@ Changelog](https://keepachangelog.com).
   construction ([#21]).
 - Our [`Base.run()`](@ref) methods now accept plain `String`s as well as `Cmd`s
   ([#24]).
+- Implemented convenience [`Base.read(::String, ::SftpSession)`](@ref) methods
+  that will take a `String` filename without having to open the file explicitly
+  ([#25]).
 
 ### Fixed
 
