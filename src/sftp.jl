@@ -142,8 +142,8 @@ mutable struct SftpSession
     - [`LibSSHException`](@ref): If creating the SFTP session fails.
     """
     function SftpSession(session::Session)
-        if !isopen(session)
-            throw(ArgumentError("Session is closed, cannot create an SftpSession with it"))
+        if !isconnected(session)
+            throw(ArgumentError("Session is disconnected, cannot create an SftpSession with it"))
         end
 
         ptr = @lockandblock session lib.sftp_new(session.ptr)
