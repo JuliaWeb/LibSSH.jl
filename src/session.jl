@@ -26,6 +26,7 @@ mutable struct Session
     ssh_dir::Union{String, Nothing}
     known_hosts::Union{String, Nothing}
     gssapi_server_identity::Union{String, Nothing}
+    process_config::Bool
 
     _lock::ReentrantLock
     _auth_methods::Union{Vector{AuthMethod}, Nothing}
@@ -68,7 +69,7 @@ mutable struct Session
         lib.ssh_set_blocking(ptr, 0)
 
         session = new(ptr, own, [], nothing,
-                      -1, nothing, nothing, nothing,
+                      -1, nothing, nothing, nothing, true,
                       ReentrantLock(), nothing, AuthMethod[], true,
                       Threads.Event(true), CloseableCondition(), false)
 
@@ -137,6 +138,13 @@ $(TYPEDSIGNATURES)
 Constructor for creating a client session. Use this if you want to connect to a
 server.
 
+!!! warning
+    By default libssh will try to follow the settings in any found SSH config
+    files. If a proxyjump is configured for `host` libssh will try to set up the
+    proxy itself, which usually does not play well with Julia's event loop. In
+    such situations you will probably want to pass `process_config=false` and
+    set up the proxyjump explicitly using a [`Forwarder`](@ref).
+
 # Throws
 - [`LibSSHException`](@ref): if a session couldn't be created, or there was an
   error initializing the `user` property.
@@ -152,6 +160,7 @@ server.
 - `log_verbosity=nothing`: Set the log verbosity for the session.
 - `auto_connect=true`: Whether to automatically call
   [`connect()`](@ref).
+- `process_config=true`: Whether to process any found SSH config files.
 
 # Examples
 
@@ -163,7 +172,8 @@ julia> session = ssh.Session(ip"12.34.56.78", 2222)
 """
 function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
                  socket::Union{Sockets.TCPSocket, RawFD, Nothing}=nothing,
-                 user=nothing, log_verbosity=nothing, auto_connect=true)
+                 user=nothing, log_verbosity=nothing, auto_connect=true,
+                 process_config=true)
     session_ptr = lib.ssh_new()
     if session_ptr == C_NULL
         throw(LibSSHException("Could not initialize Session for host $(host)"))
@@ -191,6 +201,8 @@ function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
         else
             session.user = user
         end
+
+        session.process_config = process_config
 
         if auto_connect
             connect(session)
@@ -295,10 +307,11 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
                                       :ssh_dir => (SSH_OPTIONS_SSH_DIR, Cstring),
                                       :known_hosts => (SSH_OPTIONS_KNOWNHOSTS, Cstring),
                                       :gssapi_server_identity => (SSH_OPTIONS_GSSAPI_SERVER_IDENTITY, Cstring),
-                                      :log_verbosity => (SSH_OPTIONS_LOG_VERBOSITY, Cuint))
+                                      :log_verbosity => (SSH_OPTIONS_LOG_VERBOSITY, Cuint),
+                                      :process_config => (SSH_OPTIONS_PROCESS_CONFIG, Bool))
 # These properties cannot be retrieved from the libssh API (i.e. with
 # ssh_options_get()), so we store them in the Session object instead.
-const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :known_hosts)
+const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :known_hosts, :process_config)
 
 function Base.propertynames(::Session, private::Bool=false)
     fields = fieldnames(Session)

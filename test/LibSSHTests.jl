@@ -355,6 +355,8 @@ end
         session.gssapi_server_identity = "foo.com"
         @test session.gssapi_server_identity == "foo.com"
         @test session.fd == RawFD(-1)
+        session.process_config = false
+        @test !session.process_config
 
         # Test setting an initial user
         ssh.Session("localhost"; user="foo", auto_connect=false) do session2
@@ -562,16 +564,8 @@ end
             cmd = setenv(`echo \$foo`, "foo" => "bar")
             @test readchomp(cmd, session) == "bar"
 
-            # Test command failure. We redirect error output to devnull to hide
-            # the errors displayed by the errormonitor() task.
-            try
-                redirect_stderr(devnull) do
-                    run(`foo`, session)
-                end
-            catch ex
-                @test ex isa TaskFailedException
-                @test current_exceptions(ex.task)[1][1] isa ssh.SshProcessFailedException
-            end
+            # Test command failure
+            @test_throws ssh.SshProcessFailedException run(`foo`, session)
 
             # Test passing a String instead of a Cmd
             mktempdir() do tmpdir
@@ -773,6 +767,10 @@ end
                 # Shouldn't be able to read from a closed file
                 close(file)
                 @test_throws ArgumentError read(file)
+
+                # Test reading by passing just a filename
+                write(path, msg)
+                @test read(path, sftp, String) == msg
             end
         end
     end

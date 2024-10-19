@@ -15,10 +15,18 @@ Changelog](https://keepachangelog.com).
   construction ([#21]).
 - Our [`Base.run()`](@ref) methods now accept plain `String`s as well as `Cmd`s
   ([#24]).
+- Implemented convenience [`Base.read(::String, ::SftpSession)`](@ref) methods
+  that will take a `String` filename without having to open the file explicitly
+  ([#25]).
+- Added support for specifying whether a [`Session`](@ref) should use the users
+  SSH config with the `process_config` option ([#25]).
 
 ### Fixed
 
 - Improved handling of possible errors in [`Base.readdir()`](@ref) ([#20]).
+- Fixed exception handling for [`Base.run()`](@ref), now it throws a
+  [`SshProcessFailedException`](@ref) or [`LibSSHException`](@ref) on command
+  failure instead of a plain `TaskFailedException` ([#25]).
 
 ## [v0.6.0] - 2024-10-11
 
