@@ -111,11 +111,11 @@ SshProcessFailedException
 SshProcess
 Base.wait(::SshProcess)
 Base.success(::SshProcess)
-Base.run(::Cmd, ::Session)
-Base.read(::Cmd, ::Session)
-Base.read(::Cmd, ::Session, ::Type{String})
-Base.readchomp(::Cmd, ::Session)
-Base.success(::Cmd, ::Session)
+Base.run(::Union{Cmd, String}, ::Session)
+Base.read(::Union{Cmd, String}, ::Session)
+Base.read(::Union{Cmd, String}, ::Session, ::Type{String})
+Base.readchomp(::Union{Cmd, String}, ::Session)
+Base.success(::Union{Cmd, String}, ::Session)
 ```
 
 #### Direct port forwarding
