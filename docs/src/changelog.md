@@ -7,7 +7,7 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
-## Unreleased
+## [v0.6.1] - 2024-10-20
 
 ### Added
 
