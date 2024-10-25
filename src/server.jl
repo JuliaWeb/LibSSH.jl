@@ -554,7 +554,12 @@ end
 
 function on_auth_none(session, user, client)::ssh.AuthStatus
     _add_log_event!(client, :auth_none, true)
-    return ssh.AuthStatus_Denied
+
+    if client.allow_auth_none
+        client.authenticated = true
+    end
+
+    return client.authenticated ? ssh.AuthStatus_Success : ssh.AuthStatus_Denied
 end
 
 function on_service_request(session, service, client)::Bool
@@ -695,6 +700,7 @@ end
     session::ssh.Session
     verbose::Bool
     password::Union{String, Nothing}
+    allow_auth_none::Bool = false
     authenticated::Bool = false
 
     session_event::Union{ssh.SessionEvent, Nothing} = nothing
@@ -773,6 +779,7 @@ $(TYPEDFIELDS)
     sshchan::Union{ssh.SshChannel, Nothing} = nothing
     verbose::Bool = false
     password::Union{String, Nothing} = nothing
+    allow_auth_none::Bool = false
 
     clients::Vector{Client} = Client[]
 end
@@ -794,13 +801,17 @@ Creates a [`DemoServer`](@ref).
   authentication etc. Useful for high-level debugging. The events can always be
   printed afterwards with [`Demo.print_timeline`](@ref).
 - `password=nothing`: The password to use if password authentication is enabled.
+- `allow_auth_none`: Whether to allow authentication without any credentials
+  being presented.
 - `auth_methods=[AuthMethod_None, AuthMethod_Password]`: A list of
   authentication methods to enable. See [`ssh.AuthMethod`](@ref).
 - `log_verbosity=nothing`: Controls the logging of libssh itself. This could be
   e.g. `lib.SSH_LOG_WARNING` (see the [upstream
   documentation](https://api.libssh.org/stable/group__libssh__log.html#ga06fc87d81c62e9abb8790b6e5713c55b)).
 """
-function DemoServer(port::Int; verbose::Bool=false, password::Union{String, Nothing}=nothing,
+function DemoServer(port::Int; verbose::Bool=false,
+                    password::Union{String, Nothing}=nothing,
+                    allow_auth_none=false,
                     auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_Password],
                     log_verbosity=ssh.SSH_LOG_NOLOG)
     if ssh.AuthMethod_Password in auth_methods && isnothing(password)
@@ -810,7 +821,7 @@ function DemoServer(port::Int; verbose::Bool=false, password::Union{String, Noth
     key = pki.generate(pki.KeyType_ed25519)
     bind = ssh.Bind(port; auth_methods, key, log_verbosity)
 
-    demo_server = DemoServer(; bind, verbose, password)
+    demo_server = DemoServer(; bind, verbose, password, allow_auth_none)
 
     ssh.set_message_callback(on_message, bind, demo_server)
 
@@ -893,9 +904,10 @@ end
 
 function _handle_client(session::ssh.Session, ds::DemoServer)
     client = Client(; id=length(ds.clients) + 1,
-                     session,
-                     password=ds.password,
-                     verbose=ds.verbose)
+                    session,
+                    password=ds.password,
+                    allow_auth_none=ds.allow_auth_none,
+                    verbose=ds.verbose)
     server_callbacks = ServerCallbacks(client;
                                        on_auth_password=on_auth_password,
                                        on_auth_none=on_auth_none,

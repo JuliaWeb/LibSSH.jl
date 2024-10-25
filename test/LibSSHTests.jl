@@ -192,6 +192,10 @@ end
             cmd_result = run(pipeline(cmd; stdout=cmd_out))
 
             @test strip(String(take!(cmd_out))) == "bar"
+
+    @testset "allow_auth_none" begin
+        DemoServer(2222; auth_methods=[ssh.AuthMethod_None], allow_auth_none=true) do
+            @test readchomp(passwordless_ssh_cmd(`foo@localhost whoami`)) == username()
         end
     end
 
