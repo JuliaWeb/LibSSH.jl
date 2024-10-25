@@ -588,6 +588,10 @@ end
             mktempdir() do tmpdir
                 @test readchomp("cd $(tmpdir) && pwd", session) == tmpdir
             end
+
+            sshchan = ssh.SshChannel(session)
+            close(sshchan)
+            @test_throws ArgumentError ssh.channel_request_send_exit_status(sshchan, 0)
         end
     end
 
@@ -1044,8 +1048,8 @@ end
     @test ssh.lib_version() isa VersionNumber
 end
 
-# @testset "Aqua.jl" begin
-#     Aqua.test_all(ssh)
-# end
+@testset "Aqua.jl" begin
+    Aqua.test_all(ssh)
+end
 
 end
