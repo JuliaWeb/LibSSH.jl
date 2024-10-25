@@ -3,4 +3,4 @@ import LibSSH
 
 include("LibSSHTests.jl")
 
-retest(LibSSH, LibSSHTests)
+retest(LibSSH, LibSSHTests; stats=true)
