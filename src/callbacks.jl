@@ -248,7 +248,6 @@ $(TYPEDEF)
 Wrapper around `lib.ssh_channel_callbacks_struct`.
 """
 mutable struct ChannelCallbacks
-    cb_struct::Union{lib.ssh_channel_callbacks_struct, Nothing}
     userdata::Any
     functions::Dict{Symbol, Function}
     c_result_types::Dict{Symbol, DataType}
@@ -256,6 +255,7 @@ mutable struct ChannelCallbacks
     jl_result_types::Dict{Symbol}
     jl_result_defaults::Dict{Symbol}
     jl_result_to_ctype::Dict{Symbol}
+    cb_struct::lib.ssh_channel_callbacks_struct
 
     @doc """
     $(TYPEDSIGNATURES)
@@ -329,7 +329,7 @@ mutable struct ChannelCallbacks
                               on_write_wontblock::Union{Function, Nothing}=Returns(0),
                               on_open_response::Union{Function, Nothing}=Returns(nothing),
                               on_request_response::Union{Function, Nothing}=Returns(nothing))
-        self = new(nothing, userdata,
+        self = new(userdata,
                    Dict{Symbol, Function}(),
                    Dict{Symbol, DataType}(),
                    Dict{Symbol, Any}(),
@@ -337,18 +337,22 @@ mutable struct ChannelCallbacks
                    Dict{Symbol, Any}(),
                    Dict{Symbol, Any}())
 
-        self.cb_struct = lib.ssh_channel_callbacks_struct(sizeof(lib.ssh_channel_callbacks_struct), # size (see: ssh_callback_init())
-                                                          pointer_from_objref(self), # userdata points to self
-                                                          C_NULL, C_NULL,
-                                                          C_NULL, C_NULL,
-                                                          C_NULL, C_NULL,
-                                                          C_NULL, C_NULL,
-                                                          C_NULL, C_NULL,
-                                                          C_NULL, C_NULL,
-                                                          C_NULL, C_NULL,
-                                                          C_NULL,
-                                                          C_NULL,
-                                                          C_NULL)
+        cb_struct = lib.ssh_channel_callbacks_struct(sizeof(lib.ssh_channel_callbacks_struct), # size (see: ssh_callback_init())
+                                                     pointer_from_objref(self), # userdata points to self
+                                                     C_NULL, C_NULL,
+                                                     C_NULL, C_NULL,
+                                                     C_NULL, C_NULL,
+                                                     C_NULL, C_NULL,
+                                                     C_NULL, C_NULL,
+                                                     C_NULL, C_NULL,
+                                                     C_NULL, C_NULL,
+                                                     C_NULL,
+                                                     C_NULL,
+                                                     C_NULL)
+        # Call setfield!() explicitly to fully initialize the object so that all
+        # other calls to setproperty!() will work.
+        setfield!(self, :cb_struct, cb_struct)
+
         self.on_data = on_data
         self.on_eof = on_eof
         self.on_close = on_close

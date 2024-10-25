@@ -177,10 +177,12 @@ end
     # https://github.com/JuliaLang/julia/issues/39282
     # Also note that we set `-F none` to disabling reading user config files.
     openssh_cmd = OpenSSH_jll.ssh()
-    ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`sshpass -p bar $(openssh_cmd.exec) -F none -o NoHostAuthenticationForLocalhost=yes -p 2222 $cmd`; env=openssh_cmd.env))
+    ssh_args = `-F none -o NoHostAuthenticationForLocalhost=yes -p 2222`
+    ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`sshpass -p bar $(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
+    passwordless_ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`$(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
 
     @testset "Command execution" begin
-        DemoServer(2222; password="bar") do
+        DemoServer(2222; password="bar", verbose=false) do
             # Test exitcodes
             @test run(ssh_cmd(`foo@localhost exit 0`)).exitcode == 0
             @test run(ssh_cmd(`foo@localhost exit 42`)).exitcode == 42
@@ -192,6 +194,20 @@ end
             cmd_result = run(pipeline(cmd; stdout=cmd_out))
 
             @test strip(String(take!(cmd_out))) == "bar"
+
+            # Test writing data to stdin
+            read_cmd = "read var && echo \$var"
+            cmd_out = IOBuffer()
+            open(ssh_cmd(`foo@localhost $read_cmd`), cmd_out; write=true) do io
+                write(io, "foo\n")
+            end
+            @test String(take!(cmd_out)) == "foo\n"
+        end
+    end
+
+    @testset "allow_auth_none" begin
+        DemoServer(2222; auth_methods=[ssh.AuthMethod_None], allow_auth_none=true) do
+            @test readchomp(passwordless_ssh_cmd(`foo@localhost whoami`)) == username()
         end
     end
 
@@ -281,7 +297,7 @@ end
         @test client.authenticated
 
         # And the command was executed
-        @test client.callback_log[:channel_exec_request] == ["whoami"]
+        @test client.callback_log[:channel_exec_request] == ["'whoami'"]
     end
 
     @testset "Multiple connections" begin
