@@ -587,7 +587,7 @@ end
 function on_channel_exec_request(session, sshchan, command, client)::Bool
     _add_log_event!(client, :channel_exec_request, command)
     owning_sshchan = find_unclaimed_channel(client, sshchan)
-    push!(client.channel_operations, CommandExecutor(command, owning_sshchan, client.env))
+    push!(client.channel_operations, CommandExecutor(client, command, owning_sshchan, client.env))
 
     return true
 end
@@ -1028,26 +1028,49 @@ end
 
 ## Execute commands
 
+function on_exec_channel_eof(session, sshchan, executor)
+    _add_log_event!(executor.client, :exec_channel_eof, true)
+end
+
+function on_exec_channel_close(session, sshchan, executor)
+    _add_log_event!(executor.client, :exec_channel_close, true)
+end
+
+function on_exec_channel_data(session, sshchan, data, is_stderr, executor)
+    _add_log_event!(executor.client, :exec_channel_data, length(data))
+
+    # Wait for the command to have been started and the pipe to have been opened
+    timedwait(10) do
+        try
+            isopen(executor.stdin)
+        catch
+            false
+        end
+    end
+
+    write(executor.stdin, data)
+    return length(data)
+end
+
 function exec_command(executor)
     sshchan = executor.sshchan
-    cmd_stdout = IOBuffer()
-    cmd_stderr = IOBuffer()
+    cmd_stdout = ChannelBuffer(sshchan, false)
+    cmd_stderr = ChannelBuffer(sshchan, true)
 
     # Start the process and wait for it
     cmd_str = join(Base.shell_split(executor.command), " ")
     cmd = setenv(ignorestatus(`sh -c $(cmd_str)`), executor.env)
-    proc = run(pipeline(cmd; stdout=cmd_stdout, stderr=cmd_stderr); wait=false)
+    proc = run(pipeline(cmd; stdin=executor.stdin, stdout=cmd_stdout, stderr=cmd_stderr); wait=false)
     executor.process = proc
     notify(executor._started_event)
     wait(proc)
 
-    # Write the output to the channel. We first check if the channel is open in
-    # case it's been killed suddenly in the meantime.
-    if isopen(sshchan)
-        write(sshchan, String(take!(cmd_stdout)))
-        write(sshchan, String(take!(cmd_stderr)); stderr=true)
+    close(executor.stdin)
+    close(cmd_stdout)
+    close(cmd_stderr)
 
-        # Clean up
+    # Clean up
+    if isopen(sshchan)
         ssh.channel_request_send_exit_status(sshchan, proc.exitcode)
         closewrite(sshchan)
     end
@@ -1055,22 +1078,64 @@ function exec_command(executor)
     close(sshchan)
 end
 
+# This is a helper IO type that exists for the sole purpose of asynchronously
+# forwarding output from commands back to the SshChannel. Other containers like
+# IOBuffer aren't thread-safe and can't be used so this implements a minimal,
+# thread-safe IO type based on Channels.
+mutable struct ChannelBuffer <: IO
+    channel::Channel{Vector{UInt8}}
+    sshchan::ssh.SshChannel
+    is_stderr::Bool
+    task::Task
+
+    function ChannelBuffer(sshchan, is_stderr)
+        self = new(Channel{Vector{UInt8}}(), sshchan, is_stderr)
+        self.task = Threads.@spawn for data in self.channel
+            # Write the output to the channel. We first check if the channel is open in
+            # case it's been killed suddenly in the meantime.
+            if isopen(sshchan)
+                write(self.sshchan, data; stderr=self.is_stderr)
+            end
+        end
+        errormonitor(self.task)
+
+        return self
+    end
+end
+
+function Base.write(chbuf::ChannelBuffer, data::Vector{UInt8})
+    put!(chbuf.channel, data)
+    return length(data)
+end
+
+function Base.close(chbuf::ChannelBuffer)
+    close(chbuf.channel)
+    wait(chbuf.task)
+end
+
 @kwdef mutable struct CommandExecutor
+    client::Client
     command::String
     sshchan::ssh.SshChannel
     env::Dict{String, String}
     task::Union{Task, Nothing} = nothing
     process::Union{Base.Process, Nothing} = nothing
+    stdin::Base.PipeEndpoint = Base.PipeEndpoint()
 
     _started_event::Base.Event = Base.Event()
 end
 
-function CommandExecutor(command::String, sshchan::ssh.SshChannel, env)
+function CommandExecutor(client::Client, command::String, sshchan::ssh.SshChannel, env)
     if !sshchan.owning
         throw(ArgumentError("The passed SshChannel is non-owning, CommandExecutor requires an owning SshChannel"))
     end
 
-    executor = CommandExecutor(; command, sshchan, env)
+    executor = CommandExecutor(; client, command, sshchan, env)
+    callbacks = ChannelCallbacks(executor;
+                                 on_data=on_exec_channel_data,
+                                 on_eof=on_exec_channel_eof,
+                                 on_close=on_exec_channel_close)
+    ssh.set_channel_callbacks(sshchan, callbacks)
 
     executor.task = Threads.@spawn try
         exec_command(executor)

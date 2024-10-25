@@ -14,9 +14,15 @@ Changelog](https://keepachangelog.com).
 - [`Demo.DemoServer`](@ref) now supports passing `allow_auth_none=true` to allow
   easily setting up passwordless authentication ([#28]).
 
+### Fixed
+
+- Previously the [`Demo.DemoServer`](@ref)'s command execution implementation
+  would only send the command output after it had finished. Now the output gets
+  sent as soon as it's printed by the command ([#28]).
+
 ### Changed
 
-- **Breaking**: [`set_channel_callbacks()`](@ref) now removes any existing
+- **Breaking**: [`set_channel_callbacks()`](@ref) will remove any existing
   callbacks ([#28]).
 
 ## [v0.6.1] - 2024-10-20
