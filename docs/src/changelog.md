@@ -14,6 +14,11 @@ Changelog](https://keepachangelog.com).
 - [`Demo.DemoServer`](@ref) now supports passing `allow_auth_none=true` to allow
   easily setting up passwordless authentication ([#28]).
 
+### Changed
+
+- **Breaking**: [`set_channel_callbacks()`](@ref) now removes any existing
+  callbacks ([#28]).
+
 ## [v0.6.1] - 2024-10-20
 
 ### Added

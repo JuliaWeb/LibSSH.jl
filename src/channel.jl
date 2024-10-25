@@ -284,15 +284,33 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Wrapper around [`lib.ssh_set_channel_callbacks()`](@ref). Will throw a
-[`LibSSHException`](@ref) if setting the callbacks failed.
+Wrapper around [`lib.ssh_set_channel_callbacks()`](@ref) and
+[`lib.ssh_remove_channel_callbacks()`](@ref). Unlike
+[`lib.ssh_set_channel_callbacks()`](@ref) this will replace any existing
+callbacks.
+
+# Throws
+- [`LibSSHException`](@ref): If setting the callbacks failed.
 """
 function set_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.ChannelCallbacks)
+    if !isnothing(sshchan.callbacks)
+        remove_channel_callbacks(sshchan, sshchan.callbacks)
+    end
+
     ret = lib.ssh_set_channel_callbacks(sshchan, Ref(callbacks.cb_struct))
     if ret != SSH_OK
         throw(LibSSHException("Error when setting channel callbacks: $(ret)"))
     end
     sshchan.callbacks = callbacks
+end
+
+# Undocumented for now because the API for setting callbacks isn't fleshed out yet
+function remove_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.ChannelCallbacks)
+    ret = lib.ssh_remove_channel_callbacks(sshchan, Ref(callbacks.cb_struct))
+    if ret != SSH_OK
+        throw(LibSSHException("Error when removing channel callbacks: $(ret)"))
+    end
+    sshchan.callbacks = nothing
 end
 
 """
