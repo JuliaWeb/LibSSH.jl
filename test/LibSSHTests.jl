@@ -297,7 +297,7 @@ end
         @test client.authenticated
 
         # And the command was executed
-        @test client.callback_log[:channel_exec_request] == ["whoami"]
+        @test client.callback_log[:channel_exec_request] == ["'whoami'"]
     end
 
     @testset "Multiple connections" begin

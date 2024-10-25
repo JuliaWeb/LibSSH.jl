@@ -585,7 +585,7 @@ function on_channel_env_request(session, sshchan, name, value, client)::Bool
 end
 
 function on_channel_exec_request(session, sshchan, command, client)::Bool
-    _add_log_event!(client, :channel_exec_request, command)
+    _add_log_event!(client, :channel_exec_request, "'$command'")
     owning_sshchan = find_unclaimed_channel(client, sshchan)
     push!(client.channel_operations, CommandExecutor(client, command, owning_sshchan, client.env))
 
