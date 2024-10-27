@@ -1,6 +1,6 @@
 module lib
 
-using CEnum: CEnum, @cenum
+using CEnum
 
 using libssh_jll
 using DocStringExtensions
@@ -30,7 +30,7 @@ const mode_t = __mode_t
 const __fd_mask = Clong
 
 mutable struct fd_set
-    __fds_bits::NTuple{16, __fd_mask}
+    __fds_bits::NTuple{32, __fd_mask}
 end
 
 const socket_t = Cint
@@ -2647,27 +2647,27 @@ struct sftp_attributes_struct
 end
 function Base.getproperty(x::Ptr{sftp_attributes_struct}, f::Symbol)
     f === :name && return Ptr{Ptr{Cchar}}(x + 0)
-    f === :longname && return Ptr{Ptr{Cchar}}(x + 8)
-    f === :flags && return Ptr{UInt32}(x + 16)
-    f === :type && return Ptr{UInt8}(x + 20)
-    f === :size && return Ptr{UInt64}(x + 24)
-    f === :uid && return Ptr{UInt32}(x + 32)
-    f === :gid && return Ptr{UInt32}(x + 36)
-    f === :owner && return Ptr{Ptr{Cchar}}(x + 40)
-    f === :group && return Ptr{Ptr{Cchar}}(x + 48)
-    f === :permissions && return Ptr{UInt32}(x + 56)
-    f === :atime64 && return Ptr{UInt64}(x + 64)
-    f === :atime && return Ptr{UInt32}(x + 72)
-    f === :atime_nseconds && return Ptr{UInt32}(x + 76)
-    f === :createtime && return Ptr{UInt64}(x + 80)
-    f === :createtime_nseconds && return Ptr{UInt32}(x + 88)
-    f === :mtime64 && return Ptr{UInt64}(x + 96)
-    f === :mtime && return Ptr{UInt32}(x + 104)
-    f === :mtime_nseconds && return Ptr{UInt32}(x + 108)
-    f === :acl && return Ptr{ssh_string}(x + 112)
-    f === :extended_count && return Ptr{UInt32}(x + 120)
-    f === :extended_type && return Ptr{ssh_string}(x + 128)
-    f === :extended_data && return Ptr{ssh_string}(x + 136)
+    f === :longname && return Ptr{Ptr{Cchar}}(x + 4)
+    f === :flags && return Ptr{UInt32}(x + 8)
+    f === :type && return Ptr{UInt8}(x + 12)
+    f === :size && return Ptr{UInt64}(x + 16)
+    f === :uid && return Ptr{UInt32}(x + 24)
+    f === :gid && return Ptr{UInt32}(x + 28)
+    f === :owner && return Ptr{Ptr{Cchar}}(x + 32)
+    f === :group && return Ptr{Ptr{Cchar}}(x + 36)
+    f === :permissions && return Ptr{UInt32}(x + 40)
+    f === :atime64 && return Ptr{UInt64}(x + 44)
+    f === :atime && return Ptr{UInt32}(x + 52)
+    f === :atime_nseconds && return Ptr{UInt32}(x + 56)
+    f === :createtime && return Ptr{UInt64}(x + 60)
+    f === :createtime_nseconds && return Ptr{UInt32}(x + 68)
+    f === :mtime64 && return Ptr{UInt64}(x + 72)
+    f === :mtime && return Ptr{UInt32}(x + 80)
+    f === :mtime_nseconds && return Ptr{UInt32}(x + 84)
+    f === :acl && return Ptr{ssh_string}(x + 88)
+    f === :extended_count && return Ptr{UInt32}(x + 92)
+    f === :extended_type && return Ptr{ssh_string}(x + 96)
+    f === :extended_data && return Ptr{ssh_string}(x + 100)
     return getfield(x, f)
 end
 
@@ -5122,16 +5122,16 @@ mutable struct ssh_server_callbacks_struct
 end
 function Base.getproperty(x::Ptr{ssh_server_callbacks_struct}, f::Symbol)
     f === :size && return Ptr{Csize_t}(x + 0)
-    f === :userdata && return Ptr{Ptr{Cvoid}}(x + 8)
-    f === :auth_password_function && return Ptr{ssh_auth_password_callback}(x + 16)
-    f === :auth_none_function && return Ptr{ssh_auth_none_callback}(x + 24)
-    f === :auth_gssapi_mic_function && return Ptr{ssh_auth_gssapi_mic_callback}(x + 32)
-    f === :auth_pubkey_function && return Ptr{ssh_auth_pubkey_callback}(x + 40)
-    f === :service_request_function && return Ptr{ssh_service_request_callback}(x + 48)
-    f === :channel_open_request_session_function && return Ptr{ssh_channel_open_request_session_callback}(x + 56)
-    f === :gssapi_select_oid_function && return Ptr{ssh_gssapi_select_oid_callback}(x + 64)
-    f === :gssapi_accept_sec_ctx_function && return Ptr{ssh_gssapi_accept_sec_ctx_callback}(x + 72)
-    f === :gssapi_verify_mic_function && return Ptr{ssh_gssapi_verify_mic_callback}(x + 80)
+    f === :userdata && return Ptr{Ptr{Cvoid}}(x + 4)
+    f === :auth_password_function && return Ptr{ssh_auth_password_callback}(x + 8)
+    f === :auth_none_function && return Ptr{ssh_auth_none_callback}(x + 12)
+    f === :auth_gssapi_mic_function && return Ptr{ssh_auth_gssapi_mic_callback}(x + 16)
+    f === :auth_pubkey_function && return Ptr{ssh_auth_pubkey_callback}(x + 20)
+    f === :service_request_function && return Ptr{ssh_service_request_callback}(x + 24)
+    f === :channel_open_request_session_function && return Ptr{ssh_channel_open_request_session_callback}(x + 28)
+    f === :gssapi_select_oid_function && return Ptr{ssh_gssapi_select_oid_callback}(x + 32)
+    f === :gssapi_accept_sec_ctx_function && return Ptr{ssh_gssapi_accept_sec_ctx_callback}(x + 36)
+    f === :gssapi_verify_mic_function && return Ptr{ssh_gssapi_verify_mic_callback}(x + 40)
     return getfield(x, f)
 end
 
@@ -5494,24 +5494,24 @@ mutable struct ssh_channel_callbacks_struct
 end
 function Base.getproperty(x::Ptr{ssh_channel_callbacks_struct}, f::Symbol)
     f === :size && return Ptr{Csize_t}(x + 0)
-    f === :userdata && return Ptr{Ptr{Cvoid}}(x + 8)
-    f === :channel_data_function && return Ptr{ssh_channel_data_callback}(x + 16)
-    f === :channel_eof_function && return Ptr{ssh_channel_eof_callback}(x + 24)
-    f === :channel_close_function && return Ptr{ssh_channel_close_callback}(x + 32)
-    f === :channel_signal_function && return Ptr{ssh_channel_signal_callback}(x + 40)
-    f === :channel_exit_status_function && return Ptr{ssh_channel_exit_status_callback}(x + 48)
-    f === :channel_exit_signal_function && return Ptr{ssh_channel_exit_signal_callback}(x + 56)
-    f === :channel_pty_request_function && return Ptr{ssh_channel_pty_request_callback}(x + 64)
-    f === :channel_shell_request_function && return Ptr{ssh_channel_shell_request_callback}(x + 72)
-    f === :channel_auth_agent_req_function && return Ptr{ssh_channel_auth_agent_req_callback}(x + 80)
-    f === :channel_x11_req_function && return Ptr{ssh_channel_x11_req_callback}(x + 88)
-    f === :channel_pty_window_change_function && return Ptr{ssh_channel_pty_window_change_callback}(x + 96)
-    f === :channel_exec_request_function && return Ptr{ssh_channel_exec_request_callback}(x + 104)
-    f === :channel_env_request_function && return Ptr{ssh_channel_env_request_callback}(x + 112)
-    f === :channel_subsystem_request_function && return Ptr{ssh_channel_subsystem_request_callback}(x + 120)
-    f === :channel_write_wontblock_function && return Ptr{ssh_channel_write_wontblock_callback}(x + 128)
-    f === :channel_open_response_function && return Ptr{ssh_channel_open_resp_callback}(x + 136)
-    f === :channel_request_response_function && return Ptr{ssh_channel_request_resp_callback}(x + 144)
+    f === :userdata && return Ptr{Ptr{Cvoid}}(x + 4)
+    f === :channel_data_function && return Ptr{ssh_channel_data_callback}(x + 8)
+    f === :channel_eof_function && return Ptr{ssh_channel_eof_callback}(x + 12)
+    f === :channel_close_function && return Ptr{ssh_channel_close_callback}(x + 16)
+    f === :channel_signal_function && return Ptr{ssh_channel_signal_callback}(x + 20)
+    f === :channel_exit_status_function && return Ptr{ssh_channel_exit_status_callback}(x + 24)
+    f === :channel_exit_signal_function && return Ptr{ssh_channel_exit_signal_callback}(x + 28)
+    f === :channel_pty_request_function && return Ptr{ssh_channel_pty_request_callback}(x + 32)
+    f === :channel_shell_request_function && return Ptr{ssh_channel_shell_request_callback}(x + 36)
+    f === :channel_auth_agent_req_function && return Ptr{ssh_channel_auth_agent_req_callback}(x + 40)
+    f === :channel_x11_req_function && return Ptr{ssh_channel_x11_req_callback}(x + 44)
+    f === :channel_pty_window_change_function && return Ptr{ssh_channel_pty_window_change_callback}(x + 48)
+    f === :channel_exec_request_function && return Ptr{ssh_channel_exec_request_callback}(x + 52)
+    f === :channel_env_request_function && return Ptr{ssh_channel_env_request_callback}(x + 56)
+    f === :channel_subsystem_request_function && return Ptr{ssh_channel_subsystem_request_callback}(x + 60)
+    f === :channel_write_wontblock_function && return Ptr{ssh_channel_write_wontblock_callback}(x + 64)
+    f === :channel_open_response_function && return Ptr{ssh_channel_open_resp_callback}(x + 68)
+    f === :channel_request_response_function && return Ptr{ssh_channel_request_resp_callback}(x + 72)
     return getfield(x, f)
 end
 
