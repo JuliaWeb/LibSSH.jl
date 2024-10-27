@@ -8,6 +8,7 @@ import Aqua
 import Literate
 import CURL_jll: curl
 import OpenSSH_jll
+import sshpass_jll: sshpass
 import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_broken, @test_logs
 
 import LibSSH as ssh
@@ -178,7 +179,7 @@ end
     # Also note that we set `-F none` to disabling reading user config files.
     openssh_cmd = OpenSSH_jll.ssh()
     ssh_args = `-F none -o NoHostAuthenticationForLocalhost=yes -p 2222`
-    ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`sshpass -p bar $(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
+    ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`$(sshpass()) -p bar $(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
     passwordless_ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`$(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
 
     @testset "Command execution" begin
@@ -308,7 +309,7 @@ end
         @test length(demo_server.clients) == 2
     end
 
-    sftp_cmd(cmd::Cmd) = ignorestatus(`sshpass -p bar sftp -F none -o NoHostAuthenticationForLocalhost=yes -P 2222 $cmd`)
+    sftp_cmd(cmd::Cmd) = ignorestatus(`$(sshpass()) -p bar sftp -F none -o NoHostAuthenticationForLocalhost=yes -P 2222 $cmd`)
 
     @testset "SFTP" begin
         DemoServer(2222; verbose=false, log_verbosity=ssh.SSH_LOG_NOLOG, password="bar") do
