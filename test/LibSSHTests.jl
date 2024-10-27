@@ -17,6 +17,7 @@ import LibSSH: Demo, lib, KbdintPrompt
 import LibSSH.Demo: DemoServer
 
 
+curl_cmd = `$(curl()) --no-progress-meter`
 username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
 
 const HTTP_200 = "HTTP/1.1 200 OK\r\n\r\n"
@@ -249,7 +250,7 @@ end
     @testset "Direct port forwarding" begin
         # Test the dummy HTTP server we'll use later
         http_server(9090) do
-            @test run(`$(curl()) localhost:9090`).exitcode == 0
+            @test run(`$(curl_cmd) localhost:9090`).exitcode == 0
         end
 
         # Test direct port forwarding
@@ -270,7 +271,7 @@ end
                 # on the listening port, so we only need the HTTP server running
                 # while we're making the request.
                 http_server(9090) do
-                    curl_process = run(ignorestatus(`$(curl()) localhost:8080`))
+                    curl_process = run(ignorestatus(`$(curl_cmd) localhost:8080`))
                     @test curl_process.exitcode == 0
                 end
 
@@ -609,7 +610,7 @@ end
                 show(IOBuffer(), forwarder)
 
                 http_server(9090) do
-                    curl_proc = run(ignorestatus(`$(curl()) localhost:8080`); wait=false)
+                    curl_proc = run(ignorestatus(`$(curl_cmd) localhost:8080`); wait=false)
                     try
                         wait(curl_proc)
                     finally
