@@ -8,6 +8,7 @@ import Aqua
 import Literate
 import CURL_jll: curl
 import OpenSSH_jll
+import sshpass_jll: sshpass
 import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_broken, @test_logs
 
 import LibSSH as ssh
@@ -16,6 +17,7 @@ import LibSSH: Demo, lib, KbdintPrompt
 import LibSSH.Demo: DemoServer
 
 
+curl_cmd = `$(curl()) --no-progress-meter`
 username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
 
 const HTTP_200 = "HTTP/1.1 200 OK\r\n\r\n"
@@ -178,7 +180,7 @@ end
     # Also note that we set `-F none` to disabling reading user config files.
     openssh_cmd = OpenSSH_jll.ssh()
     ssh_args = `-F none -o NoHostAuthenticationForLocalhost=yes -p 2222`
-    ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`sshpass -p bar $(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
+    ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`$(sshpass()) -p bar $(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
     passwordless_ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`$(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
 
     @testset "Command execution" begin
@@ -248,7 +250,7 @@ end
     @testset "Direct port forwarding" begin
         # Test the dummy HTTP server we'll use later
         http_server(9090) do
-            @test run(`$(curl()) localhost:9090`).exitcode == 0
+            @test run(`$(curl_cmd) localhost:9090`).exitcode == 0
         end
 
         # Test direct port forwarding
@@ -269,7 +271,7 @@ end
                 # on the listening port, so we only need the HTTP server running
                 # while we're making the request.
                 http_server(9090) do
-                    curl_process = run(ignorestatus(`$(curl()) localhost:8080`))
+                    curl_process = run(ignorestatus(`$(curl_cmd) localhost:8080`))
                     @test curl_process.exitcode == 0
                 end
 
@@ -308,7 +310,7 @@ end
         @test length(demo_server.clients) == 2
     end
 
-    sftp_cmd(cmd::Cmd) = ignorestatus(`sshpass -p bar sftp -F none -o NoHostAuthenticationForLocalhost=yes -P 2222 $cmd`)
+    sftp_cmd(cmd::Cmd) = ignorestatus(`$(sshpass()) -p bar sftp -F none -o NoHostAuthenticationForLocalhost=yes -P 2222 $cmd`)
 
     @testset "SFTP" begin
         DemoServer(2222; verbose=false, log_verbosity=ssh.SSH_LOG_NOLOG, password="bar") do
@@ -587,6 +589,10 @@ end
             mktempdir() do tmpdir
                 @test readchomp("cd $(tmpdir) && pwd", session) == tmpdir
             end
+
+            sshchan = ssh.SshChannel(session)
+            close(sshchan)
+            @test_throws ArgumentError ssh.channel_request_send_exit_status(sshchan, 0)
         end
     end
 
@@ -604,7 +610,7 @@ end
                 show(IOBuffer(), forwarder)
 
                 http_server(9090) do
-                    curl_proc = run(ignorestatus(`$(curl()) localhost:8080`); wait=false)
+                    curl_proc = run(ignorestatus(`$(curl_cmd) localhost:8080`); wait=false)
                     try
                         wait(curl_proc)
                     finally
@@ -1043,8 +1049,8 @@ end
     @test ssh.lib_version() isa VersionNumber
 end
 
-# @testset "Aqua.jl" begin
-#     Aqua.test_all(ssh)
-# end
+@testset "Aqua.jl" begin
+    Aqua.test_all(ssh)
+end
 
 end

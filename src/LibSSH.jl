@@ -7,7 +7,12 @@ import FileWatching
 
 using DocStringExtensions
 
-include("bindings.jl")
+@static if Sys.WORD_SIZE == 64
+    include(joinpath(@__DIR__, "..", "lib", "x86_64-linux-gnu.jl"))
+else
+    include(joinpath(@__DIR__, "..", "lib", "i686-linux-gnu.jl"))
+end
+
 using .lib
 import .lib: LibSSHException, SSH_OK, SSH_ERROR, SSH_AGAIN, SSH_EOF
 

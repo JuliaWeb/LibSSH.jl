@@ -361,7 +361,7 @@ $(TYPEDSIGNATURES)
 Sends an exit status in reponse to an exec request. Wrapper around
 [`lib.ssh_channel_request_send_exit_status()`](@ref).
 """
-function channel_request_send_exit_status(sshchan::SshChannel, status::Int)
+function channel_request_send_exit_status(sshchan::SshChannel, status::Integer)
     if !isopen(sshchan)
         throw(ArgumentError("SshChannel has been closed, cannot send exit status"))
     end

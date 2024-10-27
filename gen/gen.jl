@@ -233,31 +233,39 @@ function rewrite!(ctx)
 end
 
 cd(@__DIR__) do
-    # Load the doxygen tags
-    ctx_objects[:tags] = read_tags()
+    # There are some parts of the bindings where the difference in pointer size
+    # on 32bit/64bit platforms is important, like the generated getproperty()
+    # methods. Hence we generate 32bit and 64bit bindings for Linux only (they
+    # should only be architecture-dependent, not OS-dependent).
+    for target in ("x86_64-linux-gnu", "i686-linux-gnu")
+        # Load the doxygen tags
+        ctx_objects[:tags] = read_tags()
 
-    # Set the options
-    options = Clang.load_options(joinpath(@__DIR__, "generator.toml"))
-    options["general"]["callback_documentation"] = get_docs
-    ctx_objects[:codegen_options] = options["codegen"]
+        # Set the options
+        options = Clang.load_options(joinpath(@__DIR__, "generator.toml"))
+        options["general"]["callback_documentation"] = get_docs
+        options["general"]["output_file_path"] = joinpath(@__DIR__, "..", "lib", "$(target).jl")
+        ctx_objects[:codegen_options] = options["codegen"]
 
-    include_dir = normpath(libssh_jll.artifact_dir, "include")
-    headers = [joinpath(include_dir, "libssh", name) for name in
-               ["libssh.h", "libssh_version.h", "sftp.h", "server.h", "callbacks.h"]]
-    args = Clang.get_default_args()
-    push!(args, "-I$include_dir", "-DWITH_SERVER=1")
+        include_dir = normpath(libssh_jll.artifact_dir, "include")
+        headers = [joinpath(include_dir, "libssh", name) for name in
+                       ["libssh.h", "libssh_version.h", "sftp.h", "server.h", "callbacks.h"]]
 
-    # Generate the bindings
-    ctx = Clang.create_context(headers, args, options)
-    ctx_objects[:dag] = ctx.dag
-    Clang.build!(ctx, Clang.BUILDSTAGE_NO_PRINTING)
+        args = Clang.get_default_args(target)
+        push!(args, "-I$include_dir", "-DWITH_SERVER=1")
 
-    # Rewrite expressions
-    rewrite!(ctx)
+        # Generate the bindings
+        ctx = Clang.create_context(headers, args, options)
+        ctx_objects[:dag] = ctx.dag
+        Clang.build!(ctx, Clang.BUILDSTAGE_NO_PRINTING)
 
-    Clang.build!(ctx, Clang.BUILDSTAGE_PRINTING_ONLY)
+        # Rewrite expressions
+        rewrite!(ctx)
 
-    empty!(ctx_objects)
+        Clang.build!(ctx, Clang.BUILDSTAGE_PRINTING_ONLY)
+
+        empty!(ctx_objects)
+    end
 
     nothing
 end
