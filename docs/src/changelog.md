@@ -7,6 +7,11 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## Unreleased
+
+### Fixed
+- Fixed behaviour of the [`Session`](@ref)`.known_hosts` property ([#30]).
+
 ## [v0.7.0] - 2024-10-25
 
 ### Added
