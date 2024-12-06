@@ -9,6 +9,9 @@ Changelog](https://keepachangelog.com).
 
 ## Unreleased
 
+### Added
+- Implemented [`Base.mkpath(::AbstractString, ::SftpSession)`](@ref) ([#30]).
+
 ### Fixed
 - Fixed behaviour of the [`Session`](@ref)`.known_hosts` property ([#30]).
 
