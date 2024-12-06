@@ -526,6 +526,37 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Create a remote path. This behaves in exactly the same way as `Base.mkpath()`.
+
+# Throws
+- `ArgumentError`: If `sftp` is closed.
+- [`SftpException`](@ref): If making the path fails for some reason, such as
+  part of `path` being an existing file.
+"""
+function Base.mkpath(path::AbstractString, sftp::SftpSession; mode=0o777)
+    if !isopen(sftp)
+        throw(ArgumentError("$(sftp) is closed, cannot use it to mkpath()"))
+    end
+
+    parts = splitpath(path)
+    for i in eachindex(parts)
+        part= joinpath(parts[1:i])
+
+        try
+            mkdir(part, sftp; mode)
+        catch ex
+            if !(ex isa SftpException && ex.error_code == SftpError_FileAlreadyExists && isdir(part, sftp))
+                rethrow()
+            end
+        end
+    end
+
+    return path
+end
+
+"""
+$(TYPEDSIGNATURES)
+
 Move `src` to `dst` remotely. Has the same behaviour as `Base.mv()`.
 
 # Throws

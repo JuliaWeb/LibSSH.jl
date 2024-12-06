@@ -24,7 +24,6 @@ mutable struct Session
 
     log_verbosity::Int
     ssh_dir::Union{String, Nothing}
-    known_hosts::Union{String, Nothing}
     gssapi_server_identity::Union{String, Nothing}
     process_config::Bool
 
@@ -69,7 +68,7 @@ mutable struct Session
         lib.ssh_set_blocking(ptr, 0)
 
         session = new(ptr, own, [], nothing,
-                      -1, nothing, nothing, nothing, true,
+                      -1, nothing, nothing, true,
                       ReentrantLock(), nothing, AuthMethod[], true,
                       Threads.Event(true), CloseableCondition(), false)
 
@@ -311,7 +310,7 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
                                       :process_config => (SSH_OPTIONS_PROCESS_CONFIG, Bool))
 # These properties cannot be retrieved from the libssh API (i.e. with
 # ssh_options_get()), so we store them in the Session object instead.
-const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :known_hosts, :process_config)
+const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :process_config)
 
 function Base.propertynames(::Session, private::Bool=false)
     fields = fieldnames(Session)
@@ -869,6 +868,8 @@ function authenticate_cli(session::Session)
                 # We can't continue if they don't accept the key
                 return ret
             end
+        elseif ret == AuthStatus_Success
+            # Do nothing
         else
             error("Unsupported return value from authenticate(): $(ret)")
         end

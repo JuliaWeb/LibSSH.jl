@@ -954,6 +954,21 @@ end
                 @test_throws ssh.SftpException mkdir(path, sftp)
             end
 
+            # Test mkpath()
+            mktempdir() do tmpdir
+                parent_dir = joinpath(tmpdir, "foo")
+                path = joinpath(parent_dir, "bar")
+
+                # Creating a path with no existing files in the name should work
+                @test mkpath(path, sftp) == path
+                @test isdir(path)
+
+                # But if there's a file already in there we should get an exception
+                rm(parent_dir; force=true, recursive=true)
+                touch(parent_dir)
+                @test_throws ssh.SftpException mkpath(path, sftp)
+            end
+
             # Test mv()
             mktempdir() do tmpdir
                 src = joinpath(tmpdir, "foo")
@@ -984,6 +999,7 @@ end
             @test_throws ArgumentError readdir("/tmp", sftp)
             @test_throws ArgumentError rm("/tmp", sftp)
             @test_throws ArgumentError mkdir("/tmp", sftp)
+            @test_throws ArgumentError mkpath("/tmp", sftp)
             @test_throws ArgumentError mv("foo", "bar", sftp)
         end
     end
