@@ -868,6 +868,8 @@ function authenticate_cli(session::Session)
                 # We can't continue if they don't accept the key
                 return ret
             end
+        elseif ret == AuthStatus_Success
+            # Do nothing
         else
             error("Unsupported return value from authenticate(): $(ret)")
         end
