@@ -7,10 +7,12 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
-## Unreleased
+## [v0.8.0] - 2024-12-06
 
 ### Added
 - Implemented [`Base.mkpath(::AbstractString, ::SftpSession)`](@ref) ([#30]).
+- Added support for 32-bit platforms, though only Linux is tested with that in
+  CI ([#29]).
 
 ### Fixed
 - Fixed behaviour of the [`Session`](@ref)`.known_hosts` property ([#30]).
