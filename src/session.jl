@@ -13,8 +13,11 @@ implemented in `getproperty()`/`setproperty!()` by using the internal values of
 the `ssh_session`, i.e. they aren't simply fields of the struct. A `Session` may
 be owning or non-owning of its internal pointer to a `lib.ssh_session`.
 
-It must be closed explicitly with [`Base.close(::Session)`](@ref) or it will
-leak memory.
+!!! warning
+    It's *highly recommended* to close `Session`'s explicitly with
+    [`Base.close(::Session)`](@ref). Finalizers do not allow task switches so
+    the finalizer for `Session` will abruptly kill the session and free its
+    memory, which may cause problems in other code relying on the `Session`.
 """
 mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
@@ -123,11 +126,22 @@ end
 
 Base.lock(session::Session) = lock(session._lock)
 Base.unlock(session::Session) = unlock(session._lock)
+Base.islocked(session::Session) = islocked(session._lock)
+Base.trylock(session::Session) = trylock(session._lock)
 
 # Non-throwing finalizer for Session objects
 function _finalizer(session::Session)
     if isopen(session)
-        Threads.@spawn @error "$(session) has not been explicitly closed, this is a memory leak!"
+        if !trylock(session)
+            finalizer(_finalizer, session)
+        else
+            try
+                lib.ssh_free(session)
+                session.ptr = nothing
+            finally
+                unlock(session)
+            end
+        end
     end
 end
 

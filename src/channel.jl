@@ -13,6 +13,13 @@ can be closed with [`close(::SshChannel)`](@ref).
 
 The type is named `SshChannel` to avoid confusion with Julia's own `Channel`
 type.
+
+!!! warning
+    If callbacks are set on an `SshChannel` (e.g. to implement a server) it
+    *must* be closed explicitly with [`Base.close(::SshChannel)`](@ref). It is
+    not safe to allow the finalizer to clean up the resources since callback
+    functions may be called while the `SshChannel` is closed and they may yield
+    to allow task switching, which is forbidden inside finalizers.
 """
 mutable struct SshChannel
     ptr::Union{lib.ssh_channel, Nothing}
@@ -51,12 +58,18 @@ end
 # close(SshChannel) can throw, which we don't want to happen in a finalizer so
 # we wrap it in a try-catch.
 function _finalizer(sshchan::SshChannel)
-    try
-        close(sshchan)
-    catch ex
-        # Note the use of @spawn to avoid a task switch, which is forbidden in a
-        # finalizer.
-        Threads.@spawn @error "Caught exception while finalizing SshChannel" exception=(ex, catch_backtrace())
+    if trylock(sshchan.close_lock)
+        try
+            close(sshchan)
+        catch ex
+            # Note the use of @spawn to avoid a task switch, which is forbidden in a
+            # finalizer.
+            Threads.@spawn @error "Caught exception while finalizing SshChannel" exception=(ex, catch_backtrace())
+        finally
+            unlock(sshchan.close_lock)
+        end
+    else
+        finalizer(_finalizer, sshchan)
     end
 end
 
@@ -158,14 +171,17 @@ function Base.close(sshchan::SshChannel; allow_fail=false)
         throw(ArgumentError("Calling close() on a non-owning SshChannel is not allowed to avoid accidental double-frees, see the docs for more information."))
     end
 
-    # Even though we hold a lock in this section it's still possible for the
-    # function to be called recursively and enter it again anyway. The reason is
-    # because lib.ssh_channel_send_eof() and lib.ssh_channel_close() both flush
-    # the channel, which will trigger any callbacks. And if the callbacks happen
-    # to call close(), then the lock will be taken anyway (because it's a
-    # reentrant lock). There's not much we can do about this apart from making
-    # close() as robust as possible, which is why there are so many checks.
+    # Note that the finalizer will take the lock before calling close(), so
+    # we can safely call @lock here.
     @lock sshchan.close_lock begin
+        # Even though we hold a lock in this section it's still possible for the
+        # function to be called recursively and enter it again anyway. The reason is
+        # because lib.ssh_channel_send_eof() and lib.ssh_channel_close() both flush
+        # the channel, which will trigger any callbacks. And if the callbacks happen
+        # to call close(), then the lock will be taken anyway (because it's a
+        # reentrant lock). There's not much we can do about this apart from making
+        # close() as robust as possible, which is why there are so many checks.
+
         if isassigned(sshchan)
             # Remove from the sessions list of active channels. findfirst()
             # should only return nothing if the function is being called
