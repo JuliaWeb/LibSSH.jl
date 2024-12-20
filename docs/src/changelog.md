@@ -7,6 +7,14 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## Unreleased
+
+### Changed
+- Made the finalizers for [`Session`](@ref), [`SshChannel`](@ref), and
+  [`SftpSession`](@ref) slightly more robust. It's still not recommended to rely
+  on them to clean up all resources but in most cases they should be able to do
+  so ([#31]).
+
 ## [v0.7.1] - 2024-12-06
 
 ### Added

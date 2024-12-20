@@ -121,9 +121,11 @@ end
 $(TYPEDEF)
 
 This represents a SFTP session, through which one can do SFTP operations. It is
-only usable while its parent [`Session`](@ref) is still open, and it must be
-closed explicitly with [`Base.close(::SftpSession)`](@ref) or it will leak
-memory.
+only usable while its parent [`Session`](@ref) is still open.
+
+!!! warning
+    `SftpSession`'s with open [`SftpFile`](@ref)'s *must* be closed explicitly
+    with [`Base.close(::SftpSession)`](@ref) or they will leak memory.
 """
 mutable struct SftpSession
     ptr::Union{lib.sftp_session, Nothing}
@@ -168,8 +170,24 @@ mutable struct SftpSession
 end
 
 function _finalizer(sftp::SftpSession)
-    if isopen(sftp)
-        Threads.@spawn @error "$(sftp) has not been closed, this is a memory leak!"
+    # Closing an SftpSession requires locking at least SftpSession and its
+    # parent Session.
+    if trylock(sftp)
+        try
+            if trylock(sftp.session)
+                try
+                    close(sftp; finalizing=true)
+                finally
+                    unlock(sftp.session)
+                end
+            else
+                finalizer(_finalizer, sftp)
+            end
+        finally
+            unlock(sftp)
+        end
+    else
+        finalizer(_finalizer, sftp)
     end
 end
 
@@ -210,6 +228,9 @@ Unlock an [`SftpSession`](@ref).
 """
 Base.unlock(sftp::SftpSession) = unlock(sftp._lock)
 
+Base.islocked(sftp::SftpSession) = islocked(sftp._lock)
+Base.trylock(sftp::SftpSession) = trylock(sftp._lock)
+
 Base.isassigned(sftp::SftpSession) = !isnothing(sftp.ptr)
 
 """
@@ -232,11 +253,17 @@ $(TYPEDSIGNATURES)
 
 Close an `SftpSession`. This will also close any open files.
 """
-function Base.close(sftp::SftpSession)
-    if isassigned(sftp)
-        # Close all open files
-        for i in reverse(eachindex(sftp.files))
-            close(sftp.files[i])
+function Base.close(sftp::SftpSession; finalizing=false)
+    @lock sftp if isassigned(sftp)
+        if !finalizing
+            # Close all open files
+            for i in reverse(eachindex(sftp.files))
+                close(sftp.files[i])
+            end
+        elseif !isempty(sftp.files)
+            # We cannot close files in a finalizer because that requires a
+            # network call.
+            Threads.@spawn @error "$(sftp) has open files that couldn't be closed in the finalizer. This is a memory leak! You must close() the SftpSession explicitly."
         end
 
         # Remove from the parent session

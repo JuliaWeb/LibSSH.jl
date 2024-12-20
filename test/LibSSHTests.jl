@@ -396,6 +396,15 @@ end
     # And we shouldn't be able to wait on a closed session
     @test_throws InvalidStateException wait(session)
 
+    # Test the finalizer
+    ssh.Session("localhost"; auto_connect=false) do session2
+        finalize(session2)
+        @test !isopen(session2)
+
+        # Finalizing a closed session should do nothing
+        finalize(session2)
+    end
+
     # Test initializing with a socket instead of a port. We do this by setting
     # up two dummy servers, the one on port 2222 is what we want to connect to
     # and the one on port 2223 is the simulated jump host we have to go
@@ -544,6 +553,7 @@ end
         demo_server_with_session(2222) do session
             # Create a channel
             sshchan = ssh.SshChannel(session)
+            @test only(session.closeables) === sshchan
 
             # Create a non-owning channel and make sure that we can't close it
             non_owning_sshchan = ssh.SshChannel(sshchan.ptr; own=false)
@@ -556,6 +566,17 @@ end
             close(sshchan)
             @test isnothing(sshchan.ptr)
             @test isempty(session.closeables)
+        end
+
+        # Test the channel finalizer
+        demo_server_with_session(2222) do session
+            sshchan = ssh.SshChannel(session)
+            finalize(sshchan)
+            @test !isassigned(sshchan)
+            @test isempty(session.closeables)
+
+            # Finalizing a closed channel should do nothing
+            finalize(sshchan)
         end
     end
 
@@ -663,9 +684,21 @@ end
 
             # Test the finalizer
             ssh.SftpSession(session) do sftp
-                # We yield() to allow the spawned task from the finalizer to
-                # print its message.
-                @test_logs (:error, r".+memory leak.+") (finalize(sftp); yield())
+                finalize(sftp)
+                @test !isassigned(sftp)
+                @test isempty(session.closeables)
+
+                # Finalizing twice shouldn't do anything
+                finalize(sftp)
+            end
+
+            ssh.SftpSession(session) do sftp
+                # With a file open the finalizer should warn us of a memory
+                # leak. We yield() to allow the spawned task from the finalizer
+                # to print its message.
+                open(tempdir(), sftp) do file
+                    @test_logs (:error, r".+memory leak.+") (finalize(sftp); yield())
+                end
             end
 
             # Test the do-constructor
