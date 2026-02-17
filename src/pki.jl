@@ -190,6 +190,25 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Import a private key from a file. Wrapper around [`lib.ssh_pki_import_privkey_file()`](@ref).
+"""
+function import_privkey_file(path::AbstractString)
+    if !isfile(path)
+        throw(ArgumentError("No private key file at '$(path)'"))
+    end
+
+    ptr_ref = Ref{lib.ssh_key}()
+    ret = lib.ssh_pki_import_privkey_file(path, C_NULL, C_NULL, C_NULL, ptr_ref)
+    if ret != ssh.SSH_OK
+        throw(ssh.LibSSHException("Error importing private key from '$(path)': $(ret)"))
+    end
+
+    return SshKey(ptr_ref[])
+end
+
+"""
+$(TYPEDSIGNATURES)
+
 Wrapper around [`lib.ssh_key_type()`](@ref).
 """
 function key_type(key::SshKey)

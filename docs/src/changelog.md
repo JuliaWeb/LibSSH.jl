@@ -13,6 +13,8 @@ Changelog](https://keepachangelog.com).
 - Implemented [`PKI.import_pubkey_file()`](@ref) ([#39]).
 - Added support for public key authentication to the [`Demo.DemoServer`](@ref)
   ([#39]).
+- Added high level wrapper for [`lib.ssh_userauth_publickey()`](@ref) that uses 
+  key filepath for authentification
 
 ### Changed
 - Made the finalizers for [`Session`](@ref), [`SshChannel`](@ref), and
