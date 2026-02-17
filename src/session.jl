@@ -1007,6 +1007,48 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Authenticate by username and private key. The username will be taken from
+`session.user`.
+
+# Arguments
+- `session`: The session to authenticate.
+- `filename`: The private key filename to authenticate with.
+- `throw=true`: Whether to throw if there's an internal error while
+  authenticating (`AuthStatus_Error`).
+
+# Throws
+- `ArgumentError`: If the session isn't connected.
+- `LibSSHException`: If there was an internal error, unless `throw=false`.
+
+Wrapper around [`lib.ssh_userauth_publickey()`](@ref).
+"""
+function userauth_publickey_file(session::Session, filename::String; throw=true)
+    if !isconnected(session)
+        Base.throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
+    end
+
+    key_ref = Ref{lib.ssh_key}()
+    ret = lib.ssh_pki_import_privkey_file(filename, C_NULL, C_NULL, C_NULL, key_ref)
+    if ret != SSH_OK
+        throw && Base.throw(LibSSHException("Error importing private key: $(ret)"))
+        return ret
+    end
+
+    ret = _session_trywait(session) do
+        LibSSH.lib.ssh_userauth_publickey(session, C_NULL, key_ref[])
+    end
+    status = AuthStatus(ret)
+
+    if status == AuthStatus_Error && throw
+        Base.throw(LibSSHException("Got AuthStatus_Error (SSH_AUTH_ERROR) when authenticating"))
+    end
+
+    return status
+end
+
+"""
+$(TYPEDSIGNATURES)
+
 Authenticate with GSSAPI. This is not available on all platforms (see
 [`Gssapi.isavailable()`](@ref)).
 
