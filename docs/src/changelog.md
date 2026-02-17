@@ -14,7 +14,7 @@ Changelog](https://keepachangelog.com).
 - Added support for public key authentication to the [`Demo.DemoServer`](@ref)
   ([#39]).
 - Added high level wrapper for [`lib.ssh_userauth_publickey()`](@ref) that uses 
-  key filepath for authentification
+  key filepath for authentication
 
 ### Changed
 - Made the finalizers for [`Session`](@ref), [`SshChannel`](@ref), and
