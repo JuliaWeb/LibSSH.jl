@@ -9,6 +9,10 @@ Changelog](https://keepachangelog.com).
 
 ## Unreleased
 
+## [v0.7.2] -
+- Added high level wrapper for [`lib.ssh_userauth_publickey()`](@ref) that uses 
+  key filepath for authentification
+
 ### Changed
 - Made the finalizers for [`Session`](@ref), [`SshChannel`](@ref), and
   [`SftpSession`](@ref) slightly more robust. It's still not recommended to rely
