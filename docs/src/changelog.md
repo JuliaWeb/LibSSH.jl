@@ -19,7 +19,7 @@ Changelog](https://keepachangelog.com).
 
 ### Added
 - Added high level wrapper for [`lib.ssh_userauth_publickey()`](@ref) that uses 
-  key filepath for authentification
+  key filepath for authentication
 
 ## [v0.7.1] - 2024-12-06
 
