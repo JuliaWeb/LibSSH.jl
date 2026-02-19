@@ -62,20 +62,6 @@ Returns either `SSH_OK` or `SSH_ERROR`.
 """
 function event_dopoll(event::SessionEvent)
     ret = _session_trywait(event.session) do
-        # Lock the channels while polling, otherwise close(::SshChannel) may be
-        # called in the meantime by the callbacks, which can cause segfaults. We
-        # store the locked channels in an array so we can unlock only these
-        # channels after polling. This is necessary in case a channel is added
-        # during the poll, trying to unlock an unlocked channel will cause an
-        # error.
-        locked_channels = SshChannel[]
-        for obj in event.session.closeables
-            if obj isa SshChannel
-                lock(obj.close_lock)
-                push!(locked_channels, obj)
-            end
-        end
-
         # Always check if the event is still assigned within the loop since it
         # may be closed at any time.
         ret = @lock event if isassigned(event)
@@ -84,9 +70,10 @@ function event_dopoll(event::SessionEvent)
             SSH_ERROR
         end
 
-        for sshchan in locked_channels
-            unlock(sshchan.close_lock)
-        end
+        # Execute any deferred closes requested by callbacks during
+        # ssh_event_dopoll(). We must not close channels while libssh is
+        # iterating the callback list.
+        _do_deferred_channel_closes(event.session)
 
         return ret
     end
@@ -151,6 +138,7 @@ mutable struct Bind
     _listener_event::Base.Event
     _listener_started::Bool
     _lock::ReentrantLock
+    @atomic _pending_close::Bool
 
     # Settings for message callbacks
     _message_callback::Union{Function, Nothing}
@@ -178,7 +166,7 @@ mutable struct Bind
         lib.ssh_bind_set_blocking(bind_ptr, 0)
 
         bind = new(bind_ptr, addr, port, hostkey, key, auth_methods, log_verbosity,
-                   Base.Event(), false, ReentrantLock(),
+                   Base.Event(), false, ReentrantLock(), false,
                    nothing, nothing)
         bind.addr = addr
         bind.port = port
@@ -233,11 +221,13 @@ $(TYPEDSIGNATURES)
 Close and free the bind.
 """
 function Base.close(bind::Bind)
-    if isopen(bind)
+    if !isnothing(bind.ptr)
         lib.ssh_bind_free(bind)
         bind.ptr = nothing
     end
 end
+
+defer_close(bind::Bind) = @atomic bind._pending_close = true
 
 """
 $(TYPEDSIGNATURES)
@@ -258,7 +248,7 @@ $(TYPEDSIGNATURES)
 
 Check if the bind has been free'd yet.
 """
-Base.isopen(bind::Bind) = !isnothing(bind.ptr)
+Base.isopen(bind::Bind) = !isnothing(bind.ptr) && !(@atomic bind._pending_close)
 
 """
 $(TYPEDSIGNATURES)
@@ -595,10 +585,12 @@ end
 function on_channel_eof(session, sshchan, client)::Nothing
     _add_log_event!(client, :channel_eof, true)
 
-    # For SFTP clients, close the channel as soon as we get an EOF
+    # For SFTP clients, close the SFTP session and defer the channel close.
+    # We must not close the channel directly inside a callback because that
+    # would free libssh's callback list while it is being iterated.
     for op in client.channel_operations
         if op isa SftpOperation && op.sshchan.ptr == sshchan.ptr
-            close(op)
+            close(op; defer_channel_close=true)
         end
     end
 
@@ -614,11 +606,14 @@ function on_channel_close(session, sshchan, client)::Nothing
     end
 
     # It's ok if we don't find a matching channel, that just means that we've
-    # already closed it from our side.
+    # already closed it from our side. We defer the close to avoid freeing
+    # libssh's callback list while it is being iterated.
     idx = findfirst(x -> x.ptr == sshchan.ptr, all_channels)
     if !isnothing(idx)
-        close(all_channels[idx])
+        ssh.defer_close(all_channels[idx])
     end
+
+    return nothing
 end
 
 function on_channel_pty_request(session, sshchan, term, width, height, pxwidth, pxheight, client)::Bool
@@ -870,6 +865,7 @@ function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
         still_running = false
         close(timer)
     end
+    errormonitor(t)
 
     # Wait for a timeout or the function to finish
     try
@@ -931,11 +927,11 @@ function _handle_client(session::ssh.Session, ds::DemoServer)
     push!(ds.clients, client)
 
     client.session_event = ssh.SessionEvent(session)
-    while true
+    while isassigned(client.session_event)
         ret = try
             ssh.event_dopoll(client.session_event)
         catch ex
-            if ex isa InvalidStateException
+            if ex isa InvalidStateException || ex isa ssh.LibSSHException
                 break
             else
                 rethrow()
@@ -962,6 +958,7 @@ function start(demo_server::DemoServer)
     catch ex
         @error "Error during listen()" exception=(ex, catch_backtrace())
     end
+    errormonitor(demo_server.listener_task)
     ssh.wait_for_listener(demo_server.bind)
 end
 
@@ -972,14 +969,15 @@ Stop a [`DemoServer`](@ref).
 """
 function stop(demo_server::DemoServer)
     if !isnothing(demo_server.listener_task)
-        close(demo_server.bind)
+        ssh.defer_close(demo_server.bind)
+        wait(demo_server.listener_task)
+        demo_server.listener_task = nothing
 
         for client in demo_server.clients
             close(client)
         end
 
-        wait(demo_server.listener_task)
-        demo_server.listener_task = nothing
+        close(demo_server.bind)
     end
 end
 
@@ -1142,6 +1140,7 @@ function CommandExecutor(client::Client, command::String, sshchan::ssh.SshChanne
     catch ex
         @error "Error when running command" exception=(ex, catch_backtrace())
     end
+    errormonitor(executor.task)
 
     return executor
 end
@@ -1202,6 +1201,7 @@ function Forwarder(client::Client, sshchan::ssh.SshChannel, hostname::String, po
     catch ex
         @error "Error in port fowarding socket handler!" exception=(ex, catch_backtrace())
     end
+    errormonitor(self.task)
 
     return self
 end
@@ -1230,8 +1230,10 @@ function _forward_socket_data(forwarder::Forwarder)
             # can shutdown the port forward if it's still open.
             close(sock)
             if isopen(forwarder.sshchan)
-                closewrite(forwarder.sshchan)
-                close(forwarder.sshchan)
+                if iswritable(forwarder.sshchan)
+                    closewrite(forwarder.sshchan; allow_fail=true)
+                end
+                close(forwarder.sshchan; allow_fail=true)
             end
         elseif eof(forwarder.sshchan)
             # Or if the client closed the connection we also shutdown
@@ -1283,13 +1285,17 @@ end
 
 getchannels(op::SftpOperation) = [op.sshchan]
 
-function Base.close(op::SftpOperation)
+function Base.close(op::SftpOperation; defer_channel_close=true)
     if !isnothing(op.sftp_session)
         lib.sftp_server_free(op.sftp_session)
         op.sftp_session = nothing
     end
 
-    close(op.sshchan; allow_fail=true)
+    if defer_channel_close
+        ssh.defer_close(op.sshchan)
+    else
+        close(op.sshchan; allow_fail=true)
+    end
 end
 
 end
