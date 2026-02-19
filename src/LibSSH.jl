@@ -173,7 +173,8 @@ function _safe_poll_fd(args...; kwargs...)
     try
         result = FileWatching.poll_fd(args...; kwargs...)
     catch ex
-        if !(ex isa Base.IOError) && !(ex isa TypeError)
+        # An ArgumentError means the fd is invalid
+        if !(ex isa Base.IOError) && !(ex isa TypeError) && !(ex isa ArgumentError)
             rethrow()
         end
     end
