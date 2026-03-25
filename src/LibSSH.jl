@@ -6,6 +6,7 @@ import Sockets
 import FileWatching
 
 using DocStringExtensions
+using PrecompileTools: @compile_workload
 
 @static if Sys.WORD_SIZE == 64
     include(joinpath(@__DIR__, "..", "lib", "x86_64-linux-gnu.jl"))
@@ -193,5 +194,20 @@ include("server.jl")
 
 import Base: Filesystem
 include("sftp.jl")
+
+@compile_workload begin
+    port, server = Sockets.listenany(Sockets.localhost, 2222)
+    port = Int(port)
+    close(server)
+    server = Demo.DemoServer(port; password="foo", auth_methods=[AuthMethod_Password])
+    Demo.start(server)
+
+    session = Session(Sockets.localhost, port)
+    @assert isconnected(session)
+    @assert userauth_password(session, "foo") == AuthStatus_Success
+    close(session)
+
+    Demo.stop(server)
+end
 
 end
