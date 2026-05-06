@@ -93,11 +93,12 @@ mutable struct Session
 end
 
 function Base.unsafe_convert(::Type{lib.ssh_session}, session::Session)
-    if !isassigned(session)
+    ptr = getfield(session, :ptr)
+    if isnothing(ptr)
         throw(ArgumentError("Session is unassigned, cannot get a pointer from it"))
     end
 
-    return session.ptr
+    return ptr
 end
 
 Base.unsafe_convert(::Type{Ptr{Cvoid}}, session::Session) = Ptr{Cvoid}(Base.unsafe_convert(lib.ssh_session, session))
@@ -147,7 +148,18 @@ function _session_call(session::Session, f)
         # Already on the actor — direct call (critical for callbacks!)
         return f()
     end
-    result_ch = Channel{Any}(1)
+
+    # Reuse a per-task result channel to avoid allocating a fresh Channel on
+    # every call. The channel is never closed; it's only stale if a prior
+    # take! was interrupted before reading the actor's put!.
+    tls = task_local_storage()
+    result_ch = get!(tls, :_libssh_session_call_result_ch) do
+        Channel{Any}(1)
+    end::Channel{Any}
+    if isready(result_ch)
+        take!(result_ch)
+    end
+
     try
         put!(session._requests, _SessionRequest(f, result_ch))
     catch ex
@@ -264,7 +276,7 @@ $(TYPEDSIGNATURES)
 Check if the `Session` holds a valid pointer to a `lib.ssh_session`. This will
 be `false` if the session has been closed.
 """
-Base.isassigned(session::Session) = !isnothing(session.ptr)
+Base.isassigned(session::Session) = !isnothing(getfield(session, :ptr))
 
 # Make the Session closed for wait()'ing and wake up any existing waiting
 # tasks. This is probably only useful in servers.
@@ -350,21 +362,19 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
 # ssh_options_get()), so we store them in the Session object instead.
 const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :process_config)
 
-function Base.propertynames(::Session, private::Bool=false)
-    fields = fieldnames(Session)
-    libssh_options = tuple(keys(SESSION_PROPERTY_OPTIONS)...)
+const _SESSION_PROPERTYNAMES = (tuple(keys(SESSION_PROPERTY_OPTIONS)...)..., fieldnames(Session)...)
 
-    return (libssh_options..., fields...)
-end
+Base.propertynames(::Session, private::Bool=false) = _SESSION_PROPERTYNAMES
 
 function Base.getproperty(session::Session, name::Symbol)
-    if name ∉ propertynames(session, true)
-        error("type Session has no field $(name)")
+    # Fast path: direct field access. hasfield is constant-folded for literal
+    # symbols, so calls like `session._stop_flag` compile to a plain getfield.
+    if hasfield(Session, name)
+        return getfield(session, name)
     end
 
-    # If it's a property that we save, then we return the saved value
-    if name in fieldnames(Session) || name in SAVED_PROPERTIES
-        return getfield(session, name)
+    if name ∉ _SESSION_PROPERTYNAMES
+        error("type Session has no field $(name)")
     end
 
     # Otherwise, we retrieve it from the ssh_session object
@@ -530,8 +540,8 @@ function _actor_loop(session::Session)
             has_waiters = @lock session._wakeup !isempty(session._wakeup.cond.waitq)
 
             if has_waiters && isopen(session)
-                # Poll the fd for I/O readiness — C call is safe, we're the actor
-                fd = session.fd
+                # Poll the fd for I/O readiness — C calls are safe, we're the actor
+                fd = RawFD(lib.ssh_get_fd(session))
                 if fd == RawFD(-1)
                     # Session has been disconnected, fd is invalid. Close the
                     # wakeup condition so waiters get an InvalidStateException
