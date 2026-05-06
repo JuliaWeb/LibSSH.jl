@@ -424,44 +424,41 @@ function poll_loop(sshchan::SshChannel; throw=true)
 
     ret = SSH_ERROR
     while true
-        # Poll stdout and stderr
-        for io_stream in (0, 1)
-            # We always check if the channel and session are open within the loop
-            # because ssh_channel_poll() will execute callbacks, which could close
-            # them before returning.
-            if !isopen(sshchan)
-                return nothing
+        # We always check if the channel and session are open within the loop
+        # because ssh_channel_poll() will execute callbacks, which could close
+        # them before returning.
+        if !isopen(sshchan)
+            return nothing
+        end
+
+        # Note that we don't actually read any data in this loop, that's
+        # handled by the callbacks, which are called by ssh_channel_poll().
+        # We wrap the poll + deferred close check in a single _session_call
+        # to keep the C calls serialized on the actor.
+        ret = _session_call(sshchan.session, () -> begin
+            r = lib.ssh_channel_poll(sshchan, 0)
+            if r != SSH_ERROR && r != SSH_EOF && !sshchan._pending_close
+                r = lib.ssh_channel_poll(sshchan, 1)
             end
 
-            # Note that we don't actually read any data in this loop, that's
-            # handled by the callbacks, which are called by ssh_channel_poll().
-            # We wrap the poll + deferred close check in a single _session_call
-            # to keep the C calls serialized on the actor.
-            ret = _session_call(sshchan.session, () -> begin
-                r = lib.ssh_channel_poll(sshchan, io_stream)
-
-                # Execute any deferred closes requested by callbacks during
-                # ssh_channel_poll(). We must not close channels while libssh is
-                # iterating the callback list, so callbacks set a flag and we
-                # perform the actual close here. We don't call close(sshchan)
-                # directly because that takes close_lock, which could deadlock
-                # with an external close() holding the lock and waiting for the
-                # actor. Instead, signal the caller to exit so the channel can
-                # be closed externally.
-                if sshchan._pending_close
-                    sshchan._pending_close = false
-                    r = SSH_EOF
-                end
-
-                r
-            end)
-
-            # Break if there was an error, or if an EOF has been sent. We use a
-            # @goto here (Knuth forgive me) to break out of the outer loop as
-            # well as the inner one.
-            if ret == SSH_ERROR || ret == SSH_EOF
-                @goto loop_end
+            # Execute any deferred closes requested by callbacks during
+            # ssh_channel_poll(). We must not close channels while libssh is
+            # iterating the callback list, so callbacks set a flag and we
+            # perform the actual close here. We don't call close(sshchan)
+            # directly because that takes close_lock, which could deadlock
+            # with an external close() holding the lock and waiting for the
+            # actor. Instead, signal the caller to exit so the channel can
+            # be closed externally.
+            if sshchan._pending_close
+                sshchan._pending_close = false
+                r = SSH_EOF
             end
+
+            r
+        end)
+
+        if ret == SSH_ERROR || ret == SSH_EOF
+            break
         end
 
         if !isopen(sshchan.session)
@@ -470,8 +467,6 @@ function poll_loop(sshchan::SshChannel; throw=true)
 
         wait(sshchan.session)
     end
-
-    @label loop_end
 
     if ret == SSH_ERROR && throw
         Base.throw(LibSSHException("SSH_ERROR returned from lib.ssh_channel_poll()"))
