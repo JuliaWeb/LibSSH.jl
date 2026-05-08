@@ -887,17 +887,16 @@ mutable struct _ForwardingClient
             throw(LibSSHException("Could not open a forwarding channel: $(get_error(forwarder._session))"))
         end
 
-        # Set callbacks for the channel
         callbacks = Callbacks.ChannelCallbacks(nothing;
                                                on_data=_on_client_channel_data,
                                                on_eof=_on_client_channel_eof,
                                                on_close=_on_client_channel_close)
-        set_channel_callbacks(sshchan, callbacks)
-
-        # Create a client and set the callbacks userdata to the new client object
         self = new(forwarder._next_client_id, forwarder.verbose, socket,
                    sshchan, callbacks, nothing)
+
+        # Set callbacks for the channel
         callbacks.userdata = self
+        set_channel_callbacks(sshchan, callbacks)
 
         # Start a listener on the new socket to forward data to the server
         self.client_task = Threads.@spawn try
