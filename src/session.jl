@@ -116,13 +116,17 @@ function _safe_getproperty(session::Session, name::Symbol)
 end
 
 function Base.show(io::IO, session::Session)
-    if isopen(session)
+    if !isopen(session)
+        print(io, Session, "([closed])")
+    elseif !session.owning
+        # Non-owning sessions can't make C calls (those go through the owning
+        # session's actor), so we can't fetch host/user/etc. here.
+        print(io, Session, "(non-owning, ptr=$(session.ptr))")
+    else
         host = _safe_getproperty(session, :host)
         user = _safe_getproperty(session, :user)
 
         print(io, Session, "(host=$(host), port=$(session.port), user=$(user), connected=$(isconnected(session)))")
-    else
-        print(io, Session, "([closed])")
     end
 end
 

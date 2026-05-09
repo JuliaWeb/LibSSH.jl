@@ -360,6 +360,10 @@ end
     non_owning_session = ssh.Session(session.ptr; own=false)
     @test_throws ArgumentError close(non_owning_session)
 
+    # show() on a non-owning session must not make any C calls (those would
+    # otherwise go through the owning session's actor and throw).
+    @test occursin("non-owning", sprint(show, non_owning_session))
+
     @testset "Setting options" begin
         # Test initial settings
         @test session.user == username()
