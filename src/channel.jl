@@ -185,6 +185,8 @@ function Base.close(sshchan::SshChannel; allow_fail=false)
         # close() as robust as possible, which is why there are so many checks.
 
         if isassigned(sshchan)
+            session_closed = false
+
             # Remove from the sessions list of active channels. findfirst()
             # should only return nothing if the function is being called
             # recursively (i.e. through a callback) and it was already removed.
@@ -203,24 +205,37 @@ function Base.close(sshchan::SshChannel; allow_fail=false)
                 # This will trigger callbacks
                 closewrite(sshchan; allow_fail)
 
-                if isopen(sshchan)
-                    # This will trigger callbacks
+                # This will trigger callbacks
+                ret = SSH_ERROR
+                try
                     ret = _session_call(sshchan.session, () -> lib.ssh_channel_close(sshchan))
-                    if ret != SSH_OK
-                        msg = "Closing SshChannel failed with $(ret): '$(get_error(sshchan.session))'"
-                        if allow_fail
-                            # Note that we spawn to avoid task switches
-                            @warn msg
-                        else
-                            throw(LibSSHException(msg))
-                        end
+                catch ex
+                    if ex isa LibSSHException && ex.msg == "Session is closed"
+                        # If the session is closed then so is the channel so we
+                        # don't need to do anything.
+                        session_closed = true
+                    else
+                        rethrow()
+                    end
+                end
+
+                if ret != SSH_OK && !session_closed
+                    msg = "Closing SshChannel failed with $(ret): '$(get_error(sshchan.session))'"
+                    if allow_fail
+                        # Note that we spawn to avoid task switches
+                        @warn msg
+                    else
+                        throw(LibSSHException(msg))
                     end
                 end
             end
 
             # Free the memory
             if isassigned(sshchan)
-                _session_call(sshchan.session, () -> lib.ssh_channel_free(sshchan))
+                if !session_closed
+                    _session_call(sshchan.session, () -> lib.ssh_channel_free(sshchan))
+                end
+
                 sshchan.ptr = nothing
             end
         end
