@@ -9,6 +9,11 @@ Changelog](https://keepachangelog.com).
 
 ## Unreleased
 
+### Added
+- Implemented [`PKI.import_pubkey_file()`](@ref) ([#39]).
+- Added support for public key authentication to the [`Demo.DemoServer`](@ref)
+  ([#39]).
+
 ### Changed
 - Made the finalizers for [`Session`](@ref), [`SshChannel`](@ref), and
   [`SftpSession`](@ref) slightly more robust. It's still not recommended to rely

@@ -19,6 +19,7 @@ import LibSSH.Demo: DemoServer
 
 curl_cmd = `$(curl()) --no-progress-meter`
 username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
+keygen(privkey) = run(`$(OpenSSH_jll.ssh_keygen()) -t ed25519 -N "" -f $privkey -q`)
 
 const HTTP_200 = "HTTP/1.1 200 OK\r\n\r\n"
 
@@ -216,6 +217,45 @@ end
         end
     end
     @info "Finished: Server / allow_auth_none"
+
+    @testset "Public key authentication" begin
+        pubkey_ssh_cmd(cmd::Cmd, privkey) = ignorestatus(Cmd(`$(openssh_cmd.exec) $(ssh_args) -i $privkey -o IdentitiesOnly=yes $cmd`;
+                                                             env=openssh_cmd.env))
+
+        mktempdir() do tmpdir
+            # Generate a fresh key pair with ssh-keygen
+            privkey = joinpath(tmpdir, "id_ed25519")
+            pubkey = privkey * ".pub"
+            keygen(privkey)
+            authorized_keys = [ssh.PKI.import_pubkey_file(pubkey)]
+
+            # Test with a good key
+            demo_server, _ = DemoServer(2222;
+                                        auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_PublicKey],
+                                        authorized_keys) do
+                @test readchomp(pubkey_ssh_cmd(`foo@localhost whoami`, privkey)) == username()
+            end
+
+            client = demo_server.clients[1]
+            @test client.authenticated
+            @test haskey(client.callback_log, :auth_pubkey)
+
+            # Test with a bad key
+            bad_privkey = joinpath(tmpdir, "bad")
+            keygen(bad_privkey)
+            # wrong_cmd(cmd::Cmd) = ignorestatus(Cmd(`$(openssh_cmd.exec) $(ssh_args) -i $wrong_priv -o IdentitiesOnly=yes -o BatchMode=yes $cmd`; env=openssh_cmd.env))
+            DemoServer(2222;
+                       auth_methods=[ssh.AuthMethod_PublicKey],
+                       authorized_keys) do
+                proc = run(pubkey_ssh_cmd(`foo@localhost whoami`, bad_privkey))
+                @test proc.exitcode != 0
+            end
+
+            # ArgumentError when AuthMethod_PublicKey is enabled without keys
+            @test_throws ArgumentError DemoServer(2222; auth_methods=[ssh.AuthMethod_PublicKey])
+        end
+    end
+    @info "Finished: Server / Public key authentication"
 
     @testset "Password authentication and session channels" begin
         # More complicated test, where we run a command and check the output
@@ -544,13 +584,6 @@ end
                 @test ssh.authenticate(session) == ssh.AuthMethod_Interactive
                 @test ssh.authenticate(session; kbdint_answers=["bar", "foo"]) == ssh.AuthStatus_Denied
                 @test ssh.authenticate(session; kbdint_answers=["foo", "bar"]) == ssh.AuthStatus_Success
-            end
-        end
-
-        DemoServer(2222; auth_methods=[ssh.AuthMethod_PublicKey]) do
-            session_helper() do session
-                # We don't support public key auth yet so this should just throw
-                @test_throws ErrorException ssh.authenticate(session)
             end
         end
     end
@@ -1088,6 +1121,21 @@ end
 
     # Test converting the hash buffer to a hex string
     @test replace(ssh.get_hexa(sha256_hash), ":" => "") == bytes2hex(sha256_hash)
+
+    # Test reading from a file
+    @test_throws ArgumentError pki.import_pubkey_file("nonexistent.pub")
+
+    mktempdir() do tmpdir
+        privkey = joinpath(tmpdir, "test")
+        pubkey = "$(privkey).pub"
+        keygen(privkey)
+
+        @test pki.import_pubkey_file(pubkey) isa pki.SshKey
+
+        # Test reading a corrupted public key
+        write(pubkey, "foo")
+        @test_throws ssh.LibSSHException pki.import_pubkey_file(pubkey)
+    end
 end
 
 @testset "GSSAPI" begin
@@ -1102,6 +1150,10 @@ end
     end
 end
 
+@testset "Utility functions" begin
+    @test ssh.lib_version() isa VersionNumber
+end
+
 @testset "Examples" begin
     mktempdir() do tempdir
         # Test and generate the examples
@@ -1113,10 +1165,6 @@ end
 
     # Dummy test
     @test true
-end
-
-@testset "Utility functions" begin
-    @test ssh.lib_version() isa VersionNumber
 end
 
 @testset "Aqua.jl" begin
