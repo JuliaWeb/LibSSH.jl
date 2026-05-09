@@ -842,9 +842,7 @@ function _handle_forwarding_client(client)
             end
         elseif isempty(data) && eof(sock)
             close(sock)
-            if iswritable(client.sshchan)
-                closewrite(client.sshchan)
-            end
+            closewrite(client.sshchan; allow_fail=true)
             defer_close(client.sshchan)
         end
     end
