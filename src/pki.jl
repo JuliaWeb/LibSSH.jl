@@ -104,6 +104,8 @@ mutable struct SshKey
         if own
             finalizer(_finalizer, self)
         end
+
+        self
     end
 end
 
@@ -161,6 +163,25 @@ function generate(ktype::KeyType; bits::Int=2048)
     ret = lib.ssh_pki_generate(lib.ssh_keytypes_e(Int(ktype)), Cint(bits), ptr_ref)
     if ret != ssh.SSH_OK
         throw(ssh.LibSSHException("Error creating cryptographic key: $(ret)"))
+    end
+
+    return SshKey(ptr_ref[])
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Import a public key from a file. Wrapper around [`lib.ssh_pki_import_pubkey_file()`](@ref).
+"""
+function import_pubkey_file(path::AbstractString)
+    if !isfile(path)
+        throw(ArgumentError("No public key file at '$(path)'"))
+    end
+
+    ptr_ref = Ref{lib.ssh_key}()
+    ret = lib.ssh_pki_import_pubkey_file(path, ptr_ref)
+    if ret != ssh.SSH_OK
+        throw(ssh.LibSSHException("Error importing public key from '$(path)': $(ret)"))
     end
 
     return SshKey(ptr_ref[])

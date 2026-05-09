@@ -542,6 +542,34 @@ function on_auth_password(session, user, password, client)::ssh.AuthStatus
     return client.authenticated ? ssh.AuthStatus_Success : ssh.AuthStatus_Denied
 end
 
+function on_auth_pubkey(session, user, pubkey, signature_state, client)::ssh.AuthStatus
+    state = Int(signature_state)
+    fingerprint = try
+        pki.get_fingerprint_hash(pubkey)
+    catch
+        "<unknown>"
+    end
+    _add_log_event!(client, :auth_pubkey, (user, fingerprint, state))
+
+    # The client is asking whether this key would be accepted
+    if state == lib.SSH_PUBLICKEY_STATE_NONE
+        accepted = any(k -> pki.key_cmp(k, pubkey, pki.KeyCmp_Public), client.authorized_keys)
+        return accepted ? ssh.AuthStatus_Success : ssh.AuthStatus_Denied
+    end
+
+    # Anything other than a verified signature is denied
+    if state != lib.SSH_PUBLICKEY_STATE_VALID
+        return ssh.AuthStatus_Denied
+    end
+
+    if any(k -> pki.key_cmp(k, pubkey, pki.KeyCmp_Public), client.authorized_keys)
+        client.authenticated = true
+        return ssh.AuthStatus_Success
+    end
+
+    return ssh.AuthStatus_Denied
+end
+
 function on_auth_none(session, user, client)::ssh.AuthStatus
     _add_log_event!(client, :auth_none, true)
 
@@ -696,6 +724,7 @@ end
     verbose::Bool
     password::Union{String, Nothing}
     allow_auth_none::Bool = false
+    authorized_keys::Vector{pki.SshKey} = pki.SshKey[]
     authenticated::Bool = false
 
     session_event::Union{ssh.SessionEvent, Nothing} = nothing
@@ -775,6 +804,7 @@ $(TYPEDFIELDS)
     verbose::Bool = false
     password::Union{String, Nothing} = nothing
     allow_auth_none::Bool = false
+    authorized_keys::Vector{pki.SshKey} = pki.SshKey[]
 
     clients::Vector{Client} = Client[]
 end
@@ -800,6 +830,8 @@ Creates a [`DemoServer`](@ref).
   being presented.
 - `auth_methods=[AuthMethod_None, AuthMethod_Password]`: A list of
   authentication methods to enable. See [`ssh.AuthMethod`](@ref).
+- `authorized_keys=PKI.SshKey[]`: A list of public keys that will be accepted
+  when `AuthMethod_PublicKey` is enabled.
 - `log_verbosity=nothing`: Controls the logging of libssh itself. This could be
   e.g. `lib.SSH_LOG_WARNING` (see the [upstream
   documentation](https://api.libssh.org/stable/group__libssh__log.html#ga06fc87d81c62e9abb8790b6e5713c55b)).
@@ -808,15 +840,19 @@ function DemoServer(port::Int; verbose::Bool=false,
                     password::Union{String, Nothing}=nothing,
                     allow_auth_none=false,
                     auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_Password],
+                    authorized_keys::Vector{pki.SshKey}=pki.SshKey[],
                     log_verbosity=ssh.SSH_LOG_NOLOG)
     if ssh.AuthMethod_Password in auth_methods && isnothing(password)
         throw(ArgumentError("You must pass `password` to DemoServer since password authentication is enabled"))
+    end
+    if ssh.AuthMethod_PublicKey in auth_methods && isempty(authorized_keys)
+        throw(ArgumentError("You must pass `authorized_keys` to DemoServer since public key authentication is enabled"))
     end
 
     key = pki.generate(pki.KeyType_ed25519)
     bind = ssh.Bind(port; auth_methods, key, log_verbosity)
 
-    demo_server = DemoServer(; bind, verbose, password, allow_auth_none)
+    demo_server = DemoServer(; bind, verbose, password, allow_auth_none, authorized_keys)
 
     ssh.set_message_callback(on_message, bind, demo_server)
 
@@ -903,10 +939,12 @@ function _handle_client(session::ssh.Session, ds::DemoServer)
                     session,
                     password=ds.password,
                     allow_auth_none=ds.allow_auth_none,
+                    authorized_keys=ds.authorized_keys,
                     verbose=ds.verbose)
     server_callbacks = ServerCallbacks(client;
                                        on_auth_password=on_auth_password,
                                        on_auth_none=on_auth_none,
+                                       on_auth_pubkey=on_auth_pubkey,
                                        on_service_request=on_service_request,
                                        on_channel_open_request_session=on_channel_open)
     client.channel_callbacks = ChannelCallbacks(client;
