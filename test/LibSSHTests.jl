@@ -141,13 +141,13 @@ end
         @test ssh.get_error(server) == ""
 
         # Basic listener test
-        t = errormonitor(Threads.@spawn ssh.listen(_ -> nothing, server))
+        t = errormonitor(Threads.@spawn ssh.listen(Returns(nothing), server))
         ssh.wait_for_listener(server)
 
         @test istaskstarted(t)
-        close(server)
+        ssh.defer_close(server)
         wait(t)
-        @test istaskdone(t)
+        close(server)
 
         finalize(server)
         @test server.ptr == nothing
@@ -155,9 +155,10 @@ end
         # Getting an error from a closed Bind should fail
         @test_throws ArgumentError ssh.get_error(server)
     end
+    @info "Finished: Server / Initialization and finalizing"
 
     @testset "SessionEvent" begin
-        demo_server_with_session(2222; verbose=false) do session
+        demo_server_with_session(2222; timeout=5, verbose=false) do session
             event = ssh.SessionEvent(session)
 
             # Smoke test
@@ -173,6 +174,7 @@ end
             @test isnothing(event.ptr)
         end
     end
+    @info "Finished: Server / SessionEvent"
 
     # Helper function to set up an `ssh` command. Slightly ugly workaround to
     # set the necessary environment variables comes from:
@@ -206,12 +208,14 @@ end
             @test String(take!(cmd_out)) == "foo\n"
         end
     end
+    @info "Finished: Server / Command execution"
 
     @testset "allow_auth_none" begin
         DemoServer(2222; auth_methods=[ssh.AuthMethod_None], allow_auth_none=true) do
             @test readchomp(passwordless_ssh_cmd(`foo@localhost whoami`)) == username()
         end
     end
+    @info "Finished: Server / allow_auth_none"
 
     @testset "Password authentication and session channels" begin
         # More complicated test, where we run a command and check the output
@@ -246,6 +250,7 @@ end
             @test cmd_result.exitcode == 42
         end
     end
+    @info "Finished: Server / Password authentication and session channels"
 
     @testset "Direct port forwarding" begin
         # Test the dummy HTTP server we'll use later
@@ -284,6 +289,7 @@ end
         client = demo_server.clients[1]
         @test client.callback_log[:message_request] == [(ssh.RequestType_ChannelOpen, lib.SSH_CHANNEL_DIRECT_TCPIP)]
     end
+    @info "Finished: Server / Direct port forwarding"
 
     @testset "Keyboard-interactive authentication" begin
         demo_server, _ = DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
@@ -301,6 +307,7 @@ end
         # And the command was executed
         @test client.callback_log[:channel_exec_request] == ["'whoami'"]
     end
+    @info "Finished: Server / Keyboard-interactive authentication"
 
     @testset "Multiple connections" begin
         demo_server, _ = DemoServer(2222; password="bar") do
@@ -309,6 +316,7 @@ end
         end
         @test length(demo_server.clients) == 2
     end
+    @info "Finished: Server / Multiple connections"
 
     sftp_cmd(cmd::Cmd) = ignorestatus(`$(sshpass()) -p bar sftp -F none -o NoHostAuthenticationForLocalhost=yes -P 2222 $cmd`)
 
@@ -325,6 +333,7 @@ end
             end
         end
     end
+    @info "Finished: Server / SFTP"
 
     # Test that the DemoServer cleans up lingering sessions
     server_task = Threads.@spawn DemoServer(2222; password="foo") do
@@ -381,6 +390,7 @@ end
             @test session2.user == "foo"
         end
     end
+    @info "Finished: Session / Setting options"
 
     # Test close() and wait()
     waiter = Threads.@spawn wait(session)
@@ -396,14 +406,11 @@ end
     # And we shouldn't be able to wait on a closed session
     @test_throws InvalidStateException wait(session)
 
-    # Test the finalizer
-    ssh.Session("localhost"; auto_connect=false) do session2
-        finalize(session2)
-        @test !isopen(session2)
-
-        # Finalizing a closed session should do nothing
-        finalize(session2)
-    end
+    # Session has no finalizer — must be closed explicitly
+    session2 = ssh.Session("localhost"; auto_connect=false)
+    @test isopen(session2)
+    close(session2)
+    @test !isopen(session2)
 
     # Test initializing with a socket instead of a port. We do this by setting
     # up two dummy servers, the one on port 2222 is what we want to connect to
@@ -442,6 +449,7 @@ end
             close(session)
         end
     end
+    @info "Finished: Session / Password authentication"
 
     @testset "Keyboard-interactive authentication" begin
         DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
@@ -468,6 +476,7 @@ end
             close(session)
         end
     end
+    @info "Finished: Session / Keyboard-interactive authentication"
 
     @testset "GSSAPI authentication" begin
         DemoServer(2222; auth_methods=[ssh.AuthMethod_GSSAPI_MIC]) do
@@ -482,6 +491,7 @@ end
             close(session)
         end
     end
+    @info "Finished: Session / GSSAPI authentication"
 
     session_helper = (f::Function) -> begin
         session = ssh.Session(localhost, 2222)
@@ -540,6 +550,7 @@ end
             end
         end
     end
+    @info "Finished: Session / authenticate()"
 end
 
 @testset "SshChannel" begin
@@ -568,17 +579,16 @@ end
             @test isempty(session.closeables)
         end
 
-        # Test the channel finalizer
+        # SshChannel has no finalizer — must be closed explicitly
         demo_server_with_session(2222) do session
             sshchan = ssh.SshChannel(session)
-            finalize(sshchan)
+            @test isassigned(sshchan)
+            close(sshchan)
             @test !isassigned(sshchan)
             @test isempty(session.closeables)
-
-            # Finalizing a closed channel should do nothing
-            finalize(sshchan)
         end
     end
+    @info "Finished: SshChannel / Creating/closing channels"
 
     @testset "Command execution" begin
         demo_server_with_session(2222) do session
@@ -616,6 +626,7 @@ end
             @test_throws ArgumentError ssh.channel_request_send_exit_status(sshchan, 0)
         end
     end
+    @info "Finished: SshChannel / Command execution"
 
     @testset "Direct port forwarding" begin
         # Smoke test
@@ -643,13 +654,36 @@ end
             end
         end
 
-        # Test forwarding to a socket
+        # Test multiple concurrent clients through a port forwarder
         demo_server_with_session(2222) do session
-            ssh.Forwarder(session, "localhost", 9090) do forwarder
-                # Smoke test
-                show(IOBuffer(), forwarder)
-
+            ssh.Forwarder(session, 8080, "localhost", 9090) do forwarder
                 http_server(9090) do
+                    n_clients = 10
+                    procs = map(1:n_clients) do _
+                        run(ignorestatus(`$(curl_cmd) localhost:8080`); wait=false)
+                    end
+
+                    for proc in procs
+                        try
+                            wait(proc)
+                        finally
+                            kill(proc)
+                        end
+                        @test proc.exitcode == 0
+                    end
+                end
+            end
+        end
+
+        # Test forwarding to a socket.
+        # Note: http_server must start before Forwarder, because the server-side
+        # Forwarder connects to port 9090 during channel open.
+        demo_server_with_session(2222) do session
+            http_server(9090) do
+                ssh.Forwarder(session, "localhost", 9090) do forwarder
+                    # Smoke test
+                    show(IOBuffer(), forwarder)
+
                     socket = forwarder.out
                     write(socket, "foo")
                     @test read(socket, String) == HTTP_200
@@ -657,6 +691,7 @@ end
             end
         end
     end
+    @info "Finished: SshChannel / Direct port forwarding"
 end
 
 @testset "SFTP" begin
@@ -682,25 +717,6 @@ end
             # Closing twice shouldn't cause an error
             close(sftp)
 
-            # Test the finalizer
-            ssh.SftpSession(session) do sftp
-                finalize(sftp)
-                @test !isassigned(sftp)
-                @test isempty(session.closeables)
-
-                # Finalizing twice shouldn't do anything
-                finalize(sftp)
-            end
-
-            ssh.SftpSession(session) do sftp
-                # With a file open the finalizer should warn us of a memory
-                # leak. We yield() to allow the spawned task from the finalizer
-                # to print its message.
-                open(tempdir(), sftp) do file
-                    @test_logs (:error, r".+memory leak.+") (finalize(sftp); yield())
-                end
-            end
-
             # Test the do-constructor
             ssh.SftpSession(session) do sftp
                 @test isopen(sftp)
@@ -711,6 +727,7 @@ end
             @test_throws ArgumentError ssh.SftpSession(session)
         end
     end
+    @info "SFTP / Initilization and finalizing"
 
     @testset "SftpException" begin
         demo_server_with_sftp(2222) do sftp
@@ -726,6 +743,7 @@ end
             end
         end
     end
+    @info "SFTP / SftpException"
 
     @testset "Opening" begin
         # Test opening
@@ -753,11 +771,6 @@ end
                 seek(file, 1)
                 @test position(file) == 1
 
-                # Finalizing shouldn't actually do anything other than print an
-                # error because properly closing the file involves a task switch.
-                @test_logs (:error,) (finalize(file); flush(stdout))
-                @test isopen(file)
-
                 close(file)
                 @test !isassigned(file)
                 @test !isopen(file)
@@ -784,6 +797,7 @@ end
             end
         end
     end
+    @info "SFTP / Opening"
 
     @testset "Reading" begin
         # Test reading
@@ -829,6 +843,7 @@ end
             end
         end
     end
+    @info "SFTP / Reading"
 
     @testset "Writing" begin
         # Test writing
@@ -871,6 +886,7 @@ end
             end
         end
     end
+    @info "SFTP / Writing"
 
     @testset "Misc" begin
         demo_server_with_sftp(2222; verbose=false) do sftp
@@ -1036,6 +1052,7 @@ end
             @test_throws ArgumentError mv("foo", "bar", sftp)
         end
     end
+    @info "SFTP / Misc"
 end
 
 @testset "PKI" begin

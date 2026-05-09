@@ -4,6 +4,14 @@ struct KbdintPrompt
     display::Bool
 end
 
+# A request to be executed on the session's actor task.
+# `f` is a zero-argument callable, `result` is a Channel{Any} for returning
+# the result (or Nothing for fire-and-forget requests from finalizers).
+struct _SessionRequest
+    f::Any        # () -> Any
+    result::Union{Channel{Any}, Nothing}  # Nothing = fire-and-forget
+end
+
 """
 $(TYPEDEF)
 $(TYPEDFIELDS)
@@ -14,10 +22,8 @@ the `ssh_session`, i.e. they aren't simply fields of the struct. A `Session` may
 be owning or non-owning of its internal pointer to a `lib.ssh_session`.
 
 !!! warning
-    It's *highly recommended* to close `Session`'s explicitly with
-    [`Base.close(::Session)`](@ref). Finalizers do not allow task switches so
-    the finalizer for `Session` will abruptly kill the session and free its
-    memory, which may cause problems in other code relying on the `Session`.
+    `Session`'s *must* be closed explicitly with [`Base.close(::Session)`](@ref).
+    There is no finalizer, so failing to close a `Session` will leak resources.
 """
 mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
@@ -35,20 +41,15 @@ mutable struct Session
     _attempted_auth_methods::Vector{AuthMethod}
     _require_init_kbdint::Bool
 
-    # Event to notify the waiter task when someone wants to wait() on the Session
-    _waiter_request::Threads.Event
-    # Condition for callers to wait() on
+    # Channel for submitting requests to the actor task
+    _requests::Channel{_SessionRequest}
+    # Condition for callers to wait() on (SSH_AGAIN waiters)
     _wakeup::CloseableCondition
-    # Tell the waiter task when to stop
-    @atomic _waiter_stop_flag::Bool
-    # The waiter task runs for as long as the Session is open. Its only job is
-    # to wakeup when requested by other tasks calling wait(::Session), poll the
-    # Session, and then wakeup all waiting tasks to let them know that they can
-    # run their callbacks. It's important that only one task is doing the
-    # waiting on the file descriptor, because if there's multiple tasks waiting
-    # then one task might 'catch' an event that was intended for some other
-    # task.
-    _waiter_task::Task
+    # Tell the actor task when to stop
+    @atomic _stop_flag::Bool
+    # The actor task owns ALL C libssh calls for this session. Other tasks
+    # submit work via _requests. This ensures thread-safety by construction.
+    _actor_task::Task
 
     @doc """
     $(TYPEDSIGNATURES)
@@ -63,28 +64,28 @@ mutable struct Session
        accidentally changing the logging level in callbacks when non-owning
        Sessions are created. You can still set the logging level explicitly with
        `session.log_verbosity` if necessary.
-    - `own=true`: Whether to take ownership of `ptr`, i.e. whether
-      to register a finalizer to free the memory.
+    - `own=true`: Whether to take ownership of `ptr`.
     """
     function Session(ptr::lib.ssh_session; log_verbosity=nothing, own::Bool=true)
-        # Set to non-blocking mode
-        lib.ssh_set_blocking(ptr, 0)
-
         session = new(ptr, own, [], nothing,
                       -1, nothing, nothing, true,
                       ReentrantLock(), nothing, AuthMethod[], true,
-                      Threads.Event(true), CloseableCondition(), false)
-
-        # Start the waiter task
-        session._waiter_task = Threads.@spawn _wait_loop(session)
-        errormonitor(session._waiter_task)
-
-        if !isnothing(log_verbosity)
-            session.log_verbosity = log_verbosity
-        end
+                      Channel{_SessionRequest}(256), CloseableCondition(), false)
 
         if own
-            finalizer(_finalizer, session)
+            # Set to non-blocking mode
+            lib.ssh_set_blocking(ptr, 0)
+
+            # Start the actor task — only for owning Sessions.
+            # Non-owning Sessions are lightweight wrappers used in callbacks;
+            # they must NOT start an actor or make C calls, since the owning
+            # Session's actor already owns all C calls for this ssh_session.
+            session._actor_task = Threads.@spawn _actor_loop(session)
+            errormonitor(session._actor_task)
+
+            if !isnothing(log_verbosity)
+                session.log_verbosity = log_verbosity
+            end
         end
 
         return session
@@ -92,11 +93,12 @@ mutable struct Session
 end
 
 function Base.unsafe_convert(::Type{lib.ssh_session}, session::Session)
-    if !isassigned(session)
+    ptr = getfield(session, :ptr)
+    if isnothing(ptr)
         throw(ArgumentError("Session is unassigned, cannot get a pointer from it"))
     end
 
-    return session.ptr
+    return ptr
 end
 
 Base.unsafe_convert(::Type{Ptr{Cvoid}}, session::Session) = Ptr{Cvoid}(Base.unsafe_convert(lib.ssh_session, session))
@@ -129,20 +131,45 @@ Base.unlock(session::Session) = unlock(session._lock)
 Base.islocked(session::Session) = islocked(session._lock)
 Base.trylock(session::Session) = trylock(session._lock)
 
-# Non-throwing finalizer for Session objects
-function _finalizer(session::Session)
-    if isopen(session)
-        if !trylock(session)
-            finalizer(_finalizer, session)
-        else
-            try
-                lib.ssh_free(session)
-                session.ptr = nothing
-            finally
-                unlock(session)
-            end
-        end
+"""
+    _session_call(session::Session, f) -> Any
+
+Submit a zero-argument callable `f` to the session's actor task for execution
+and wait for the result. If the current task IS the actor task (e.g. inside a
+callback), `f` is called directly to avoid deadlock.
+
+Throws any exception that `f` throws.
+"""
+function _session_call(session::Session, f)
+    if !session.owning
+        throw(ArgumentError("Cannot call _session_call on a non-owning Session. Use the owning Session instead."))
     end
+    if current_task() === session._actor_task
+        # Already on the actor — direct call (critical for callbacks!)
+        return f()
+    end
+
+    # Reuse a per-task result channel to avoid allocating a fresh Channel on
+    # every call. The channel is never closed; it's only stale if a prior
+    # take! was interrupted before reading the actor's put!.
+    tls = task_local_storage()
+    result_ch = get!(tls, :_libssh_session_call_result_ch) do
+        Channel{Any}(1)
+    end::Channel{Any}
+    if isready(result_ch)
+        take!(result_ch)
+    end
+
+    try
+        put!(session._requests, _SessionRequest(f, result_ch))
+    catch ex
+        if ex isa InvalidStateException
+            throw(LibSSHException("Session is closed"))
+        end
+        rethrow()
+    end
+    tag, value = take!(result_ch)
+    tag === :ok ? value : throw(value)
 end
 
 """
@@ -210,7 +237,7 @@ function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
         if isnothing(user)
             # Explicitly initialize the user, otherwise an error will be thrown when
             # retrieving it. Passing null will set it to the current user (see docs).
-            lib.ssh_options_set(session, SSH_OPTIONS_USER, C_NULL)
+            _session_call(session, () -> lib.ssh_options_set(session, SSH_OPTIONS_USER, C_NULL))
         else
             session.user = user
         end
@@ -249,18 +276,20 @@ $(TYPEDSIGNATURES)
 Check if the `Session` holds a valid pointer to a `lib.ssh_session`. This will
 be `false` if the session has been closed.
 """
-Base.isassigned(session::Session) = !isnothing(session.ptr)
+Base.isassigned(session::Session) = !isnothing(getfield(session, :ptr))
 
 # Make the Session closed for wait()'ing and wake up any existing waiting
 # tasks. This is probably only useful in servers.
 function closewait(session::Session)
-    # Close the waiter task so it will never notify again
-    @atomic session._waiter_stop_flag = true
-    notify(session._waiter_request)
-    wait(session._waiter_task)
+    # Stop the actor task by setting the flag and closing the request channel
+    @atomic session._stop_flag = true
+    close(session._requests)
 
-    # Wake up any tasks that were already waiting
+    # Wake up any tasks waiting on the session (e.g. _session_trywait callers)
+    # BEFORE waiting for the actor, so those tasks can unblock and exit.
     @lock session._wakeup close(session._wakeup)
+
+    wait(session._actor_task)
 end
 
 """
@@ -278,9 +307,14 @@ function Base.close(session::Session)
         throw(ArgumentError("Calling close() on a non-owning Session is not allowed to avoid accidental double-frees, see the docs for more information."))
     end
 
-    @lock session if isopen(session)
-        closewait(session)
+    if isopen(session)
+        # Disconnect while the actor is still running so C calls go through it
         disconnect(session)
+
+        # Now stop the actor
+        closewait(session)
+
+        # Free directly — actor is stopped, no concurrent C calls possible
         lib.ssh_free(session)
         session.ptr = nothing
     end
@@ -308,8 +342,10 @@ function get_error(session::Session)
         throw(ArgumentError("Session has been free'd, cannot get its error"))
     end
 
-    ret = lib.ssh_get_error(session)
-    return unsafe_string(ret)
+    return _session_call(session, () -> begin
+        ret = lib.ssh_get_error(session)
+        unsafe_string(ret)
+    end)
 end
 
 # Mapping from option name to the corresponding enum and C type
@@ -326,55 +362,55 @@ const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
 # ssh_options_get()), so we store them in the Session object instead.
 const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :process_config)
 
-function Base.propertynames(::Session, private::Bool=false)
-    fields = fieldnames(Session)
-    libssh_options = tuple(keys(SESSION_PROPERTY_OPTIONS)...)
+const _SESSION_PROPERTYNAMES = (tuple(keys(SESSION_PROPERTY_OPTIONS)...)..., fieldnames(Session)...)
 
-    return (libssh_options..., fields...)
-end
+Base.propertynames(::Session, private::Bool=false) = _SESSION_PROPERTYNAMES
 
 function Base.getproperty(session::Session, name::Symbol)
-    if name ∉ propertynames(session, true)
-        error("type Session has no field $(name)")
-    end
-
-    # If it's a property that we save, then we return the saved value
-    if name in fieldnames(Session) || name in SAVED_PROPERTIES
+    # Fast path: direct field access. hasfield is constant-folded for literal
+    # symbols, so calls like `session._stop_flag` compile to a plain getfield.
+    if hasfield(Session, name)
         return getfield(session, name)
     end
 
+    if name ∉ _SESSION_PROPERTYNAMES
+        error("type Session has no field $(name)")
+    end
+
     # Otherwise, we retrieve it from the ssh_session object
-    ret = 0
-    value = nothing
-    is_string = false
+    return _session_call(session, () -> begin
+        ret = 0
+        value = nothing
+        is_string = false
 
-    if name === :port
-        # The port is a special option with its own function
-        port = Ref{Cuint}(0)
-        ret = lib.ssh_options_get_port(session, port; throw=false)
-        value = UInt(port[])
-    elseif name === :fd
-        value = RawFD(lib.ssh_get_fd(session))
-    else
-        # All properties supported by ssh_options_get() are strings, so we know
-        # that this option must be a string.
-        is_string = true
-        option = SESSION_PROPERTY_OPTIONS[name][1]
+        if name === :port
+            # The port is a special option with its own function
+            port = Ref{Cuint}(0)
+            ret = lib.ssh_options_get_port(session, port; throw=false)
+            value = UInt(port[])
+        elseif name === :fd
+            value = RawFD(lib.ssh_get_fd(session))
+        else
+            # All properties supported by ssh_options_get() are strings, so we know
+            # that this option must be a string.
+            is_string = true
+            option = SESSION_PROPERTY_OPTIONS[name][1]
 
-        out = Ref{Ptr{Cchar}}()
-        ret = lib.ssh_options_get(session, option, out; throw=false)
-    end
+            out = Ref{Ptr{Cchar}}()
+            ret = lib.ssh_options_get(session, option, out; throw=false)
+        end
 
-    if ret != 0
-        throw(LibSSHException("Error getting $(name) from session: $(ret)"))
-    end
+        if ret != 0
+            throw(LibSSHException("Error getting $(name) from session: $(ret)"))
+        end
 
-    if is_string
-        value = unsafe_string(out[])
-        lib.ssh_string_free_char(out[])
-    end
+        if is_string
+            value = unsafe_string(out[])
+            lib.ssh_string_free_char(out[])
+        end
 
-    return value
+        value
+    end)
 end
 
 function Base.setproperty!(session::Session, name::Symbol, value)
@@ -383,7 +419,7 @@ function Base.setproperty!(session::Session, name::Symbol, value)
     end
 
     if name in (:ptr, :server_callbacks, :_auth_methods, :_attempted_auth_methods,
-                :_kbdint_prompts, :_require_init_kbdint, :_waiter_task, :_waiter_stop_flag)
+                :_kbdint_prompts, :_require_init_kbdint, :_actor_task, :_stop_flag)
         return setfield!(session, name, value)
     end
 
@@ -394,16 +430,16 @@ function Base.setproperty!(session::Session, name::Symbol, value)
 
     # Always convert string values to String, types like SubString cannot be
     # converted to Cstring.
-    if is_string
+    ret = if is_string
         value_str = String(value)
         GC.@preserve value_str begin
             cvalue = Base.unsafe_convert(ctype, value_str)
-            ret = lib.ssh_options_set(session, option, Ptr{Cvoid}(cvalue); throw=false)
+            _session_call(session, () -> lib.ssh_options_set(session, option, Ptr{Cvoid}(cvalue); throw=false))
         end
     else
         GC.@preserve value begin
             cvalue = Base.cconvert(ctype, value)
-            ret = lib.ssh_options_set(session, option, Ref(cvalue); throw=false)
+            _session_call(session, () -> lib.ssh_options_set(session, option, Ref(cvalue); throw=false))
         end
     end
 
@@ -453,35 +489,116 @@ function Base.wait(session::Session)
     end
 
     @lock session._wakeup begin
-        # Tell the waiter task we want the session to be polled
-        notify(session._waiter_request)
+        # Submit a no-op to the actor to ensure it wakes up and polls.
+        # The actual wakeup comes from the actor's poll_fd notifying _wakeup.
+        put!(session._requests, _SessionRequest(() -> nothing, nothing))
 
         wait(session._wakeup)
     end
 end
 
-# This is run for as long as the session is open
-function _wait_loop(session::Session)
-    while isopen(session)
-        wait(session._waiter_request)
-        if @atomic session._waiter_stop_flag
+# Process a single request from the actor loop.
+# We use invokelatest because the closure may have been created in a newer
+# world age than the actor task (e.g. REPL usage, or test code loaded after
+# LibSSH).
+function _process_request(req::_SessionRequest)
+    if isnothing(req.result)
+        # Fire-and-forget: run and discard result/errors
+        try
+            @invokelatest req.f()
+        catch
+        end
+    else
+        try
+            value = @invokelatest req.f()
+            put!(req.result, (:ok, value))
+        catch ex
+            put!(req.result, (:err, ex))
+        end
+    end
+end
+
+# The actor loop: owns ALL C libssh calls for this session.
+function _actor_loop(session::Session)
+    requests = session._requests
+
+    try
+        while !(@atomic session._stop_flag) && isopen(session)
+            # Drain all pending requests, but re-check stop flag each iteration
+            # to avoid an infinite drain loop when a caller immediately resubmits.
+            while !(@atomic session._stop_flag) && isready(requests)
+                req = try
+                    take!(requests)
+                catch ex
+                    ex isa InvalidStateException && @goto drain_remaining
+                    rethrow()
+                end
+                _process_request(req)
+            end
+
+            # Check if anyone is waiting for I/O (i.e. _wakeup has waiters)
+            has_waiters = @lock session._wakeup !isempty(session._wakeup.cond.waitq)
+
+            if has_waiters && isopen(session)
+                # Poll the fd for I/O readiness — C calls are safe, we're the actor
+                fd = RawFD(lib.ssh_get_fd(session))
+                if fd == RawFD(-1)
+                    # Session has been disconnected, fd is invalid. Close the
+                    # wakeup condition so waiters get an InvalidStateException
+                    # rather than a spurious normal wakeup.
+                    @lock session._wakeup close(session._wakeup)
+                    break
+                end
+
+                poll_flags = lib.ssh_get_poll_flags(session)
+                readable = (poll_flags & lib.SSH_READ_PENDING) > 0
+                writable = (poll_flags & lib.SSH_WRITE_PENDING) > 0
+
+                result = _safe_poll_fd(fd, 0.1; readable, writable)
+                if isnothing(result)
+                    # fd closed
+                    break
+                end
+
+                # Always notify waiters, even on timeout. This is critical
+                # because channel state can change without fd activity (e.g.
+                # when close(::SshChannel) is called locally). Without this,
+                # poll_loop would stay blocked in wait(session) forever after
+                # a channel is closed locally.
+                @lock session._wakeup notify(session._wakeup)
+            else
+                # No waiters — block until a request arrives
+                req = try
+                    take!(requests)
+                catch ex
+                    ex isa InvalidStateException && @goto drain_remaining
+                    rethrow()
+                end
+                _process_request(req)
+            end
+        end
+    catch ex
+        if !(ex isa InvalidStateException)
+            @error "Actor loop crashed" exception=(ex, catch_backtrace())
+        end
+    end
+
+    @label drain_remaining
+    # Drain any remaining requests and send error responses so callers
+    # waiting on take!(result_ch) don't block forever.
+    # Note: we use take!() in a try-catch loop rather than checking isready()
+    # first, because there's a race between close() and put!() on the requests
+    # channel that can cause isready() to return false even when items exist.
+    while true
+        req = try
+            take!(requests)
+        catch
             break
         end
-
-        poll_flags = lib.ssh_get_poll_flags(session)
-        readable = (poll_flags & lib.SSH_READ_PENDING) > 0
-        writable = (poll_flags & lib.SSH_WRITE_PENDING) > 0
-
-        while !(@atomic session._waiter_stop_flag) && isopen(session)
-            result = @lock session _safe_poll_fd(session.fd, 0.1; readable, writable)
-            if isnothing(result)
-                # This means the session's file descriptor has been closed (see the
-                # comments for _safe_poll_fd()).
-                break
-            elseif !result.timedout
-                # Wakeup waiting tasks
-                @lock session._wakeup notify(session._wakeup)
-                break
+        if !isnothing(req.result)
+            try
+                put!(req.result, (:err, LibSSHException("Session actor has stopped")))
+            catch
             end
         end
     end
@@ -505,7 +622,7 @@ function connect(session::Session)
     end
 
     while true
-        ret = lib.ssh_connect(session)
+        ret = _session_call(session, () -> lib.ssh_connect(session))
 
         if ret == SSH_AGAIN
             wait(session)
@@ -526,19 +643,31 @@ Wrapper around [`lib.ssh_disconnect()`](@ref).
     This will close all channels created from the session.
 """
 function disconnect(session::Session)
-    if isconnected(session)
-        # We close all the closeables in reverse order because closing them will
-        # delete each object from the vector and we don't want to invalidate any
-        # indices while deleting. The channels in particular need to be closed
-        # here because lib.ssh_disconnect() will free all of them.
-        for i in reverse(eachindex(session.closeables))
-            # Note that only owning channels are added to session.closeables, which
-            # means that this should never throw because the channel is non-owning
-            # (of course it may still throw for other reasons).
-            close(session.closeables[i])
-        end
+    if !isopen(session) || !isopen(session._requests)
+        return
+    end
+    try
+        if isconnected(session)
+            # We close all the closeables in reverse order because closing them will
+            # delete each object from the vector and we don't want to invalidate any
+            # indices while deleting. The channels in particular need to be closed
+            # here because lib.ssh_disconnect() will free all of them.
+            for i in reverse(eachindex(session.closeables))
+                # Note that only owning channels are added to session.closeables, which
+                # means that this should never throw because the channel is non-owning
+                # (of course it may still throw for other reasons).
+                close(session.closeables[i])
+            end
 
-        lib.ssh_disconnect(session)
+            _session_call(session, () -> lib.ssh_disconnect(session))
+        end
+    catch ex
+        # The actor may have been stopped by closewait() on another task
+        # (e.g. close(Client) calling closewait before the listener's finally
+        # block runs disconnect). In that case _session_call will throw.
+        if !(ex isa LibSSHException)
+            rethrow()
+        end
     end
 end
 
@@ -548,7 +677,7 @@ $(TYPEDSIGNATURES)
 Wrapper around [`lib.ssh_is_connected()`](@ref).
 """
 function isconnected(session::Session)
-    isassigned(session) ? lib.ssh_is_connected(session) == 1 : false
+    isassigned(session) ? _session_call(session, () -> lib.ssh_is_connected(session) == 1) : false
 end
 
 """
@@ -567,13 +696,14 @@ function get_server_publickey(session::Session)
         throw(ArgumentError("Session is disconnected, cannot get the servers public key"))
     end
 
-    key_ref = Ref{lib.ssh_key}()
-    ret = lib.ssh_get_server_publickey(session, key_ref)
-    if ret != SSH_OK
-        throw(LibSSHException("Error when getting servers public key: $(ret)"))
-    end
-
-    return PKI.SshKey(key_ref[])
+    return _session_call(session, () -> begin
+        key_ref = Ref{lib.ssh_key}()
+        ret = lib.ssh_get_server_publickey(session, key_ref)
+        if ret != SSH_OK
+            throw(LibSSHException("Error when getting servers public key: $(ret)"))
+        end
+        PKI.SshKey(key_ref[])
+    end)
 end
 
 """
@@ -599,7 +729,7 @@ function is_known_server(session::Session; throw=true)
         Base.throw(ArgumentError("Session is disconnected, cannot check the servers public key"))
     end
 
-    status = KnownHosts(Int(lib.ssh_session_is_known_server(session)))
+    status = KnownHosts(Int(_session_call(session, () -> lib.ssh_session_is_known_server(session))))
     if throw && status != KnownHosts_Ok
         Base.throw(HostVerificationException(status))
     end
@@ -623,10 +753,12 @@ function update_known_hosts(session::Session)
         throw(ArgumentError("Session is disconnected, cannot get the servers public key to update the known hosts file"))
     end
 
-    ret = lib.ssh_session_update_known_hosts(session)
-    if ret != SSH_OK
-        throw(LibSSHException("Could not update the users known hosts file: $(ret)"))
-    end
+    _session_call(session, () -> begin
+        ret = lib.ssh_session_update_known_hosts(session)
+        if ret != SSH_OK
+            throw(LibSSHException("Could not update the users known hosts file: $(ret)"))
+        end
+    end)
 end
 
 # Helper function to call userauth_kbdint() until we get a non-AuthStatus_Info
@@ -919,7 +1051,7 @@ function userauth_none(session::Session; throw=true)
     end
 
     while true
-        ret = AuthStatus(lib.ssh_userauth_none(session, C_NULL))
+        ret = AuthStatus(_session_call(session, () -> lib.ssh_userauth_none(session, C_NULL)))
 
         if ret == AuthStatus_Again
             wait(session)
@@ -954,7 +1086,7 @@ function userauth_list(session::Session; call_auth_none=true)
         userauth_none(session)
     end
 
-    ret = lib.ssh_userauth_list(session, C_NULL)
+    ret = _session_call(session, () -> lib.ssh_userauth_list(session, C_NULL))
     auth_methods = AuthMethod[]
     for method in instances(AuthMethod)
         if (Int(method) & ret) > 0
@@ -989,9 +1121,9 @@ function userauth_password(session::Session, password::String; throw=true)
     end
 
     while true
-        GC.@preserve password begin
+        ret = GC.@preserve password begin
             password_cstr = Base.unsafe_convert(Ptr{Cchar}, password)
-            ret = AuthStatus(lib.ssh_userauth_password(session, C_NULL, password_cstr))
+            AuthStatus(_session_call(session, () -> lib.ssh_userauth_password(session, C_NULL, password_cstr)))
         end
 
         if ret == AuthStatus_Again
@@ -1097,15 +1229,16 @@ function userauth_kbdint_getprompts(session::Session)
         throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
 
-    prompts = KbdintPrompt[]
-    n_prompts = lib.ssh_userauth_kbdint_getnprompts(session)
-    for i in 0:n_prompts - 1
-        echo_ref = Ref{Cchar}()
-        question = lib.ssh_userauth_kbdint_getprompt(session, i, echo_ref)
-        push!(prompts, KbdintPrompt(question, Bool(echo_ref[])))
-    end
-
-    return prompts
+    return _session_call(session, () -> begin
+        prompts = KbdintPrompt[]
+        n_prompts = lib.ssh_userauth_kbdint_getnprompts(session)
+        for i in 0:n_prompts - 1
+            echo_ref = Ref{Cchar}()
+            question = lib.ssh_userauth_kbdint_getprompt(session, i, echo_ref)
+            push!(prompts, KbdintPrompt(question, Bool(echo_ref[])))
+        end
+        prompts
+    end)
 end
 
 """
@@ -1128,18 +1261,20 @@ function userauth_kbdint_setanswers(session::Session, answers::Vector{String})
         throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
 
-    n_prompts = lib.ssh_userauth_kbdint_getnprompts(session)
-    if n_prompts != length(answers)
-        throw(ArgumentError("Server sent $(n_prompts) prompts, but was passed $(length(answers)) answers"))
-    end
-
-    for (i, answer) in enumerate(answers)
-        ret = lib.ssh_userauth_kbdint_setanswer(session, i - 1,
-                                                Base.cconvert(Cstring, answer))
-        if ret != SSH_OK
-            throw(LibSSHException("Error while setting answer $(i) with ssh_userauth_kbdint_setanswer(): $(ret)"))
+    _session_call(session, () -> begin
+        n_prompts = lib.ssh_userauth_kbdint_getnprompts(session)
+        if n_prompts != length(answers)
+            throw(ArgumentError("Server sent $(n_prompts) prompts, but was passed $(length(answers)) answers"))
         end
-    end
+
+        for (i, answer) in enumerate(answers)
+            ret = lib.ssh_userauth_kbdint_setanswer(session, i - 1,
+                                                    Base.cconvert(Cstring, answer))
+            if ret != SSH_OK
+                throw(LibSSHException("Error while setting answer $(i) with ssh_userauth_kbdint_setanswer(): $(ret)"))
+            end
+        end
+    end)
 end
 
 #=
@@ -1150,7 +1285,7 @@ function _session_trywait(f::Function, session::Session)
     ret = SSH_ERROR
 
     while true
-        ret = @lock session f()
+        ret = _session_call(session, f)
 
         if ret != SSH_AGAIN && ret != lib.SSH_AUTH_AGAIN
             break

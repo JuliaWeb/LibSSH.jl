@@ -164,30 +164,7 @@ mutable struct SftpSession
         end
 
         push!(session.closeables, self)
-
-        finalizer(_finalizer, self)
-    end
-end
-
-function _finalizer(sftp::SftpSession)
-    # Closing an SftpSession requires locking at least SftpSession and its
-    # parent Session.
-    if trylock(sftp)
-        try
-            if trylock(sftp.session)
-                try
-                    close(sftp; finalizing=true)
-                finally
-                    unlock(sftp.session)
-                end
-            else
-                finalizer(_finalizer, sftp)
-            end
-        finally
-            unlock(sftp)
-        end
-    else
-        finalizer(_finalizer, sftp)
+        self
     end
 end
 
@@ -253,17 +230,11 @@ $(TYPEDSIGNATURES)
 
 Close an `SftpSession`. This will also close any open files.
 """
-function Base.close(sftp::SftpSession; finalizing=false)
+function Base.close(sftp::SftpSession)
     @lock sftp if isassigned(sftp)
-        if !finalizing
-            # Close all open files
-            for i in reverse(eachindex(sftp.files))
-                close(sftp.files[i])
-            end
-        elseif !isempty(sftp.files)
-            # We cannot close files in a finalizer because that requires a
-            # network call.
-            Threads.@spawn @error "$(sftp) has open files that couldn't be closed in the finalizer. This is a memory leak! You must close() the SftpSession explicitly."
+        # Close all open files
+        for i in reverse(eachindex(sftp.files))
+            close(sftp.files[i])
         end
 
         # Remove from the parent session
@@ -736,15 +707,7 @@ mutable struct SftpFile
         self = new(ptr, sftp, path, "$(session.user)@$(session.host):$(path)", flags)
         push!(sftp.files, self)
 
-        finalizer(_finalize, self)
-    end
-end
-
-# We can't close the file in the finalizer because that requires locking the
-# session, which could lead to a task switch.
-function _finalize(file::SftpFile)
-    if isassigned(file)
-        Threads.@spawn @error "$file has not been close()'d, this is a memory leak! The finalizer cannot close the file because it can require task switching."
+        self
     end
 end
 
