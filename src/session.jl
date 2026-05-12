@@ -26,18 +26,18 @@ be owning or non-owning of its internal pointer to a `lib.ssh_session`.
     There is no finalizer, so failing to close a `Session` will leak resources.
 """
 mutable struct Session
-    ptr::Union{lib.ssh_session,Nothing}
+    ptr::Union{lib.ssh_session, Nothing}
     owning::Bool
     closeables::Vector{Any}
-    server_callbacks::Union{Callbacks.ServerCallbacks,Nothing}
+    server_callbacks::Union{Callbacks.ServerCallbacks, Nothing}
 
     log_verbosity::Int
-    ssh_dir::Union{String,Nothing}
-    gssapi_server_identity::Union{String,Nothing}
+    ssh_dir::Union{String, Nothing}
+    gssapi_server_identity::Union{String, Nothing}
     process_config::Bool
 
     _lock::ReentrantLock
-    _auth_methods::Union{Vector{AuthMethod},Nothing}
+    _auth_methods::Union{Vector{AuthMethod}, Nothing}
     _attempted_auth_methods::Vector{AuthMethod}
     _require_init_kbdint::Bool
 
@@ -214,10 +214,10 @@ julia> session = ssh.Session("foo.org")
 julia> session = ssh.Session(ip"12.34.56.78", 2222)
 ```
 """
-function Session(host::Union{AbstractString,Sockets.IPAddr}, port=22;
-    socket::Union{Sockets.TCPSocket,RawFD,Nothing}=nothing,
-    user=nothing, log_verbosity=nothing, auto_connect=true,
-    process_config=true)
+function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
+                 socket::Union{Sockets.TCPSocket, RawFD, Nothing}=nothing,
+                 user=nothing, log_verbosity=nothing, auto_connect=true,
+                 process_config=true)
     session_ptr = lib.ssh_new()
     if session_ptr == C_NULL
         throw(LibSSHException("Could not initialize Session for host $(host)"))
@@ -354,14 +354,14 @@ end
 
 # Mapping from option name to the corresponding enum and C type
 const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
-    :port => (SSH_OPTIONS_PORT, Cuint),
-    :fd => (SSH_OPTIONS_FD, Cint),
-    :user => (SSH_OPTIONS_USER, Cstring),
-    :ssh_dir => (SSH_OPTIONS_SSH_DIR, Cstring),
-    :known_hosts => (SSH_OPTIONS_KNOWNHOSTS, Cstring),
-    :gssapi_server_identity => (SSH_OPTIONS_GSSAPI_SERVER_IDENTITY, Cstring),
-    :log_verbosity => (SSH_OPTIONS_LOG_VERBOSITY, Cuint),
-    :process_config => (SSH_OPTIONS_PROCESS_CONFIG, Bool))
+                                      :port => (SSH_OPTIONS_PORT, Cuint),
+                                      :fd => (SSH_OPTIONS_FD, Cint),
+                                      :user => (SSH_OPTIONS_USER, Cstring),
+                                      :ssh_dir => (SSH_OPTIONS_SSH_DIR, Cstring),
+                                      :known_hosts => (SSH_OPTIONS_KNOWNHOSTS, Cstring),
+                                      :gssapi_server_identity => (SSH_OPTIONS_GSSAPI_SERVER_IDENTITY, Cstring),
+                                      :log_verbosity => (SSH_OPTIONS_LOG_VERBOSITY, Cuint),
+                                      :process_config => (SSH_OPTIONS_PROCESS_CONFIG, Bool))
 # These properties cannot be retrieved from the libssh API (i.e. with
 # ssh_options_get()), so we store them in the Session object instead.
 const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :process_config)
@@ -857,8 +857,7 @@ It can return any of:
   available.
 - `LibSSHException`: If there's an internal error and `throw=true`.
 """
-function authenticate(session::Session; password=nothing, key=nothing, passphrase=nothing, kbdint_answers=nothing,
-    throw=true)
+function authenticate(session::Session; password=nothing, key=nothing, passphrase=nothing, kbdint_answers=nothing, throw=true)
     if !isconnected(session)
         Base.throw(ArgumentError("Session is disconnected, cannot authenticate"))
     elseif !isnothing(password) && !isnothing(kbdint_answers)
@@ -875,7 +874,7 @@ function authenticate(session::Session; password=nothing, key=nothing, passphras
 
     # Retrieve the supported methods
     session._auth_methods = userauth_list(session;
-        call_auth_none=isnothing(session._auth_methods))
+                                          call_auth_none=isnothing(session._auth_methods))
 
     # First we check if any of the input arguments have been passed, and we
     # attempt authentication if so.
