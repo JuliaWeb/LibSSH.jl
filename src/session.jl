@@ -883,7 +883,7 @@ function authenticate(session::Session; password=nothing, key=nothing, passphras
         status = if !isnothing(password)
             userauth_password(session, password; throw)
         elseif !isnothing(key)
-            isfile(key) ? userauth_publickey(session, key; passphrase, throw) : userauth_publickey(session, key; throw)
+            key isa PKI.SshKey ? userauth_publickey(session, key; throw) : userauth_publickey(session, key; passphrase, throw)
         else
             _try_userauth_kbdint(session, kbdint_answers, throw)
         end
