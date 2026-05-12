@@ -9,7 +9,7 @@ end
 # the result (or Nothing for fire-and-forget requests from finalizers).
 struct _SessionRequest
     f::Any        # () -> Any
-    result::Union{Channel{Any},Nothing}  # Nothing = fire-and-forget
+    result::Union{Channel{Any}, Nothing}  # Nothing = fire-and-forget
 end
 
 """
@@ -68,9 +68,9 @@ mutable struct Session
     """
     function Session(ptr::lib.ssh_session; log_verbosity=nothing, own::Bool=true)
         session = new(ptr, own, [], nothing,
-            -1, nothing, nothing, true,
-            ReentrantLock(), nothing, AuthMethod[], true,
-            Channel{_SessionRequest}(256), CloseableCondition(), false)
+                      -1, nothing, nothing, true,
+                      ReentrantLock(), nothing, AuthMethod[], true,
+                      Channel{_SessionRequest}(256), CloseableCondition(), false)
 
         if own
             # Set to non-blocking mode
@@ -423,7 +423,7 @@ function Base.setproperty!(session::Session, name::Symbol, value)
     end
 
     if name in (:ptr, :server_callbacks, :_auth_methods, :_attempted_auth_methods,
-        :_kbdint_prompts, :_require_init_kbdint, :_actor_task, :_stop_flag)
+                :_kbdint_prompts, :_require_init_kbdint, :_actor_task, :_stop_flag)
         return setfield!(session, name, value)
     end
 
@@ -583,7 +583,7 @@ function _actor_loop(session::Session)
         end
     catch ex
         if !(ex isa InvalidStateException)
-            @error "Actor loop crashed" exception = (ex, catch_backtrace())
+            @error "Actor loop crashed" exception=(ex, catch_backtrace())
         end
     end
 
@@ -1287,7 +1287,7 @@ function userauth_kbdint_getprompts(session::Session)
     return _session_call(session, () -> begin
         prompts = KbdintPrompt[]
         n_prompts = lib.ssh_userauth_kbdint_getnprompts(session)
-        for i in 0:n_prompts-1
+        for i in 0:n_prompts - 1
             echo_ref = Ref{Cchar}()
             question = lib.ssh_userauth_kbdint_getprompt(session, i, echo_ref)
             push!(prompts, KbdintPrompt(question, Bool(echo_ref[])))
@@ -1324,7 +1324,7 @@ function userauth_kbdint_setanswers(session::Session, answers::Vector{String})
 
         for (i, answer) in enumerate(answers)
             ret = lib.ssh_userauth_kbdint_setanswer(session, i - 1,
-                Base.cconvert(Cstring, answer))
+                                                    Base.cconvert(Cstring, answer))
             if ret != SSH_OK
                 throw(LibSSHException("Error while setting answer $(i) with ssh_userauth_kbdint_setanswer(): $(ret)"))
             end
