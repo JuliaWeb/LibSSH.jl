@@ -199,7 +199,7 @@ function import_privkey_file(path::AbstractString; passphrase::Union{AbstractStr
 
     ptr_ref = Ref{lib.ssh_key}()
     ret = GC.@preserve passphrase begin
-        passphrase_cstr = isnothing(passphrase) ? C_NULL : unsafe_convert(Ptr{Cchar}, passphrase)
+        passphrase_cstr = isnothing(passphrase) ? C_NULL : Base.unsafe_convert(Ptr{Cchar}, passphrase)
         lib.ssh_pki_import_privkey_file(path, passphrase_cstr, C_NULL, C_NULL, ptr_ref)
     end
     if ret != ssh.SSH_OK
