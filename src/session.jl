@@ -9,7 +9,7 @@ end
 # the result (or Nothing for fire-and-forget requests from finalizers).
 struct _SessionRequest
     f::Any        # () -> Any
-    result::Union{Channel{Any}, Nothing}  # Nothing = fire-and-forget
+    result::Union{Channel{Any},Nothing}  # Nothing = fire-and-forget
 end
 
 """
@@ -26,18 +26,18 @@ be owning or non-owning of its internal pointer to a `lib.ssh_session`.
     There is no finalizer, so failing to close a `Session` will leak resources.
 """
 mutable struct Session
-    ptr::Union{lib.ssh_session, Nothing}
+    ptr::Union{lib.ssh_session,Nothing}
     owning::Bool
     closeables::Vector{Any}
-    server_callbacks::Union{Callbacks.ServerCallbacks, Nothing}
+    server_callbacks::Union{Callbacks.ServerCallbacks,Nothing}
 
     log_verbosity::Int
-    ssh_dir::Union{String, Nothing}
-    gssapi_server_identity::Union{String, Nothing}
+    ssh_dir::Union{String,Nothing}
+    gssapi_server_identity::Union{String,Nothing}
     process_config::Bool
 
     _lock::ReentrantLock
-    _auth_methods::Union{Vector{AuthMethod}, Nothing}
+    _auth_methods::Union{Vector{AuthMethod},Nothing}
     _attempted_auth_methods::Vector{AuthMethod}
     _require_init_kbdint::Bool
 
@@ -68,9 +68,9 @@ mutable struct Session
     """
     function Session(ptr::lib.ssh_session; log_verbosity=nothing, own::Bool=true)
         session = new(ptr, own, [], nothing,
-                      -1, nothing, nothing, true,
-                      ReentrantLock(), nothing, AuthMethod[], true,
-                      Channel{_SessionRequest}(256), CloseableCondition(), false)
+            -1, nothing, nothing, true,
+            ReentrantLock(), nothing, AuthMethod[], true,
+            Channel{_SessionRequest}(256), CloseableCondition(), false)
 
         if own
             # Set to non-blocking mode
@@ -214,10 +214,10 @@ julia> session = ssh.Session("foo.org")
 julia> session = ssh.Session(ip"12.34.56.78", 2222)
 ```
 """
-function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
-                 socket::Union{Sockets.TCPSocket, RawFD, Nothing}=nothing,
-                 user=nothing, log_verbosity=nothing, auto_connect=true,
-                 process_config=true)
+function Session(host::Union{AbstractString,Sockets.IPAddr}, port=22;
+    socket::Union{Sockets.TCPSocket,RawFD,Nothing}=nothing,
+    user=nothing, log_verbosity=nothing, auto_connect=true,
+    process_config=true)
     session_ptr = lib.ssh_new()
     if session_ptr == C_NULL
         throw(LibSSHException("Could not initialize Session for host $(host)"))
@@ -354,14 +354,14 @@ end
 
 # Mapping from option name to the corresponding enum and C type
 const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
-                                      :port => (SSH_OPTIONS_PORT, Cuint),
-                                      :fd => (SSH_OPTIONS_FD, Cint),
-                                      :user => (SSH_OPTIONS_USER, Cstring),
-                                      :ssh_dir => (SSH_OPTIONS_SSH_DIR, Cstring),
-                                      :known_hosts => (SSH_OPTIONS_KNOWNHOSTS, Cstring),
-                                      :gssapi_server_identity => (SSH_OPTIONS_GSSAPI_SERVER_IDENTITY, Cstring),
-                                      :log_verbosity => (SSH_OPTIONS_LOG_VERBOSITY, Cuint),
-                                      :process_config => (SSH_OPTIONS_PROCESS_CONFIG, Bool))
+    :port => (SSH_OPTIONS_PORT, Cuint),
+    :fd => (SSH_OPTIONS_FD, Cint),
+    :user => (SSH_OPTIONS_USER, Cstring),
+    :ssh_dir => (SSH_OPTIONS_SSH_DIR, Cstring),
+    :known_hosts => (SSH_OPTIONS_KNOWNHOSTS, Cstring),
+    :gssapi_server_identity => (SSH_OPTIONS_GSSAPI_SERVER_IDENTITY, Cstring),
+    :log_verbosity => (SSH_OPTIONS_LOG_VERBOSITY, Cuint),
+    :process_config => (SSH_OPTIONS_PROCESS_CONFIG, Bool))
 # These properties cannot be retrieved from the libssh API (i.e. with
 # ssh_options_get()), so we store them in the Session object instead.
 const SAVED_PROPERTIES = (:log_verbosity, :gssapi_server_identity, :ssh_dir, :process_config)
@@ -423,7 +423,7 @@ function Base.setproperty!(session::Session, name::Symbol, value)
     end
 
     if name in (:ptr, :server_callbacks, :_auth_methods, :_attempted_auth_methods,
-                :_kbdint_prompts, :_require_init_kbdint, :_actor_task, :_stop_flag)
+        :_kbdint_prompts, :_require_init_kbdint, :_actor_task, :_stop_flag)
         return setfield!(session, name, value)
     end
 
@@ -583,7 +583,7 @@ function _actor_loop(session::Session)
         end
     catch ex
         if !(ex isa InvalidStateException)
-            @error "Actor loop crashed" exception=(ex, catch_backtrace())
+            @error "Actor loop crashed" exception = (ex, catch_backtrace())
         end
     end
 
@@ -840,6 +840,9 @@ It can return any of:
 - `session`: The [`Session`](@ref) to authenticate.
 - `password=nothing`: A password to authenticate with. Pass this if
   `authenticate()` previously returned `AuthMethod_Password`.
+- `key=nothing`: A path to a private key file, or a `SshKey` object. Pass
+  this if `authenticate()` previously returned `AuthMethod_PublicKey`.
+- `passphrase=nothing`: A passphrase for the private key, if necessary.
 - `kbdint_answers=nothing`: Answers to keyboard-interactive prompts from the
   server. Use [`userauth_kbdint_getprompts()`](@ref) to get the prompts if
   `authenticate()` returns `AuthMethod_Interactive` and then pass the answers in
@@ -854,8 +857,8 @@ It can return any of:
   available.
 - `LibSSHException`: If there's an internal error and `throw=true`.
 """
-function authenticate(session::Session; password=nothing, kbdint_answers=nothing,
-                      throw=true)
+function authenticate(session::Session; password=nothing, key=nothing, passphrase=nothing, kbdint_answers=nothing,
+    throw=true)
     if !isconnected(session)
         Base.throw(ArgumentError("Session is disconnected, cannot authenticate"))
     elseif !isnothing(password) && !isnothing(kbdint_answers)
@@ -872,13 +875,15 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
 
     # Retrieve the supported methods
     session._auth_methods = userauth_list(session;
-                                          call_auth_none=isnothing(session._auth_methods))
+        call_auth_none=isnothing(session._auth_methods))
 
     # First we check if any of the input arguments have been passed, and we
     # attempt authentication if so.
-    if !isnothing(password) || !isnothing(kbdint_answers)
+    if !isnothing(password) || !isnothing(kbdint_answers) || !isnothing((key))
         status = if !isnothing(password)
             userauth_password(session, password; throw)
+        elseif !isnothing(key)
+            isfile(key) ? userauth_publickey(session, key; passphrase, throw) : userauth_publickey(session, key; throw)
         else
             _try_userauth_kbdint(session, kbdint_answers, throw)
         end
@@ -927,6 +932,11 @@ function authenticate(session::Session; password=nothing, kbdint_answers=nothing
     # Then password auth
     if _can_attempt_auth(session, AuthMethod_Password)
         return AuthMethod_Password
+    end
+
+    # Then public key auth
+    if _can_attempt_auth(session, AuthMethod_PublicKey)
+        return AuthMethod_PublicKey
     end
 
     # Then keyboard-interactive auth
@@ -1148,7 +1158,8 @@ Authenticate by username and private key. The username will be taken from
 
 # Arguments
 - `session`: The session to authenticate.
-- `filename`: The private key filename to authenticate with.
+- `path`: The private key file path to authenticate with.
+- `passphrase=nothing`: An optional passphrase for the private key, if it's encrypted.
 - `throw=true`: Whether to throw if there's an internal error while
   authenticating (`AuthStatus_Error`).
 
@@ -1158,20 +1169,18 @@ Authenticate by username and private key. The username will be taken from
 
 Wrapper around [`lib.ssh_userauth_publickey()`](@ref).
 """
-function userauth_publickey_file(session::Session, filename::String; throw=true)
+function userauth_publickey(session::Session, path::AbstractString; passphrase=nothing, throw=true)
+    key = PKI.import_privkey_file(path; passphrase)
+    return userauth_publickey(session, key; throw)
+end
+
+function userauth_publickey(session::Session, key::PKI.SshKey; throw=true)
     if !isconnected(session)
         Base.throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
 
-    key_ref = Ref{lib.ssh_key}()
-    ret = lib.ssh_pki_import_privkey_file(filename, C_NULL, C_NULL, C_NULL, key_ref)
-    if ret != SSH_OK
-        throw && Base.throw(LibSSHException("Error importing private key: $(ret)"))
-        return ret
-    end
-
     ret = _session_trywait(session) do
-        LibSSH.lib.ssh_userauth_publickey(session, C_NULL, key_ref[])
+        LibSSH.lib.ssh_userauth_publickey(session, C_NULL, key.ptr)
     end
     status = AuthStatus(ret)
 
@@ -1278,7 +1287,7 @@ function userauth_kbdint_getprompts(session::Session)
     return _session_call(session, () -> begin
         prompts = KbdintPrompt[]
         n_prompts = lib.ssh_userauth_kbdint_getnprompts(session)
-        for i in 0:n_prompts - 1
+        for i in 0:n_prompts-1
             echo_ref = Ref{Cchar}()
             question = lib.ssh_userauth_kbdint_getprompt(session, i, echo_ref)
             push!(prompts, KbdintPrompt(question, Bool(echo_ref[])))
@@ -1315,7 +1324,7 @@ function userauth_kbdint_setanswers(session::Session, answers::Vector{String})
 
         for (i, answer) in enumerate(answers)
             ret = lib.ssh_userauth_kbdint_setanswer(session, i - 1,
-                                                    Base.cconvert(Cstring, answer))
+                Base.cconvert(Cstring, answer))
             if ret != SSH_OK
                 throw(LibSSHException("Error while setting answer $(i) with ssh_userauth_kbdint_setanswer(): $(ret)"))
             end

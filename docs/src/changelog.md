@@ -11,22 +11,16 @@ Changelog](https://keepachangelog.com).
 
 ### Added
 - Implemented [`PKI.import_pubkey_file()`](@ref) ([#39]).
+- Implemented [`PKI.import_privkey_file()`](@ref) ([#32]).
 - Added support for public key authentication to the [`Demo.DemoServer`](@ref)
   ([#39]).
-- Added high level wrapper for [`lib.ssh_userauth_publickey()`](@ref) that uses 
-  key filepath for authentication
+- Implemented [`lib.ssh_userauth_publickey()`](@ref) ([#32])
 
 ### Changed
 - Made the finalizers for [`Session`](@ref), [`SshChannel`](@ref), and
   [`SftpSession`](@ref) slightly more robust. It's still not recommended to rely
   on them to clean up all resources but in most cases they should be able to do
   so ([#31]).
-
-## [v0.7.2] -
-
-### Added
-- Added high level wrapper for [`lib.ssh_userauth_publickey()`](@ref) that uses 
-  key filepath for authentication
 
 ## [v0.7.1] - 2024-12-06
 

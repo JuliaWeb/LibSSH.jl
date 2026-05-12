@@ -192,13 +192,16 @@ $(TYPEDSIGNATURES)
 
 Import a private key from a file. Wrapper around [`lib.ssh_pki_import_privkey_file()`](@ref).
 """
-function import_privkey_file(path::AbstractString)
+function import_privkey_file(path::AbstractString; passphrase::Union{AbstractString,Nothing}=nothing)
     if !isfile(path)
         throw(ArgumentError("No private key file at '$(path)'"))
     end
 
     ptr_ref = Ref{lib.ssh_key}()
-    ret = lib.ssh_pki_import_privkey_file(path, C_NULL, C_NULL, C_NULL, ptr_ref)
+    ret = GC.@preserve passphrase begin
+        passphrase_cstr = isnothing(passphrase) ? C_NULL : unsafe_convert(Ptr{Cchar}, passphrase)
+        lib.ssh_pki_import_privkey_file(path, passphrase_cstr, C_NULL, C_NULL, ptr_ref)
+    end
     if ret != ssh.SSH_OK
         throw(ssh.LibSSHException("Error importing private key from '$(path)': $(ret)"))
     end
