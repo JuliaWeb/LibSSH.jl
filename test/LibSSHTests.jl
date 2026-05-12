@@ -1202,6 +1202,7 @@ end
 
     # Test reading from a file
     @test_throws ArgumentError pki.import_pubkey_file("nonexistent.pub")
+    @test_throws ArgumentError pki.import_privkey_file("nonexistent")
 
     mktempdir() do tmpdir
         privkey = joinpath(tmpdir, "test")
