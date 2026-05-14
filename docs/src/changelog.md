@@ -11,8 +11,12 @@ Changelog](https://keepachangelog.com).
 
 ### Added
 - Implemented [`PKI.import_pubkey_file()`](@ref) ([#39]).
+- Implemented [`PKI.import_privkey_file()`](@ref) ([#32]).
 - Added support for public key authentication to the [`Demo.DemoServer`](@ref)
   ([#39]).
+- Implemented [`userauth_publickey()`](@ref) ([#32])
+- Added support for public key authentication to the [`authenticate()`](@ref)
+  function ([#39]).
 
 ### Changed
 - Made the finalizers for [`Session`](@ref), [`SshChannel`](@ref), and

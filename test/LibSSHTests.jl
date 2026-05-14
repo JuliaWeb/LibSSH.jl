@@ -19,7 +19,14 @@ import LibSSH.Demo: DemoServer
 
 curl_cmd = `$(curl()) --no-progress-meter`
 username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
-keygen(privkey) = run(`$(OpenSSH_jll.ssh_keygen()) -t ed25519 -N "" -f $privkey -q`)
+keygen(privkey; passphrase="") = run(`$(OpenSSH_jll.ssh_keygen()) -t ed25519 -N $passphrase -f $privkey -q`)
+function sshkeygen(privkey_path; passphrase="")
+    pubkey_path = privkey_path * ".pub"
+    keygen(privkey_path; passphrase)
+    pubkey = ssh.PKI.import_pubkey_file(pubkey_path)
+    privkey = ssh.PKI.import_privkey_file(privkey_path; passphrase)
+    return privkey, pubkey
+end
 
 const HTTP_200 = "HTTP/1.1 200 OK\r\n\r\n"
 
@@ -495,6 +502,28 @@ end
     end
     @info "Finished: Session / Password authentication"
 
+    @testset "Public key authentication" begin
+        mktempdir() do tmpdir
+            # Generate a fresh key pair with ssh-keygen
+            privkey_path = joinpath(tmpdir, "id_ed25519")
+            privkey, pubkey = sshkeygen(privkey_path; passphrase="bar")
+            @test_throws ssh.LibSSHException badkey = ssh.PKI.import_privkey_file(privkey_path; passphrase="foo")
+            # Test with a good key with passphrase
+            DemoServer(2222; auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_PublicKey], authorized_keys=[pubkey]) do
+                ssh.Session(localhost, 2222) do session
+                    @test ssh.isconnected(session)
+                    @test_throws ssh.LibSSHException ssh.userauth_publickey(session, privkey_path; passphrase="foo")
+                    @test ssh.userauth_publickey(session, privkey_path; passphrase="bar") == ssh.AuthStatus_Success
+                end
+                ssh.Session(localhost, 2222) do session
+                    @test ssh.isconnected(session)
+                    @test ssh.userauth_publickey(session, privkey) == ssh.AuthStatus_Success
+                end
+            end
+        end
+    end
+    @info "Finished: Session / Public key authentication"
+
     @testset "Keyboard-interactive authentication" begin
         DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
             session = ssh.Session(localhost, 2222)
@@ -576,6 +605,20 @@ end
             end
 
             close(session)
+        end
+
+        # Test with public key auth
+        mktempdir() do tmpdir
+            # Generate a fresh key pair with ssh-keygen
+            privkey_path = joinpath(tmpdir, "id_ed25519")
+            privkey, pubkey = sshkeygen(privkey_path; passphrase="bar")
+            # Test with a good key with passphrase
+            DemoServer(2222; auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_PublicKey], authorized_keys=[pubkey]) do
+                session_helper() do session
+                    @test ssh.authenticate(session) == ssh.AuthMethod_PublicKey
+                    @test ssh.authenticate(session; privkey) == ssh.AuthStatus_Success
+                end
+            end
         end
 
         # Test with keyboard-interactive auth
@@ -1124,6 +1167,7 @@ end
 
     # Test reading from a file
     @test_throws ArgumentError pki.import_pubkey_file("nonexistent.pub")
+    @test_throws ArgumentError pki.import_privkey_file("nonexistent")
 
     mktempdir() do tmpdir
         privkey = joinpath(tmpdir, "test")
@@ -1131,10 +1175,13 @@ end
         keygen(privkey)
 
         @test pki.import_pubkey_file(pubkey) isa pki.SshKey
+        @test pki.import_privkey_file(privkey) isa pki.SshKey
 
         # Test reading a corrupted public key
         write(pubkey, "foo")
+        write(privkey, "bar")
         @test_throws ssh.LibSSHException pki.import_pubkey_file(pubkey)
+        @test_throws ssh.LibSSHException pki.import_privkey_file(privkey)
     end
 end
 

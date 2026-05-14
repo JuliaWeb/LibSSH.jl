@@ -51,6 +51,7 @@ authenticate_cli
 userauth_list
 userauth_none
 userauth_password
+userauth_publickey
 userauth_kbdint
 userauth_kbdint_getprompts
 userauth_kbdint_setanswers
