@@ -840,9 +840,8 @@ It can return any of:
 - `session`: The [`Session`](@ref) to authenticate.
 - `password=nothing`: A password to authenticate with. Pass this if
   `authenticate()` previously returned `AuthMethod_Password`.
-- `key=nothing`: A path to a private key file, or a `SshKey` object. Pass
+- `privkey=nothing`: A `SshKey` to authenticate with. Pass
   this if `authenticate()` previously returned `AuthMethod_PublicKey`.
-- `passphrase=nothing`: A passphrase for the private key, if necessary.
 - `kbdint_answers=nothing`: Answers to keyboard-interactive prompts from the
   server. Use [`userauth_kbdint_getprompts()`](@ref) to get the prompts if
   `authenticate()` returns `AuthMethod_Interactive` and then pass the answers in
@@ -857,7 +856,7 @@ It can return any of:
   available.
 - `LibSSHException`: If there's an internal error and `throw=true`.
 """
-function authenticate(session::Session; password=nothing, key=nothing, passphrase=nothing, kbdint_answers=nothing, throw=true)
+function authenticate(session::Session; password=nothing, privkey::Union{SshKey, Nothing}=nothing, kbdint_answers=nothing, throw=true)
     if !isconnected(session)
         Base.throw(ArgumentError("Session is disconnected, cannot authenticate"))
     elseif !isnothing(password) && !isnothing(kbdint_answers)
@@ -878,11 +877,11 @@ function authenticate(session::Session; password=nothing, key=nothing, passphras
 
     # First we check if any of the input arguments have been passed, and we
     # attempt authentication if so.
-    if !isnothing(password) || !isnothing(kbdint_answers) || !isnothing((key))
+    if !isnothing(password) || !isnothing(kbdint_answers) || !isnothing(privkey)
         status = if !isnothing(password)
             userauth_password(session, password; throw)
-        elseif !isnothing(key)
-            key isa PKI.SshKey ? userauth_publickey(session, key; throw) : userauth_publickey(session, key; passphrase, throw)
+        elseif !isnothing(privkey)
+            userauth_publickey(session, privkey; throw)
         else
             _try_userauth_kbdint(session, kbdint_answers, throw)
         end
@@ -1169,17 +1168,35 @@ Authenticate by username and private key. The username will be taken from
 Wrapper around [`lib.ssh_userauth_publickey()`](@ref).
 """
 function userauth_publickey(session::Session, path::AbstractString; passphrase=nothing, throw=true)
-    key = PKI.import_privkey_file(path; passphrase)
-    return userauth_publickey(session, key; throw)
+    privkey = PKI.import_privkey_file(path; passphrase)
+    return userauth_publickey(session, privkey; throw)
 end
 
-function userauth_publickey(session::Session, key::PKI.SshKey; throw=true)
+"""
+$(TYPEDSIGNATURES)
+
+Authenticate by username and private key. The username will be taken from
+`session.user`.
+
+# Arguments
+- `session`: The session to authenticate.
+- `privkey`: The private key to authenticate with, as a `SshKey` object.
+- `throw=true`: Whether to throw if there's an internal error while
+  authenticating (`AuthStatus_Error`).
+
+# Throws
+- `ArgumentError`: If the session isn't connected.
+- `LibSSHException`: If there was an internal error, unless `throw=false`.
+
+Wrapper around [`lib.ssh_userauth_publickey()`](@ref).
+"""
+function userauth_publickey(session::Session, privkey::PKI.SshKey; throw=true)
     if !isconnected(session)
         Base.throw(ArgumentError("Session is disconnected, cannot authenticate until it's connected"))
     end
 
     ret = _session_trywait(session) do
-        LibSSH.lib.ssh_userauth_publickey(session, C_NULL, key.ptr)
+        LibSSH.lib.ssh_userauth_publickey(session, C_NULL, privkey.ptr)
     end
     status = AuthStatus(ret)
 

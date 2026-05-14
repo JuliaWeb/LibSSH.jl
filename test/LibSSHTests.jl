@@ -20,6 +20,13 @@ import LibSSH.Demo: DemoServer
 curl_cmd = `$(curl()) --no-progress-meter`
 username() = Sys.iswindows() ? ENV["USERNAME"] : ENV["USER"]
 keygen(privkey; passphrase="") = run(`$(OpenSSH_jll.ssh_keygen()) -t ed25519 -N $passphrase -f $privkey -q`)
+function sshkeygen(privkey_path; passphrase="")
+    pubkey_path = privkey_path * ".pub"
+    keygen(privkey_path; passphrase)
+    pubkey = ssh.PKI.import_pubkey_file(pubkey_path)
+    privkey = ssh.PKI.import_privkey_file(privkey_path; passphrase)
+    return privkey, pubkey
+end
 
 const HTTP_200 = "HTTP/1.1 200 OK\r\n\r\n"
 
@@ -498,43 +505,24 @@ end
     @testset "Public key authentication" begin
         mktempdir() do tmpdir
             # Generate a fresh key pair with ssh-keygen
-            privkey = joinpath(tmpdir, "id_ed25519")
-            pubkey = privkey * ".pub"
-            keygen(privkey)
-            authorized_keys = [ssh.PKI.import_pubkey_file(pubkey)]
-            key = ssh.PKI.import_privkey_file(privkey)
-
-            # Test with a good key
-            DemoServer(2222; auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_PublicKey], authorized_keys) do
+            privkey_path = joinpath(tmpdir, "id_ed25519")
+            privkey, pubkey = sshkeygen(privkey_path; passphrase="bar")
+            @test_throws ssh.LibSSHException badkey = ssh.PKI.import_privkey_file(privkey_path; passphrase="foo")
+            # Test with a good key with passphrase
+            DemoServer(2222; auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_PublicKey], authorized_keys=[pubkey]) do
+                ssh.Session(localhost, 2222) do session
+                    @test ssh.isconnected(session)
+                    @test_throws ssh.LibSSHException ssh.userauth_publickey(session, privkey_path; passphrase="foo")
+                    @test ssh.userauth_publickey(session, privkey_path; passphrase="bar") == ssh.AuthStatus_Success
+                end
                 ssh.Session(localhost, 2222) do session
                     @test ssh.isconnected(session)
                     @test ssh.userauth_publickey(session, privkey) == ssh.AuthStatus_Success
                 end
-                ssh.Session(localhost, 2222) do session
-                    @test ssh.isconnected(session)
-                    @test ssh.userauth_publickey(session, key) == ssh.AuthStatus_Success
-                end
-            end
-            privkey2 = joinpath(tmpdir, "id_ed25519_passphrase")
-            pubkey2 = privkey2 * ".pub"
-            keygen(privkey2; passphrase="bar")
-            authorized_keys = [ssh.PKI.import_pubkey_file(pubkey2)]
-            key2 = ssh.PKI.import_privkey_file(privkey2; passphrase="bar")
-            @test_throws ssh.LibSSHException badkey = ssh.PKI.import_privkey_file(privkey2; passphrase="foo")
-            # Test with a good key with passphrase
-            DemoServer(2222; auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_PublicKey], authorized_keys) do
-                ssh.Session(localhost, 2222) do session
-                    @test ssh.isconnected(session)
-                    @test_throws ssh.LibSSHException ssh.userauth_publickey(session, privkey2; passphrase="foo")
-                    @test ssh.userauth_publickey(session, privkey2; passphrase="bar") == ssh.AuthStatus_Success
-                end
-                ssh.Session(localhost, 2222) do session
-                    @test ssh.isconnected(session)
-                    @test ssh.userauth_publickey(session, key2) == ssh.AuthStatus_Success
-                end
             end
         end
     end
+    @info "Finished: Session / Public key authentication"
 
     @testset "Keyboard-interactive authentication" begin
         DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
@@ -622,36 +610,13 @@ end
         # Test with public key auth
         mktempdir() do tmpdir
             # Generate a fresh key pair with ssh-keygen
-            privkey = joinpath(tmpdir, "id_ed25519")
-            pubkey = privkey * ".pub"
-            keygen(privkey)
-            authorized_keys = [ssh.PKI.import_pubkey_file(pubkey)]
-            key = ssh.PKI.import_privkey_file(privkey)
-
-            DemoServer(2222; auth_methods=[ssh.AuthMethod_PublicKey], authorized_keys) do
-                session_helper() do session
-                    @test ssh.authenticate(session) == ssh.AuthMethod_PublicKey
-                    @test ssh.authenticate(session; key=privkey) == ssh.AuthStatus_Success
-                end
-                session_helper() do session
-                    @test ssh.authenticate(session) == ssh.AuthMethod_PublicKey
-                    @test ssh.authenticate(session; key) == ssh.AuthStatus_Success
-                end
-            end
-            privkey2 = joinpath(tmpdir, "id_ed25519_passphrase")
-            pubkey2 = privkey2 * ".pub"
-            keygen(privkey2; passphrase="bar")
-            authorized_keys = [ssh.PKI.import_pubkey_file(pubkey2)]
-            key2 = ssh.PKI.import_privkey_file(privkey2; passphrase="bar")
-            @test_throws ssh.LibSSHException ssh.PKI.import_privkey_file(privkey2; passphrase="foo")
+            privkey_path = joinpath(tmpdir, "id_ed25519")
+            privkey, pubkey = sshkeygen(privkey_path; passphrase="bar")
             # Test with a good key with passphrase
-            DemoServer(2222; auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_PublicKey], authorized_keys) do
+            DemoServer(2222; auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_PublicKey], authorized_keys=[pubkey]) do
                 session_helper() do session
-                    @test_throws ssh.LibSSHException ssh.authenticate(session; key=privkey2, passphrase="foo")
-                    @test ssh.authenticate(session; key=privkey2, passphrase="bar") == ssh.AuthStatus_Success
-                end
-                session_helper() do session
-                    @test ssh.authenticate(session; key=key2) == ssh.AuthStatus_Success
+                    @test ssh.authenticate(session) == ssh.AuthMethod_PublicKey
+                    @test ssh.authenticate(session; privkey) == ssh.AuthStatus_Success
                 end
             end
         end
