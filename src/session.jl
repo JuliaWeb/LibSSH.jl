@@ -856,7 +856,7 @@ It can return any of:
   available.
 - `LibSSHException`: If there's an internal error and `throw=true`.
 """
-function authenticate(session::Session; password=nothing, privkey::Union{SshKey, Nothing}=nothing, kbdint_answers=nothing, throw=true)
+function authenticate(session::Session; password=nothing, privkey::Union{PKI.SshKey, Nothing}=nothing, kbdint_answers=nothing, throw=true)
     if !isconnected(session)
         Base.throw(ArgumentError("Session is disconnected, cannot authenticate"))
     elseif !isnothing(password) && !isnothing(kbdint_answers)
