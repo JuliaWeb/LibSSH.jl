@@ -12,6 +12,34 @@ struct _SessionRequest
     result::Union{Channel{Any}, Nothing}  # Nothing = fire-and-forget
 end
 
+# Reusable fd-readiness poller for a Session: replaces per-iteration
+# FileWatching.poll_fd() by keeping one FDWatcher and one periodic Timer
+# for the session's lifetime.
+#
+# A Threads.Condition coordinates a watcher task (blocks in wait(watcher);
+# on readability sets ready=true and waits for the actor to clear it before
+# rearming — backpressure against level-triggered POLLIN spin), the periodic
+# Timer (notifies the cond per tick so SSH_AGAIN writes get retried), and the
+# actor (calls _poll_fd, gets :readable / :timeout / :woken / :closed).
+# Writability isn't watched (TCP sockets are almost always writable); writes
+# are retried on the next tick instead.
+#
+# The watcher sits on a dup() of the session fd so libssh closing its own
+# fd can't pull libuv's poll handle out from under us. See
+# _teardown_fd_poller for the close-ordering race that remains.
+@kwdef mutable struct _FdPoller
+    const dupfd::RawFD
+    const watcher::FileWatching.FDWatcher
+    const timer::Timer
+    const cond::Threads.Condition
+    # Set by the watcher on POLLIN, cleared by the actor once it consumes the
+    # readiness. Always accessed under `cond`.
+    @atomic ready::Bool
+    @atomic woken::Bool
+    @atomic stop::Bool
+    watcher_task::Union{Task, Nothing} = nothing
+end
+
 """
 $(TYPEDEF)
 $(TYPEDFIELDS)
@@ -41,12 +69,24 @@ mutable struct Session
     _attempted_auth_methods::Vector{AuthMethod}
     _require_init_kbdint::Bool
 
-    # Channel for submitting requests to the actor task
-    _requests::Channel{_SessionRequest}
+    # Channel for submitting requests to the actor task. The `Nothing` variant
+    # is a wake-up sentinel sent by _wake_actor when the actor may be blocked
+    # in the idle take!(requests) path (where a cond notify wouldn't reach).
+    _requests::Channel{Union{_SessionRequest, Nothing}}
     # Condition for callers to wait() on (SSH_AGAIN waiters)
     _wakeup::CloseableCondition
+    # Channels registered for the actor to poll directly (see poll_loop), held
+    # as Any because SshChannel is defined later. Guarded by _wakeup's lock.
+    _poll_regs::Vector{Any}
+    # Lazily-created fd-readiness poller (see _FdPoller). Only the actor task
+    # creates it; teardown can come from the actor or disconnect().
+    _fd_poller::Union{Nothing, _FdPoller}
     # Tell the actor task when to stop
     @atomic _stop_flag::Bool
+    # When set, the actor and fd poller tasks are pinned to this Julia thread
+    # so their per-poll notify/wait handshake stays thread-local. nothing
+    # leaves them on the regular multithreaded scheduler.
+    _pin_tid::Union{Nothing, Int}
     # The actor task owns ALL C libssh calls for this session. Other tasks
     # submit work via _requests. This ensures thread-safety by construction.
     _actor_task::Task
@@ -66,11 +106,13 @@ mutable struct Session
        `session.log_verbosity` if necessary.
     - `own=true`: Whether to take ownership of `ptr`.
     """
-    function Session(ptr::lib.ssh_session; log_verbosity=nothing, own::Bool=true)
+    function Session(ptr::lib.ssh_session; log_verbosity=nothing, own::Bool=true,
+                     pin_tid::Union{Nothing, Integer}=nothing)
         session = new(ptr, own, [], nothing,
                       -1, nothing, nothing, true,
                       ReentrantLock(), nothing, AuthMethod[], true,
-                      Channel{_SessionRequest}(256), CloseableCondition(), false)
+                      Channel{Union{_SessionRequest, Nothing}}(256), CloseableCondition(), Any[], nothing, false,
+                      isnothing(pin_tid) ? nothing : Int(pin_tid))
 
         if own
             # Set to non-blocking mode
@@ -80,7 +122,8 @@ mutable struct Session
             # Non-owning Sessions are lightweight wrappers used in callbacks;
             # they must NOT start an actor or make C calls, since the owning
             # Session's actor already owns all C calls for this ssh_session.
-            session._actor_task = Threads.@spawn _actor_loop(session)
+            session._actor_task = _spawn_session_task(() -> _actor_loop(session),
+                                                      session._pin_tid)
             errormonitor(session._actor_task)
 
             if !isnothing(log_verbosity)
@@ -172,6 +215,7 @@ function _session_call(session::Session, f)
         end
         rethrow()
     end
+    _wake_actor(session)
     tag, value = take!(result_ch)
     tag === :ok ? value : throw(value)
 end
@@ -217,7 +261,7 @@ julia> session = ssh.Session(ip"12.34.56.78", 2222)
 function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
                  socket::Union{Sockets.TCPSocket, RawFD, Nothing}=nothing,
                  user=nothing, log_verbosity=nothing, auto_connect=true,
-                 process_config=true)
+                 process_config=true, pin_tid::Union{Nothing, Integer}=nothing)
     session_ptr = lib.ssh_new()
     if session_ptr == C_NULL
         throw(LibSSHException("Could not initialize Session for host $(host)"))
@@ -225,7 +269,7 @@ function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
 
     host_str = host isa AbstractString ? host : string(host)
 
-    session = Session(session_ptr; log_verbosity)
+    session = Session(session_ptr; log_verbosity, pin_tid)
 
     # Put this section in a try-catch block so that the session will be free'd
     # if initialization fails for some reason.
@@ -423,7 +467,8 @@ function Base.setproperty!(session::Session, name::Symbol, value)
     end
 
     if name in (:ptr, :server_callbacks, :_auth_methods, :_attempted_auth_methods,
-                :_kbdint_prompts, :_require_init_kbdint, :_actor_task, :_stop_flag)
+                :_kbdint_prompts, :_require_init_kbdint, :_actor_task, :_stop_flag,
+                :_fd_poller)
         return setfield!(session, name, value)
     end
 
@@ -493,10 +538,8 @@ function Base.wait(session::Session)
     end
 
     @lock session._wakeup begin
-        # Submit a no-op to the actor to ensure it wakes up and polls.
-        # The actual wakeup comes from the actor's poll_fd notifying _wakeup.
-        put!(session._requests, _SessionRequest(() -> nothing, nothing))
-
+        # Nudge the actor so it cycles through a poll and notifies _wakeup.
+        _wake_actor(session)
         wait(session._wakeup)
     end
 end
@@ -505,6 +548,7 @@ end
 # We use invokelatest because the closure may have been created in a newer
 # world age than the actor task (e.g. REPL usage, or test code loaded after
 # LibSSH).
+_process_request(::Nothing) = nothing
 function _process_request(req::_SessionRequest)
     if isnothing(req.result)
         # Fire-and-forget: run and discard result/errors
@@ -518,6 +562,187 @@ function _process_request(req::_SessionRequest)
             put!(req.result, (:ok, value))
         catch ex
             put!(req.result, (:err, ex))
+        end
+    end
+end
+
+# External wake-up nudge. The actor has two blocking points and we don't
+# know which one it's in, so we nudge both:
+#   - cond notify (with `woken`=true): wakes _poll_fd.
+#   - nothing sentinel on _requests: wakes the idle take!(requests) branch.
+# The redundant signal on the path the actor isn't using is harmless: the
+# sentinel becomes a no-op on the next drain; the cond wake just causes one
+# extra trip through the poll loop.
+function _wake_actor(session::Session)
+    p = session._fd_poller
+    if !isnothing(p)
+        @lock p.cond begin
+            @atomic p.woken = true
+            notify(p.cond; all=true)
+        end
+    end
+    try
+        put!(session._requests, nothing)
+    catch
+    end
+end
+
+# Watcher task: wait for POLLIN, publish ready=true, then block until the
+# actor clears it before rearming. The handshake stops level-triggered
+# POLLIN from spinning while the actor is still draining.
+function _watcher_loop(p::_FdPoller)
+    while !(@atomic p.stop)
+        try
+            wait(p.watcher)
+        catch
+            # EOFError (watcher closed) or IOError if the dup fd was pulled
+            # out from under us. Either way: exit.
+            break
+        end
+        (@atomic p.stop) && break
+
+        @lock p.cond begin
+            @atomic p.ready = true
+            notify(p.cond; all=true)
+            while (@atomic p.ready) && !(@atomic p.stop)
+                wait(p.cond)
+            end
+        end
+    end
+
+    # Make sure no one is left blocked on us.
+    @lock p.cond notify(p.cond; all=true)
+end
+
+# Reusable poll_fd for the session actor. Returns :readable (POLLIN),
+# :woken (external nudge), :timeout, or :closed. Single-consumer — only
+# the actor task may call this.
+function _poll_fd(p::_FdPoller, timeout_s::Real)
+    deadline = time() + timeout_s
+    @lock p.cond begin
+        while true
+            (@atomic p.stop) && return :closed
+            if (@atomic p.woken)
+                @atomic p.woken = false
+                return :woken
+            end
+            if (@atomic p.ready)
+                @atomic p.ready = false
+                notify(p.cond; all=true)   # release watcher to rearm
+                return :readable
+            end
+            remaining = deadline - time()
+            remaining <= 0 && return :timeout
+            wait(p.cond)
+        end
+    end
+end
+
+# Pin `task` to Julia thread `tid` (1-based). Used to co-locate the actor
+# and its watcher so their per-poll notify/wait stays thread-local.
+function pintask!(task::Task, tid::Integer)
+    if tid ∉ Threads.threadpooltids(:default) && tid ∉ Threads.threadpooltids(:interactive)
+        error("Thread ID '$tid' does not exist in the :default or :interactive threadpool, cannot schedule a task onto it.")
+    end
+
+    task.sticky = true
+    ret = ccall(:jl_set_task_tid, Cint, (Any, Cint), task, tid - 1)
+
+    if Threads.threadid(task) != tid
+        error("jl_set_task_tid() onto Julia thread ID $tid failed!")
+    end
+end
+
+# Spawn `f` on the regular multithreaded scheduler, or pinned to `tid` when
+# pinning is enabled for the session.
+function _spawn_session_task(f, tid::Union{Nothing, Int})
+    if isnothing(tid)
+        return Threads.@spawn f()
+    end
+
+    task = Task(f)
+    pintask!(task, tid)
+    schedule(task)
+    return task
+end
+
+# Create the session's poller the first time the actor sees a valid fd, and
+# keep it for the session's lifetime (the socket fd is stable per session).
+# Only ever called on the actor task. Returns nothing if the FDWatcher
+# couldn't be created (treated like a closed fd by the caller).
+function _ensure_fd_poller(session::Session, fd::RawFD)
+    p = session._fd_poller
+    isnothing(p) || return p
+
+    # dup() so the watcher's lifetime is decoupled from libssh's (see _FdPoller).
+    dupfd = Base.Libc.dup(fd)
+    if dupfd == RawFD(-1)
+        return nothing
+    end
+
+    watcher = try
+        FileWatching.FDWatcher(dupfd, true, false)
+    catch
+        ccall(:close, Cint, (Cint,), dupfd)
+        return nothing
+    end
+
+    cond = Threads.Condition()
+    # Periodic tick: bounded latency for SSH_AGAIN write retries and state
+    # re-checks that aren't fd-driven.
+    timer = Timer(0.1; interval=0.1) do _
+        try
+            @lock cond notify(cond; all=true)
+        catch
+        end
+    end
+
+    p = _FdPoller(; dupfd, watcher, timer, cond, ready=false, woken=false, stop=false)
+    p.watcher_task = errormonitor(_spawn_session_task(() -> _watcher_loop(p),
+                                                      session._pin_tid))
+    session._fd_poller = p
+    return p
+end
+
+# Idempotent, callable from any task; exactly one caller wins via the
+# atomic stop flag. The watcher sits on our dup, so ordering vs.
+# ssh_disconnect() doesn't matter for correctness.
+function _teardown_fd_poller(session::Session)
+    p = session._fd_poller
+    isnothing(p) && return
+
+    # Claim the teardown exactly once.
+    (@atomicswap p.stop = true) && return
+    session._fd_poller = nothing
+
+    try
+        close(p.timer)
+    catch
+    end
+    try
+        close(p.watcher)
+    catch
+    end
+    # close(watcher) only *schedules* uv_close; epoll_ctl(DEL) on dupfd
+    # runs at some later libuv loop iteration. Closing dupfd before that
+    # flush is unsafe: if its number is reused, libuv removes the wrong fd
+    # from epoll; if not, epoll_ctl(DEL) -> EBADF aborts the process. The
+    # Timer(0.5) makes it rare but not safe — wall time has no causal link
+    # to libuv progress. Proper fix: an fd-owning FDWatcher so libuv closes
+    # dupfd itself, but FileWatching doesn't expose that publicly. Each
+    # teardown also leaks a Timer/libuv handle.
+    dupfd = p.dupfd
+    Timer(0.5) do _
+        ccall(:close, Cint, (Cint,), dupfd)
+    end
+    # Unblock the watcher task if it's parked in wait(cond) for ready to clear.
+    @lock p.cond notify(p.cond; all=true)
+
+    t = p.watcher_task
+    if !isnothing(t) && current_task() !== t
+        try
+            wait(t)
+        catch
         end
     end
 end
@@ -540,10 +765,13 @@ function _actor_loop(session::Session)
                 _process_request(req)
             end
 
-            # Check if anyone is waiting for I/O (i.e. _wakeup has waiters)
-            has_waiters = @lock session._wakeup !isempty(session._wakeup.cond.waitq)
+            # Check if anyone is waiting for I/O: either an SSH_AGAIN waiter on
+            # _wakeup, or a channel registered for direct polling (poll_loop).
+            has_waiters, has_regs = @lock session._wakeup begin
+                (!isempty(session._wakeup.cond.waitq), !isempty(session._poll_regs))
+            end
 
-            if has_waiters && isopen(session)
+            if (has_waiters || has_regs) && isopen(session)
                 # Poll the fd for I/O readiness — C calls are safe, we're the actor
                 fd = RawFD(lib.ssh_get_fd(session))
                 if fd == RawFD(-1)
@@ -554,29 +782,35 @@ function _actor_loop(session::Session)
                     break
                 end
 
-                poll_flags = lib.ssh_get_poll_flags(session)
-                readable = (poll_flags & lib.SSH_READ_PENDING) > 0
-                writable = (poll_flags & lib.SSH_WRITE_PENDING) > 0
-
-                result = _safe_poll_fd(fd, 0.1; readable, writable)
-                if isnothing(result)
-                    # fd closed
+                p = _ensure_fd_poller(session, fd)
+                if isnothing(p)
+                    # Couldn't watch the fd (closed/invalid)
                     break
                 end
 
-                # Always notify waiters, even on timeout. This is critical
-                # because channel state can change without fd activity (e.g.
-                # when close(::SshChannel) is called locally). Without this,
-                # poll_loop would stay blocked in wait(session) forever after
-                # a channel is closed locally.
-                @lock session._wakeup notify(session._wakeup)
+                result = _poll_fd(p, 0.1)
+                if result === :closed || (@atomic session._stop_flag) || !isopen(session)
+                    break
+                end
+
+                # :readable / :timeout / :woken — drive libssh and wake
+                # SSH_AGAIN waiters. Spurious wakes are harmless.
+                _actor_poll_channels(session)
+                # Only wake the waiters when I/O could have made progress
+                # (:readable) or the retry tick elapsed (:timeout).
+                if result !== :woken
+                    @lock session._wakeup notify(session._wakeup)
+                end
             else
                 # No waiters — block until a request arrives
                 req = try
                     take!(requests)
                 catch ex
-                    ex isa InvalidStateException && @goto drain_remaining
-                    rethrow()
+                    if ex isa InvalidStateException
+                        @goto drain_remaining
+                    else
+                        rethrow()
+                    end
                 end
                 _process_request(req)
             end
@@ -588,6 +822,13 @@ function _actor_loop(session::Session)
     end
 
     @label drain_remaining
+    # Tear down the fd poller (safety net for exit paths that don't go through
+    # disconnect(), e.g. closewait() or a remote-initiated disconnect).
+    _teardown_fd_poller(session)
+
+    # Unblock any poll_loop callers waiting on a registered channel.
+    _finish_poll_regs(session)
+
     # Drain any remaining requests and send error responses so callers
     # waiting on take!(result_ch) don't block forever.
     # Note: we use take!() in a try-catch loop rather than checking isready()
@@ -599,7 +840,7 @@ function _actor_loop(session::Session)
         catch
             break
         end
-        if !isnothing(req.result)
+        if req isa _SessionRequest && !isnothing(req.result)
             try
                 put!(req.result, (:err, LibSSHException("Session actor has stopped")))
             catch
@@ -650,6 +891,10 @@ function disconnect(session::Session)
     if !isopen(session) || !isopen(session._requests)
         return
     end
+    # Tear down the poller. The watcher is on our dup, so this no longer has
+    # to precede lib.ssh_disconnect(); done early simply to stop polling.
+    _teardown_fd_poller(session)
+
     try
         if isconnected(session)
             # We close all the closeables in reverse order because closing them will
