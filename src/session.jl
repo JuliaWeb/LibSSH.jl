@@ -42,7 +42,6 @@ end
 
 """
 $(TYPEDEF)
-$(TYPEDFIELDS)
 
 Represents an SSH session. Note that some properties such as the host and port are
 implemented in `getproperty()`/`setproperty!()` by using the internal values of
@@ -99,12 +98,11 @@ mutable struct Session
 
     # Arguments
     - `ptr`: A pointer to the `lib.ssh_session` to wrap.
-    - `log_verbosity=nothing`: Set the log verbosity for the
-       session. This argument will be ignored if `own` is `false` to avoid
-       accidentally changing the logging level in callbacks when non-owning
-       Sessions are created. You can still set the logging level explicitly with
-       `session.log_verbosity` if necessary.
+    - `log_verbosity=nothing`: argument will be ignored if `own` is `false` to
+       avoid accidentally changing the logging level in callbacks when
+       non-owning Sessions are created.
     - `own=true`: Whether to take ownership of `ptr`.
+    - `pin_tid=nothing`: See the host/port constructor docstring.
     """
     function Session(ptr::lib.ssh_session; log_verbosity=nothing, own::Bool=true,
                      pin_tid::Union{Nothing, Integer}=nothing)
@@ -245,10 +243,17 @@ server.
   need to close the socket afterwards, the `Session` will not do it for you.
 - `user=nothing`: Set the user to connect as. If unset the current
    username will be used.
-- `log_verbosity=nothing`: Set the log verbosity for the session.
+- `log_verbosity=nothing`: Set the log verbosity for the session. You can still
+  set the logging level explicitly with `session.log_verbosity` if necessary.
 - `auto_connect=true`: Whether to automatically call
   [`connect()`](@ref).
 - `process_config=true`: Whether to process any found SSH config files.
+- `pin_tid=nothing`: An optional thread ID to pin the internal polling tasks
+   to. Polling in a thread-safe way requires a lot of scheduler wakeups, and
+   Julia versions <1.14 are quite inefficient at that with many
+   threads (see [#61826](https://github.com/JuliaLang/julia/pull/61826)). Should
+   only be necessary if you're running Julia with many threads and you observe
+   high CPU usage coming from LibSSH.
 
 # Examples
 

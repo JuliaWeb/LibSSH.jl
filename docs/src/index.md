@@ -39,6 +39,8 @@ pkg> add LibSSH
 - GSSAPI support isn't available on all platforms (see
   [`Gssapi.isavailable`](@ref)).
 - Many features don't have high-level wrappers (see [Contributing](@ref)).
+- LibSSH.jl is currently only tested on Linux. Windows/MacOS may or may not work
+  (feel free to open an issue/PR if not, it would be nice to support them).
 
 ## FAQ
 

@@ -7,22 +7,36 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
-## Unreleased
+## [v1.0.0] - 2026-06-25
 
 ### Added
 - Implemented [`PKI.import_pubkey_file()`](@ref) ([#39]).
 - Implemented [`PKI.import_privkey_file()`](@ref) ([#32]).
-- Added support for public key authentication to the [`Demo.DemoServer`](@ref)
+- Added support for public key authentication to the [`DemoServer`](@ref)
   ([#39]).
 - Implemented [`userauth_publickey()`](@ref) ([#32])
 - Added support for public key authentication to the [`authenticate()`](@ref)
   function ([#39]).
+- Added a `pin_tid` argument to [`Session()`](@ref) to allow pinning the polling
+  tasks to avoid scheduler overhead ([#40]).
 
 ### Changed
-- Made the finalizers for [`Session`](@ref), [`SshChannel`](@ref), and
-  [`SftpSession`](@ref) slightly more robust. It's still not recommended to rely
-  on them to clean up all resources but in most cases they should be able to do
-  so ([#31]).
+- Significantly refactored the internals to be thread-safe ([#33], [#40]).
+- Julia 1.11 is now the minimum supported version due to threadsafety fixes it
+  has for `@threadcall` ([#40]).
+- **Breaking**: `poll_loop()` has been removed, [`SshChannel`](@ref)'s will
+  automatically handle their own polling ([#40]).
+- **Breaking**: `channel_send_eof()` was renamed to
+  [`closewrite(::SshChannel)`](@ref) ([#40]).
+- **Breaking**: removed the finalizers for [`Session`](@ref),
+  [`SshChannel`](@ref), [`Forwarder`](@ref), [`SftpSession`](@ref), and
+  [`SftpFile`](@ref) because they could not reliably work with the new
+  thread-safe design ([#33]).
+- **Breaking**: the `Demo` and `Callback` modules were removed, all members have
+  been moved into the top-level `LibSSH` module.
+- **Breaking**: the [`DemoServer`](@ref) start/stop API was replaced with a
+  simpler construct/close API ([#40]). `wait_for_listener` was removed as part
+  of this.
 
 ## [v0.7.1] - 2024-12-06
 
@@ -38,12 +52,12 @@ Changelog](https://keepachangelog.com).
 
 ### Added
 
-- [`Demo.DemoServer`](@ref) now supports passing `allow_auth_none=true` to allow
+- [`DemoServer`](@ref) now supports passing `allow_auth_none=true` to allow
   easily setting up passwordless authentication ([#28]).
 
 ### Fixed
 
-- Previously the [`Demo.DemoServer`](@ref)'s command execution implementation
+- Previously the [`DemoServer`](@ref)'s command execution implementation
   would only send the command output after it had finished. Now the output gets
   sent as soon as it's printed by the command ([#28]).
 
@@ -80,8 +94,8 @@ Changelog](https://keepachangelog.com).
 - Implemented [`Base.readchomp(::Cmd)`](@ref) for remote commands ([#12]).
 - Add support for passing environment variables to remote commands with
   [`Base.run(::Cmd)`](@ref) ([#12]).
-- Made it possible to assign callbacks to [`Callbacks.ServerCallbacks`](@ref) and
-  [`Callbacks.ChannelCallbacks`](@ref) by property ([#14]).
+- Made it possible to assign callbacks to [`ServerCallbacks`](@ref) and
+  [`ChannelCallbacks`](@ref) by property ([#14]).
 - [`close(::SshChannel)`](@ref) and [`closewrite(::SshChannel)`](@ref) now
   support an `allow_fail` argument that will print a warning instead of throw an
   exception if modifying the `lib.ssh_channel` fails ([#16]).
@@ -91,9 +105,9 @@ Changelog](https://keepachangelog.com).
 
 - Fixed segfaults that would occur in [`SshChannel`](@ref) when its
   [`Session`](@ref) is disconnected by the remote end ([#13]).
-- Fixed some concurrency bugs in the [`Demo.DemoServer`](@ref) and
+- Fixed some concurrency bugs in the [`DemoServer`](@ref) and
   [`SessionEvent`](@ref) ([#15]).
-- Fixed a race condition in the [`Demo.DemoServer`](@ref) that could cause
+- Fixed a race condition in the [`DemoServer`](@ref) that could cause
   segfaults ([#16]).
 
 ### Changed
@@ -116,7 +130,7 @@ Changelog](https://keepachangelog.com).
 
 ### Added
 
-- A `throw` argument to [`poll_loop()`](@ref) ([#9]).
+- A `throw` argument to `poll_loop()`(@ref) ([#9]).
 - Support for some more options in [`Session`](@ref) ([#9]).
 - A new method for [`PKI.get_fingerprint_hash(::PKI.SshKey)`](@ref) to get a
   public key fingerprint straight from a [`PKI.SshKey`](@ref) ([#9]).
@@ -156,14 +170,14 @@ Changelog](https://keepachangelog.com).
 
 ### Fixed
 
-- Fixed some race conditions in [`poll_loop()`](@ref) and [`Forwarder()`](@ref)
+- Fixed some race conditions in `poll_loop()` and [`Forwarder()`](@ref)
   ([#6]).
 - [`Base.run(::Cmd, ::Session)`](@ref) now properly converts commands into
   strings before executing them remotely, previously things like quotes weren't
   escaped properly ([#6]).
 - Fixed a bug in [`Base.run(::Cmd, ::Session)`](@ref) that would clear the
   output buffer when printing ([#6]).
-- Changed [`poll_loop()`](@ref) to poll the stdout and stderr streams, which
+- Changed `poll_loop()` to poll the stdout and stderr streams, which
   fixes a bug where callbacks would sometimes not get executed even when data
   was available ([#8]).
 

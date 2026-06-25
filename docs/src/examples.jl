@@ -104,8 +104,8 @@ isreadable(file)
 #-
 iswritable(file)
 
-# After using it we have to close it explicitly because the finalizer won't do
-# it for us (see the [`Base.close(::SftpFile)`](@ref) docstring for details):
+# After using it we have to close it explicitly because there is no finalizer to
+# do it for us (see the [`Base.close(::SftpFile)`](@ref) docstring for details):
 
 close(file)
 

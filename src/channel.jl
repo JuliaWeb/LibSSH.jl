@@ -1042,6 +1042,11 @@ $(TYPEDFIELDS)
 This object manages a direct forwarding channel between `localport` and
 `remotehost:remoteport`. Fields beginning with an underscore `_` are private and
 should not be used.
+
+!!! warning
+    `Forwarder`'s *must* be closed explicitly with
+    [`Base.close(::Forwarder)`](@ref). There is no finalizer, so failing to close
+    a `Forwarder` will leak resources.
 """
 @kwdef mutable struct Forwarder
     remotehost::String
