@@ -199,7 +199,7 @@ include("sftp.jl")
     port, server = Sockets.listenany(Sockets.localhost, 2222)
     port = Int(port)
     close(server)
-    server = Demo.DemoServer(port; password="foo", auth_methods=[AuthMethod_Password])
+    server = DemoServer(port; password="foo", auth_methods=[AuthMethod_Password])
 
     session = Session(Sockets.localhost, port)
     @assert isconnected(session)

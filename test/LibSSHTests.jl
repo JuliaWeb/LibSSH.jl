@@ -13,8 +13,7 @@ import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_broken, @test_
 
 import LibSSH as ssh
 import LibSSH.PKI as pki
-import LibSSH: Demo, lib, KbdintPrompt
-import LibSSH.Demo: DemoServer
+import LibSSH: lib, KbdintPrompt, DemoServer
 
 
 curl_cmd = `$(curl()) --no-progress-meter`
@@ -290,7 +289,7 @@ end
         @test client.authenticated
 
         # And a command was executed
-        @test typeof.(client.channel_operations) == [Demo.CommandExecutor]
+        @test typeof.(client.channel_operations) == [ssh.CommandExecutor]
 
         # Make sure that it can handle errors too
         DemoServer(2222; password="bar") do

@@ -98,6 +98,7 @@ run `sshd` as a non-root user unless you disable password authentication
 want to test. Plus, having a custom server makes it simpler to set up in just
 the way we want.
 
-```@autodocs
-Modules = [LibSSH.Demo]
+```@docs
+DemoServer
+print_timeline
 ```

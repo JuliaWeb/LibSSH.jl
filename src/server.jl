@@ -1,4 +1,5 @@
-import .Callbacks: ServerCallbacks
+import .Callbacks: ServerCallbacks, ChannelCallbacks
+import Printf: @printf
 
 
 """
@@ -121,7 +122,6 @@ Base.isassigned(event::SessionEvent) = !isnothing(event.ptr)
 
 """
 $(TYPEDEF)
-$(TYPEDFIELDS)
 
 Wrapper around [`lib.ssh_bind`](@ref).
 """
@@ -508,33 +508,20 @@ function set_message_callback(f::Function, bind::Bind, userdata)
     return nothing
 end
 
-module Demo
 
-import Dates
-import Printf: @printf
-import Sockets
-import Sockets: getaddrinfo, IPv4
+## Demo server
 
-using DocStringExtensions
-
-import ...LibSSH as ssh
-import ...LibSSH.lib
-import ...LibSSH.PKI as pki
-import ..Bind
-import ..Callbacks: ServerCallbacks, ChannelCallbacks
-
-
-function on_auth_password(session, user, password, client)::ssh.AuthStatus
+function on_auth_password(session, user, password, client)::AuthStatus
     _add_log_event!(client, :auth_password, (user, password))
     client.authenticated = password == client.password
 
-    return client.authenticated ? ssh.AuthStatus_Success : ssh.AuthStatus_Denied
+    return client.authenticated ? AuthStatus_Success : AuthStatus_Denied
 end
 
-function on_auth_pubkey(session, user, pubkey, signature_state, client)::ssh.AuthStatus
+function on_auth_pubkey(session, user, pubkey, signature_state, client)::AuthStatus
     state = Int(signature_state)
     fingerprint = try
-        pki.get_fingerprint_hash(pubkey)
+        PKI.get_fingerprint_hash(pubkey)
     catch
         "<unknown>"
     end
@@ -542,31 +529,31 @@ function on_auth_pubkey(session, user, pubkey, signature_state, client)::ssh.Aut
 
     # The client is asking whether this key would be accepted
     if state == lib.SSH_PUBLICKEY_STATE_NONE
-        accepted = any(k -> pki.key_cmp(k, pubkey, pki.KeyCmp_Public), client.authorized_keys)
-        return accepted ? ssh.AuthStatus_Success : ssh.AuthStatus_Denied
+        accepted = any(k -> PKI.key_cmp(k, pubkey, PKI.KeyCmp_Public), client.authorized_keys)
+        return accepted ? AuthStatus_Success : AuthStatus_Denied
     end
 
     # Anything other than a verified signature is denied
     if state != lib.SSH_PUBLICKEY_STATE_VALID
-        return ssh.AuthStatus_Denied
+        return AuthStatus_Denied
     end
 
-    if any(k -> pki.key_cmp(k, pubkey, pki.KeyCmp_Public), client.authorized_keys)
+    if any(k -> PKI.key_cmp(k, pubkey, PKI.KeyCmp_Public), client.authorized_keys)
         client.authenticated = true
-        return ssh.AuthStatus_Success
+        return AuthStatus_Success
     end
 
-    return ssh.AuthStatus_Denied
+    return AuthStatus_Denied
 end
 
-function on_auth_none(session, user, client)::ssh.AuthStatus
+function on_auth_none(session, user, client)::AuthStatus
     _add_log_event!(client, :auth_none, true)
 
     if client.allow_auth_none
         client.authenticated = true
     end
 
-    return client.authenticated ? ssh.AuthStatus_Success : ssh.AuthStatus_Denied
+    return client.authenticated ? AuthStatus_Success : AuthStatus_Denied
 end
 
 function on_service_request(session, service, client)::Bool
@@ -574,10 +561,10 @@ function on_service_request(session, service, client)::Bool
     return true
 end
 
-function on_channel_open(session, client)::Union{ssh.SshChannel, Nothing}
+function on_channel_open(session, client)::Union{SshChannel, Nothing}
     _add_log_event!(client, :channel_open, true)
-    sshchan = ssh.SshChannel(client.session)
-    ssh.set_channel_callbacks(sshchan, client.channel_callbacks)
+    sshchan = SshChannel(client.session)
+    set_channel_callbacks(sshchan, client.channel_callbacks)
     push!(client.unclaimed_channels, sshchan)
 
     return sshchan
@@ -627,7 +614,7 @@ function on_channel_close(session, sshchan, client)::Nothing
     # libssh's callback list while it is being iterated.
     idx = findfirst(x -> x.ptr == sshchan.ptr, all_channels)
     if !isnothing(idx)
-        ssh.defer_close(all_channels[idx])
+        defer_close(all_channels[idx])
     end
 
     return nothing
@@ -647,25 +634,25 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
     end
     client = demo_server.clients[idx]
 
-    msg_type = ssh.message_type(msg)
-    msg_subtype = ssh.message_subtype(msg)
+    msg_type = message_type(msg)
+    msg_subtype = message_subtype(msg)
     _add_log_event!(client, :message_request, (msg_type, msg_subtype))
 
     # Handle direct port forwarding requests
-    if msg_type == ssh.RequestType_ChannelOpen && msg_subtype == lib.SSH_CHANNEL_DIRECT_TCPIP
+    if msg_type == RequestType_ChannelOpen && msg_subtype == lib.SSH_CHANNEL_DIRECT_TCPIP
         hostname = unsafe_string(lib.ssh_message_channel_request_open_destination(msg))
         port = lib.ssh_message_channel_request_open_destination_port(msg)
 
         # Create a channel for the port forward
         channel_ptr = lib.ssh_message_channel_request_open_reply_accept(msg)
-        sshchan = ssh.SshChannel(channel_ptr, client.session)
-        push!(client.channel_operations, Forwarder(client, sshchan, hostname, port))
+        sshchan = SshChannel(channel_ptr, client.session)
+        push!(client.channel_operations, DemoServerForwarder(client, sshchan, hostname, port))
 
         return false
     end
 
     # Handle keyboard-interactive authentication
-    if msg_type == ssh.RequestType_Auth && msg_subtype == lib.SSH_AUTH_METHOD_INTERACTIVE
+    if msg_type == RequestType_Auth && msg_subtype == lib.SSH_AUTH_METHOD_INTERACTIVE
         if client.authenticated
             _add_log_event!(client, :auth_kbdint, "already authenticated")
             lib.ssh_message_auth_reply_success(msg, Int(false))
@@ -676,7 +663,7 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
             # This means the user is requesting authentication
             user = lib.ssh_message_auth_user(msg)
             _add_log_event!(client, :auth_kbdint, user)
-            ssh.message_auth_interactive_request(msg, "Demo server login", "Enter your details.",
+            message_auth_interactive_request(msg, "Demo server login", "Enter your details.",
                                                  ["Password: ", "Token: "], [true, true])
             return false
         else
@@ -709,16 +696,16 @@ end
 
 @kwdef mutable struct Client
     id::Int
-    session::ssh.Session
+    session::Session
     verbose::Bool
     password::Union{String, Nothing}
     allow_auth_none::Bool = false
-    authorized_keys::Vector{pki.SshKey} = pki.SshKey[]
+    authorized_keys::Vector{PKI.SshKey} = PKI.SshKey[]
     authenticated::Bool = false
 
-    session_event::Union{ssh.SessionEvent, Nothing} = nothing
+    session_event::Union{SessionEvent, Nothing} = nothing
     channel_callbacks::ChannelCallbacks = ChannelCallbacks()
-    unclaimed_channels::Vector{ssh.SshChannel} = ssh.SshChannel[]
+    unclaimed_channels::Vector{SshChannel} = SshChannel[]
     channel_operations::Vector{Any} = []
 
     sftp_session::Union{lib.sftp_session, Nothing} = nothing
@@ -741,7 +728,7 @@ function Base.close(client::Client)
     # closing the SessionEvent because wait(::SessionEvent) involves waiting on
     # the session. It's not great. Ideally it would be possible to close() a
     # SessionEvent without closing its session.
-    ssh.closewait(client.session)
+    closewait(client.session)
 
     close(client.session_event)
     wait(client.task)
@@ -789,11 +776,11 @@ $(TYPEDFIELDS)
 @kwdef mutable struct DemoServer
     bind::Bind
     listener_task::Union{Task, Nothing} = nothing
-    sshchan::Union{ssh.SshChannel, Nothing} = nothing
+    sshchan::Union{SshChannel, Nothing} = nothing
     verbose::Bool = false
     password::Union{String, Nothing} = nothing
     allow_auth_none::Bool = false
-    authorized_keys::Vector{pki.SshKey} = pki.SshKey[]
+    authorized_keys::Vector{PKI.SshKey} = PKI.SshKey[]
 
     clients::Vector{Client} = Client[]
 end
@@ -813,12 +800,12 @@ Creates a [`DemoServer`](@ref).
 - `verbose=false`: This verbosity doesn't refer to the log messages from libssh but
   from the `DemoServer`. If this is `true` it print messages on events like
   authentication etc. Useful for high-level debugging. The events can always be
-  printed afterwards with [`Demo.print_timeline`](@ref).
+  printed afterwards with [`print_timeline`](@ref).
 - `password=nothing`: The password to use if password authentication is enabled.
 - `allow_auth_none`: Whether to allow authentication without any credentials
   being presented.
 - `auth_methods=[AuthMethod_None, AuthMethod_Password]`: A list of
-  authentication methods to enable. See [`ssh.AuthMethod`](@ref).
+  authentication methods to enable. See [`AuthMethod`](@ref).
 - `authorized_keys=PKI.SshKey[]`: A list of public keys that will be accepted
   when `AuthMethod_PublicKey` is enabled.
 - `log_verbosity=nothing`: Controls the logging of libssh itself. This could be
@@ -828,25 +815,25 @@ Creates a [`DemoServer`](@ref).
 function DemoServer(port::Int; verbose::Bool=false,
                     password::Union{String, Nothing}=nothing,
                     allow_auth_none=false,
-                    auth_methods=[ssh.AuthMethod_None, ssh.AuthMethod_Password],
-                    authorized_keys::Vector{pki.SshKey}=pki.SshKey[],
-                    log_verbosity=ssh.SSH_LOG_NOLOG)
-    if ssh.AuthMethod_Password in auth_methods && isnothing(password)
+                    auth_methods=[AuthMethod_None, AuthMethod_Password],
+                    authorized_keys::Vector{PKI.SshKey}=PKI.SshKey[],
+                    log_verbosity=SSH_LOG_NOLOG)
+    if AuthMethod_Password in auth_methods && isnothing(password)
         throw(ArgumentError("You must pass `password` to DemoServer since password authentication is enabled"))
     end
-    if ssh.AuthMethod_PublicKey in auth_methods && isempty(authorized_keys)
+    if AuthMethod_PublicKey in auth_methods && isempty(authorized_keys)
         throw(ArgumentError("You must pass `authorized_keys` to DemoServer since public key authentication is enabled"))
     end
 
-    key = pki.generate(pki.KeyType_ed25519)
-    bind = ssh.Bind(port; auth_methods, key, log_verbosity)
+    key = PKI.generate(PKI.KeyType_ed25519)
+    bind = Bind(port; auth_methods, key, log_verbosity)
 
     demo_server = DemoServer(; bind, verbose, password, allow_auth_none, authorized_keys)
 
-    ssh.set_message_callback(on_message, bind, demo_server)
+    set_message_callback(on_message, bind, demo_server)
 
     demo_server.listener_task = Threads.@spawn try
-        ssh.listen(session -> _handle_client(session, demo_server), bind)
+        listen(session -> _handle_client(session, demo_server), bind)
     catch ex
         @error "Error during listen()" exception=(ex, catch_backtrace())
     end
@@ -871,7 +858,7 @@ it safely cleaned up afterwards. There are two keyword arguments to be aware of:
 # Examples
 
 ```julia-repl
-julia> import LibSSH.Demo: DemoServer
+julia> import LibSSH: DemoServer
 
 julia> DemoServer(2222; password="foo") do
            run(`sshpass -p foo ssh -o NoHostAuthenticationForLocalhost=yes -p 2222 localhost echo 'Hello world!'`)
@@ -928,7 +915,7 @@ function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
     return demo_server, fetch(t)
 end
 
-function _handle_client(session::ssh.Session, ds::DemoServer)
+function _handle_client(session::Session, ds::DemoServer)
     client = Client(; id=length(ds.clients) + 1,
                     session,
                     password=ds.password,
@@ -950,27 +937,27 @@ function _handle_client(session::ssh.Session, ds::DemoServer)
                                                 on_subsystem_request=on_channel_subsystem_request)
     client.task = current_task()
 
-    ssh.set_server_callbacks(session, server_callbacks)
-    if !ssh.handle_key_exchange(session)
+    set_server_callbacks(session, server_callbacks)
+    if !handle_key_exchange(session)
         @error "Key exchange failed"
         return
     end
 
     push!(ds.clients, client)
 
-    client.session_event = ssh.SessionEvent(session)
+    client.session_event = SessionEvent(session)
     while isassigned(client.session_event)
         ret = try
-            ssh.event_dopoll(client.session_event)
+            event_dopoll(client.session_event)
         catch ex
-            if ex isa InvalidStateException || ex isa ssh.LibSSHException
+            if ex isa InvalidStateException || ex isa LibSSHException
                 break
             else
                 rethrow()
             end
         end
 
-        if ret != ssh.SSH_OK
+        if ret != SSH_OK
             break
         end
     end
@@ -987,7 +974,7 @@ times.
 """
 function Base.close(demo_server::DemoServer)
     if !isnothing(demo_server.listener_task)
-        ssh.defer_close(demo_server.bind)
+        defer_close(demo_server.bind)
         wait(demo_server.listener_task)
         demo_server.listener_task = nothing
 
@@ -1087,7 +1074,7 @@ function exec_command(executor)
 
     # Clean up
     if isopen(sshchan)
-        ssh.channel_request_send_exit_status(sshchan, proc.exitcode)
+        channel_request_send_exit_status(sshchan, proc.exitcode)
         closewrite(sshchan)
     end
 
@@ -1100,7 +1087,7 @@ end
 # thread-safe IO type based on Channels.
 mutable struct ChannelBuffer <: IO
     channel::Channel{Vector{UInt8}}
-    sshchan::ssh.SshChannel
+    sshchan::SshChannel
     is_stderr::Bool
     task::Task
 
@@ -1132,7 +1119,7 @@ end
 @kwdef mutable struct CommandExecutor
     client::Client
     command::String
-    sshchan::ssh.SshChannel
+    sshchan::SshChannel
     env::Dict{String, String}
     task::Union{Task, Nothing} = nothing
     process::Union{Base.Process, Nothing} = nothing
@@ -1141,7 +1128,7 @@ end
     _started_event::Base.Event = Base.Event()
 end
 
-function CommandExecutor(client::Client, command::String, sshchan::ssh.SshChannel, env)
+function CommandExecutor(client::Client, command::String, sshchan::SshChannel, env)
     if !sshchan.owning
         throw(ArgumentError("The passed SshChannel is non-owning, CommandExecutor requires an owning SshChannel"))
     end
@@ -1151,7 +1138,7 @@ function CommandExecutor(client::Client, command::String, sshchan::ssh.SshChanne
                                  on_data=on_exec_channel_data,
                                  on_eof=on_exec_channel_eof,
                                  on_close=on_exec_channel_close)
-    ssh.set_channel_callbacks(sshchan, callbacks)
+    set_channel_callbacks(sshchan, callbacks)
 
     executor.task = Threads.@spawn try
         exec_command(executor)
@@ -1194,21 +1181,21 @@ function on_fwd_channel_exit_status(session, sshchan, exitcode, forwarder)::Noth
     _add_log_event!(forwarder.client, :fwd_channel_exit_status, exitcode)
 end
 
-@kwdef mutable struct Forwarder
+@kwdef mutable struct DemoServerForwarder
     client::Client
-    sshchan::ssh.SshChannel
+    sshchan::SshChannel
     socket::Sockets.TCPSocket = Sockets.TCPSocket()
     task::Union{Task, Nothing} = nothing
 end
 
-function Forwarder(client::Client, sshchan::ssh.SshChannel, hostname::String, port::Integer)
-    self = Forwarder(; client, sshchan)
+function DemoServerForwarder(client::Client, sshchan::SshChannel, hostname::String, port::Integer)
+    self = DemoServerForwarder(; client, sshchan)
     channel_callbacks = ChannelCallbacks(self;
                                          on_eof=on_fwd_channel_eof,
                                          on_close=on_fwd_channel_close,
                                          on_data=on_fwd_channel_data,
                                          on_exit_status=on_fwd_channel_exit_status)
-    ssh.set_channel_callbacks(sshchan, channel_callbacks)
+    set_channel_callbacks(sshchan, channel_callbacks)
 
     # Set up the listener socket. Restrict ourselves to IPv4 for simplicity
     # since the test HTTP servers bind to the IPv4 loopback interface (and
@@ -1224,14 +1211,14 @@ function Forwarder(client::Client, sshchan::ssh.SshChannel, hostname::String, po
     return self
 end
 
-getchannels(forwarder::Forwarder) = [forwarder.sshchan]
+getchannels(forwarder::DemoServerForwarder) = [forwarder.sshchan]
 
-function Base.close(forwarder::Forwarder)
+function Base.close(forwarder::DemoServerForwarder)
     close(forwarder.socket)
     wait(forwarder.task)
 end
 
-function _forward_socket_data(forwarder::Forwarder)
+function _forward_socket_data(forwarder::DemoServerForwarder)
     sock = forwarder.socket
 
     # Loop while the connection is open
@@ -1298,7 +1285,7 @@ end
 
 mutable struct SftpOperation
     sftp_session::Union{lib.sftp_session, Nothing}
-    sshchan::ssh.SshChannel
+    sshchan::SshChannel
 end
 
 getchannels(op::SftpOperation) = [op.sshchan]
@@ -1310,10 +1297,9 @@ function Base.close(op::SftpOperation; defer_channel_close=true)
     end
 
     if defer_channel_close
-        ssh.defer_close(op.sshchan)
+        defer_close(op.sshchan)
     else
         close(op.sshchan; allow_fail=true)
     end
 end
 
-end

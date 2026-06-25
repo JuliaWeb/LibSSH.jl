@@ -783,7 +783,7 @@ An easy way of getting around these restrictions is to pass the command as a
 ```julia-repl
 julia> import LibSSH as ssh
 
-julia> ssh.Demo.DemoServer(2222; password="foo") do
+julia> ssh.DemoServer(2222; password="foo") do
            session = ssh.Session("127.0.0.1", 2222)
            @assert ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
 
@@ -858,7 +858,7 @@ Read the output from the command as a String.
 ```julia-repl
 julia> import LibSSH as ssh
 
-julia> ssh.Demo.DemoServer(2222; password="foo") do
+julia> ssh.DemoServer(2222; password="foo") do
            session = ssh.Session("127.0.0.1", 2222)
            @assert ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
 

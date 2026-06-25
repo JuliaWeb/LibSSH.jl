@@ -11,9 +11,7 @@ import LibSSH as ssh
 # Sadly there aren't many publicly available SSH servers out there so we'll
 # start our own [Demo server](@ref) locally with a Very Secure™ password:
 
-import LibSSH.Demo as demo
-
-demo_server = demo.DemoServer(2222; password="foo", auth_methods=[ssh.AuthMethod_Password])
+demo_server = ssh.DemoServer(2222; password="foo", auth_methods=[ssh.AuthMethod_Password])
 
 # This is just to have something to play with. Now we can create a
 # [`Session`](@ref) to connect to the server:

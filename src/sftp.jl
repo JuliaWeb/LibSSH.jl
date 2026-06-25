@@ -598,7 +598,7 @@ $(TYPEDSIGNATURES)
 
 Get information about the file object at `path` as a [`SftpAttributes`](@ref).
 
-Note: the [`Demo.DemoServer`](@ref) does not support setting all of these
+Note: the [`DemoServer`](@ref) does not support setting all of these
 properties.
 
 # Throws
