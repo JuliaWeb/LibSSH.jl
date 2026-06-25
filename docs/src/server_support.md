@@ -41,12 +41,11 @@ authentication, also see [`message_auth_interactive_request`](@ref).
 ```@docs
 Bind
 listen
-wait_for_listener
 handle_key_exchange
 set_auth_methods(::Session, ::Vector{AuthMethod})
 set_auth_methods(::lib.ssh_message, ::Vector{AuthMethod})
-Callbacks.ServerCallbacks
-Callbacks.ServerCallbacks()
+ServerCallbacks
+ServerCallbacks()
 set_server_callbacks
 set_message_callback
 get_error(::Bind)
@@ -99,6 +98,7 @@ run `sshd` as a non-root user unless you disable password authentication
 want to test. Plus, having a custom server makes it simpler to set up in just
 the way we want.
 
-```@autodocs
-Modules = [LibSSH.Demo]
+```@docs
+DemoServer
+print_timeline
 ```

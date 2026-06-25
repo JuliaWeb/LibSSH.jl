@@ -25,8 +25,15 @@ mutable struct SshChannel
     session::Union{Session, Nothing}
     close_lock::ReentrantLock
     local_eof::Bool
-    callbacks::Union{Callbacks.ChannelCallbacks, Nothing}
+    callbacks::Union{ChannelCallbacks, Nothing}
     _pending_close::Bool
+    # Set once the actor has observed the channel open, so it can tell a
+    # not-yet-opened channel apart from one that opened and then closed.
+    _poll_seen_open::Bool
+    # Carries the terminating ssh_channel_poll() result to wait(::SshChannel)
+    # (or nothing if the channel/session closed). Buffered so the result is
+    # kept even if nobody is waiting yet.
+    _poll_done::Channel{Union{Int, Nothing}}
 
     @doc """
     $(TYPEDSIGNATURES)
@@ -43,7 +50,8 @@ mutable struct SshChannel
         elseif own && !isnothing(session) && !session.owning
             throw(ArgumentError("Cannot create a SshChannel from a non-owning Session"))
         end
-        self = new(ptr, own, session, ReentrantLock(), false, nothing, false)
+        self = new(ptr, own, session, ReentrantLock(), false, nothing, false,
+                   false, Channel{Union{Int, Nothing}}(1))
 
         if own
             push!(session.closeables, self)
@@ -140,8 +148,8 @@ end
 # This must be used instead of close(::SshChannel) when closing a channel from
 # inside a channel callback (e.g. `on_eof`, `on_close`). Calling `close()`
 # directly from a callback will free the callback list that libssh is currently
-# iterating, causing a segfault.  The actual close will be performed by
-# poll_loop() or event_dopoll(::SessionEvent) after the C call returns.
+# iterating, causing a segfault.  The actual close will be performed by the
+# actor's channel poll or event_dopoll(::SessionEvent) after the C call returns.
 function defer_close(sshchan::SshChannel)
     sshchan._pending_close = true
 end
@@ -174,6 +182,9 @@ function Base.close(sshchan::SshChannel; allow_fail=false)
     if !sshchan.owning
         throw(ArgumentError("Calling close() on a non-owning SshChannel is not allowed to avoid accidental double-frees, see the docs for more information."))
     end
+
+    # Stop the actor polling this channel and unblock any wait(::SshChannel).
+    _finish_channel_poll(sshchan, nothing)
 
     @lock sshchan.close_lock begin
         # Even though we hold a lock in this section it's still possible for the
@@ -330,7 +341,7 @@ callbacks.
 # Throws
 - [`LibSSHException`](@ref): If setting the callbacks failed.
 """
-function set_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.ChannelCallbacks)
+function set_channel_callbacks(sshchan::SshChannel, callbacks::ChannelCallbacks)
     if !isnothing(sshchan.callbacks)
         remove_channel_callbacks(sshchan, sshchan.callbacks)
     end
@@ -340,10 +351,20 @@ function set_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.Channel
         throw(LibSSHException("Error when setting channel callbacks: $(ret)"))
     end
     sshchan.callbacks = callbacks
+
+    # The channel now wants to receive data, so have the actor poll it
+    # automatically (it may not be open yet — the actor waits for that).
+    # Server sessions are excluded: they drive I/O via event_dopoll(), not the
+    # actor, so the two would fight over the same channel.
+    if sshchan.owning && isnothing(sshchan.session.server_callbacks)
+        _register_channel_poll(sshchan)
+    end
 end
 
 # Undocumented for now because the API for setting callbacks isn't fleshed out yet
-function remove_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.ChannelCallbacks)
+function remove_channel_callbacks(sshchan::SshChannel, callbacks::ChannelCallbacks)
+    _finish_channel_poll(sshchan, nothing)
+
     ret = _session_call(sshchan.session, () -> lib.ssh_remove_channel_callbacks(sshchan, Ref(callbacks.cb_struct)))
     if ret != SSH_OK
         throw(LibSSHException("Error when removing channel callbacks: $(ret)"))
@@ -394,8 +415,6 @@ function Base.closewrite(sshchan::SshChannel; allow_fail=false)
     sshchan.local_eof = true
 end
 
-@deprecate channel_send_eof(sshchan::SshChannel) closewrite(sshchan)
-
 """
 $(TYPEDSIGNATURES)
 
@@ -413,81 +432,136 @@ function channel_request_send_exit_status(sshchan::SshChannel, status::Integer)
     end
 end
 
+# Register a channel so the session's actor task polls it directly (which
+# triggers its callbacks) after each fd poll. This replaces the old per-channel
+# poll_loop task: there is no extra task and no _session_call round-trip per
+# SSH chunk. Called automatically by set_channel_callbacks().
+function _register_channel_poll(sshchan::SshChannel)
+    session = sshchan.session
+    @lock session._wakeup push!(session._poll_regs, sshchan)
+
+    # Kick the actor out of a blocking take!(requests)/_poll_fd so it notices
+    # the new registration and starts polling.
+    _wake_actor(session)
+end
+
+# Deliver the terminating poll result to wait(::SshChannel) and unregister the
+# channel. Exactly-once: only the call that removes it from _poll_regs delivers
+# (the actor on EOF/ERROR, or close()/remove_channel_callbacks()/actor exit).
+function _finish_channel_poll(sshchan::SshChannel, value::Union{Int, Nothing})
+    session = sshchan.session
+    if isnothing(session)
+        return
+    end
+
+    @lock session._wakeup begin
+        idx = findfirst(x -> x === sshchan, session._poll_regs)
+        if !isnothing(idx)
+            popat!(session._poll_regs, idx)
+            # Only the call that removes the registration delivers, so this
+            # runs exactly once on the (empty) one-shot channel.
+            try
+                put!(sshchan._poll_done, value)
+            catch
+            end
+        end
+    end
+end
+
+# Run on the actor task after the session fd is polled: poll each registered
+# channel (triggering its callbacks) and finish any that hit EOF/ERROR. This is
+# the work the old poll_loop task did via _session_call, now done inline on the
+# task that already owns the C calls.
+function _actor_poll_channels(session::Session)
+    channels = @lock session._wakeup copy(session._poll_regs)
+    for sshchan in channels
+        # We're the actor, so call libssh directly rather than through
+        # isopen()/_session_call (which would deadlock on ourselves).
+        opened = isassigned(sshchan) && lib.ssh_channel_is_open(sshchan) != 0
+
+        if !opened
+            # A channel registered before it was opened (e.g. execute()) just
+            # waits here until it opens; one that was open and is now closed
+            # is finished.
+            if sshchan._poll_seen_open
+                _finish_channel_poll(sshchan, nothing)
+            end
+            continue
+        end
+        sshchan._poll_seen_open = true
+
+        # We don't read any data here, that's handled by the callbacks invoked
+        # by ssh_channel_poll().
+        r = lib.ssh_channel_poll(sshchan, 0)
+        if r != SSH_ERROR && r != SSH_EOF && !sshchan._pending_close
+            r = lib.ssh_channel_poll(sshchan, 1)
+        end
+
+        # Apply deferred closes requested by callbacks during the poll. We
+        # can't close here (close_lock could deadlock with an external close()
+        # waiting on the actor), so we signal the waiter to exit and let it
+        # close the channel externally.
+        if sshchan._pending_close
+            sshchan._pending_close = false
+            r = SSH_EOF
+        end
+
+        if r == SSH_ERROR || r == SSH_EOF
+            _finish_channel_poll(sshchan, Int(r))
+        end
+    end
+end
+
+# Unblock all wait(::SshChannel) callers when the actor stops.
+function _finish_poll_regs(session::Session)
+    channels = @lock session._wakeup copy(session._poll_regs)
+    for sshchan in channels
+        _finish_channel_poll(sshchan, nothing)
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 
-Poll a (owning) channel in a loop while it's alive, which will trigger any
-callbacks. This function should always be called on a channel for it to work
-properly. It will return:
-- `nothing` if the channel was closed during the loop.
-- Otherwise the last result from [`lib.ssh_channel_poll()`](@ref), which should
-  be checked to see if it's `SSH_EOF`.
+Wait until an owning channel finishes (its remote end sends EOF, an error
+occurs, or it is closed). Returns `nothing` if the channel/session was closed
+before EOF, otherwise the terminating [`lib.ssh_channel_poll()`](@ref) result.
 
 # Throws
-- [`LibSSHException`](@ref): If `SSH_ERROR` is returned and
-  `throw=true`.
+- [`LibSSHException`](@ref): If `SSH_ERROR` is returned and `throw=true`.
 
 # Arguments
-- `sshchan`: The [`SshChannel`](@ref) to poll.
-- `throw=true`: Whether to throw an exception if `SSH_ERROR` is
-  returned.
+- `sshchan`: The [`SshChannel`](@ref) to wait on.
+- `throw=true`: Whether to throw an exception if `SSH_ERROR` is returned.
 """
-function poll_loop(sshchan::SshChannel; throw=true)
+function Base.wait(sshchan::SshChannel; throw=true)
     if !sshchan.owning
-        Base.throw(ArgumentError("Polling is only possible for owning SshChannel's, the passed channel is non-owning"))
+        Base.throw(ArgumentError("Waiting is only possible for owning SshChannel's, the passed channel is non-owning"))
     end
 
-    ret = SSH_ERROR
-    while true
-        # We always check if the channel and session are open within the loop
-        # because ssh_channel_poll() will execute callbacks, which could close
-        # them before returning.
-        if !isopen(sshchan)
-            return nothing
-        end
-
-        # Note that we don't actually read any data in this loop, that's
-        # handled by the callbacks, which are called by ssh_channel_poll().
-        # We wrap the poll + deferred close check in a single _session_call
-        # to keep the C calls serialized on the actor.
-        ret = _session_call(sshchan.session, () -> begin
-            r = lib.ssh_channel_poll(sshchan, 0)
-            if r != SSH_ERROR && r != SSH_EOF && !sshchan._pending_close
-                r = lib.ssh_channel_poll(sshchan, 1)
-            end
-
-            # Execute any deferred closes requested by callbacks during
-            # ssh_channel_poll(). We must not close channels while libssh is
-            # iterating the callback list, so callbacks set a flag and we
-            # perform the actual close here. We don't call close(sshchan)
-            # directly because that takes close_lock, which could deadlock
-            # with an external close() holding the lock and waiting for the
-            # actor. Instead, signal the caller to exit so the channel can
-            # be closed externally.
-            if sshchan._pending_close
-                sshchan._pending_close = false
-                r = SSH_EOF
-            end
-
-            r
-        end)
-
-        if ret == SSH_ERROR || ret == SSH_EOF
-            break
-        end
-
-        if !isopen(sshchan.session)
-            return nothing
-        end
-
-        wait(sshchan.session)
+    # Not registered and no buffered result: the channel was never activated
+    # (no callbacks set), so there is nothing to wait for.
+    registered = !isnothing(sshchan.session) &&
+        @lock sshchan.session._wakeup !isnothing(findfirst(x -> x === sshchan, sshchan.session._poll_regs))
+    if !registered && !isready(sshchan._poll_done)
+        return nothing
     end
 
-    if ret == SSH_ERROR && throw
+    ret = try
+        take!(sshchan._poll_done)
+    catch
+        nothing
+    end
+
+    if isnothing(ret)
+        return nothing
+    end
+
+    if ret == Int(SSH_ERROR) && throw
         Base.throw(LibSSHException("SSH_ERROR returned from lib.ssh_channel_poll()"))
     end
 
-    return Int(ret)
+    return ret
 end
 
 ## execute()
@@ -637,8 +711,9 @@ function _exec_command(process::SshProcess)
         throw(LibSSHException("Error from lib.ssh_channel_request_exec, could not execute command: $(err)"))
     end
 
-    # Wait for data to be read
-    ret = poll_loop(sshchan)
+    # The actor polls the channel automatically (callbacks were set in
+    # execute()); wait for it to finish reading.
+    ret = wait(sshchan)
 
     # Close the channel
     if iswritable(sshchan)
@@ -694,7 +769,7 @@ An easy way of getting around these restrictions is to pass the command as a
 ```julia-repl
 julia> import LibSSH as ssh
 
-julia> ssh.Demo.DemoServer(2222; password="foo") do
+julia> ssh.DemoServer(2222; password="foo") do
            session = ssh.Session("127.0.0.1", 2222)
            @assert ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
 
@@ -728,11 +803,11 @@ function Base.run(cmd::Union{Cmd, String}, session::Session;
         process.err = process.out
     end
 
-    callbacks = Callbacks.ChannelCallbacks(process;
-                                           on_eof=_on_channel_eof,
-                                           on_close=_on_channel_close,
-                                           on_data=_on_channel_data,
-                                           on_exit_status=_on_channel_exit_status)
+    callbacks = ChannelCallbacks(process;
+                                 on_eof=_on_channel_eof,
+                                 on_close=_on_channel_close,
+                                 on_data=_on_channel_data,
+                                 on_exit_status=_on_channel_exit_status)
     process._sshchan = SshChannel(session)
     set_channel_callbacks(process._sshchan, callbacks)
 
@@ -769,7 +844,7 @@ Read the output from the command as a String.
 ```julia-repl
 julia> import LibSSH as ssh
 
-julia> ssh.Demo.DemoServer(2222; password="foo") do
+julia> ssh.DemoServer(2222; password="foo") do
            session = ssh.Session("127.0.0.1", 2222)
            @assert ssh.userauth_password(session, "foo") == ssh.AuthStatus_Success
 
@@ -824,12 +899,10 @@ function _on_client_channel_close(session, sshchan, client)
     _logcb(client, "close")
 end
 
-# Handler for a single client on a forwarded port. It will take care of polling
-# the channel and forwarding data to the server and client.
+# Handler for a single client on a forwarded port. The channel→socket
+# direction is driven automatically by the session actor (callbacks were set
+# in the _ForwardingClient constructor); this only forwards socket→channel.
 function _handle_forwarding_client(client)
-    # Start polling the client channel
-    poller = errormonitor(Threads.@spawn poll_loop(client.sshchan))
-
     # Read data from the socket while it's open
     sock = client.sock
     while isopen(sock)
@@ -862,14 +935,14 @@ function _handle_forwarding_client(client)
         end
     end
 
-    # Ensure the channel is closed so that poll_loop exits. Some read loop
-    # exit paths (e.g. IOError on the socket) don't call defer_close().
+    # Ensure the channel is closed. Some read loop exit paths (e.g. IOError on
+    # the socket) don't call defer_close().
     if isopen(client.sshchan)
         close(client.sshchan; allow_fail=true)
     end
 
-    # This will throw if polling failed with an SSH_ERROR
-    fetch(poller)
+    # This will throw if the channel's auto-poll failed with an SSH_ERROR.
+    wait(client.sshchan)
 end
 
 # Struct to represent a client connected to a forwarded port
@@ -879,7 +952,7 @@ mutable struct _ForwardingClient
 
     sock::TCPSocket
     sshchan::SshChannel
-    callbacks::Callbacks.ChannelCallbacks
+    callbacks::ChannelCallbacks
     client_task::Union{Task, Nothing}
 
     function _ForwardingClient(forwarder, socket::TCPSocket)
@@ -900,10 +973,10 @@ mutable struct _ForwardingClient
             throw(LibSSHException("Could not open a forwarding channel: $(get_error(forwarder._session))"))
         end
 
-        callbacks = Callbacks.ChannelCallbacks(nothing;
-                                               on_data=_on_client_channel_data,
-                                               on_eof=_on_client_channel_eof,
-                                               on_close=_on_client_channel_close)
+        callbacks = ChannelCallbacks(nothing;
+                                     on_data=_on_client_channel_data,
+                                     on_eof=_on_client_channel_eof,
+                                     on_close=_on_client_channel_close)
         self = new(forwarder._next_client_id, forwarder.verbose, socket,
                    sshchan, callbacks, nothing)
 
@@ -969,6 +1042,11 @@ $(TYPEDFIELDS)
 This object manages a direct forwarding channel between `localport` and
 `remotehost:remoteport`. Fields beginning with an underscore `_` are private and
 should not be used.
+
+!!! warning
+    `Forwarder`'s *must* be closed explicitly with
+    [`Base.close(::Forwarder)`](@ref). There is no finalizer, so failing to close
+    a `Forwarder` will leak resources.
 """
 @kwdef mutable struct Forwarder
     remotehost::String
