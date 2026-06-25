@@ -57,7 +57,7 @@ mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
     owning::Bool
     closeables::Vector{Any}
-    server_callbacks::Union{Callbacks.ServerCallbacks, Nothing}
+    server_callbacks::Union{ServerCallbacks, Nothing}
 
     log_verbosity::Int
     ssh_dir::Union{String, Nothing}

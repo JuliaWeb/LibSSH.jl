@@ -25,7 +25,7 @@ mutable struct SshChannel
     session::Union{Session, Nothing}
     close_lock::ReentrantLock
     local_eof::Bool
-    callbacks::Union{Callbacks.ChannelCallbacks, Nothing}
+    callbacks::Union{ChannelCallbacks, Nothing}
     _pending_close::Bool
     # Set once the actor has observed the channel open, so it can tell a
     # not-yet-opened channel apart from one that opened and then closed.
@@ -341,7 +341,7 @@ callbacks.
 # Throws
 - [`LibSSHException`](@ref): If setting the callbacks failed.
 """
-function set_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.ChannelCallbacks)
+function set_channel_callbacks(sshchan::SshChannel, callbacks::ChannelCallbacks)
     if !isnothing(sshchan.callbacks)
         remove_channel_callbacks(sshchan, sshchan.callbacks)
     end
@@ -362,7 +362,7 @@ function set_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.Channel
 end
 
 # Undocumented for now because the API for setting callbacks isn't fleshed out yet
-function remove_channel_callbacks(sshchan::SshChannel, callbacks::Callbacks.ChannelCallbacks)
+function remove_channel_callbacks(sshchan::SshChannel, callbacks::ChannelCallbacks)
     _finish_channel_poll(sshchan, nothing)
 
     ret = _session_call(sshchan.session, () -> lib.ssh_remove_channel_callbacks(sshchan, Ref(callbacks.cb_struct)))
@@ -817,11 +817,11 @@ function Base.run(cmd::Union{Cmd, String}, session::Session;
         process.err = process.out
     end
 
-    callbacks = Callbacks.ChannelCallbacks(process;
-                                           on_eof=_on_channel_eof,
-                                           on_close=_on_channel_close,
-                                           on_data=_on_channel_data,
-                                           on_exit_status=_on_channel_exit_status)
+    callbacks = ChannelCallbacks(process;
+                                 on_eof=_on_channel_eof,
+                                 on_close=_on_channel_close,
+                                 on_data=_on_channel_data,
+                                 on_exit_status=_on_channel_exit_status)
     process._sshchan = SshChannel(session)
     set_channel_callbacks(process._sshchan, callbacks)
 
@@ -966,7 +966,7 @@ mutable struct _ForwardingClient
 
     sock::TCPSocket
     sshchan::SshChannel
-    callbacks::Callbacks.ChannelCallbacks
+    callbacks::ChannelCallbacks
     client_task::Union{Task, Nothing}
 
     function _ForwardingClient(forwarder, socket::TCPSocket)
@@ -987,10 +987,10 @@ mutable struct _ForwardingClient
             throw(LibSSHException("Could not open a forwarding channel: $(get_error(forwarder._session))"))
         end
 
-        callbacks = Callbacks.ChannelCallbacks(nothing;
-                                               on_data=_on_client_channel_data,
-                                               on_eof=_on_client_channel_eof,
-                                               on_close=_on_client_channel_close)
+        callbacks = ChannelCallbacks(nothing;
+                                     on_data=_on_client_channel_data,
+                                     on_eof=_on_client_channel_eof,
+                                     on_close=_on_client_channel_close)
         self = new(forwarder._next_client_id, forwarder.verbose, socket,
                    sshchan, callbacks, nothing)
 

@@ -1,11 +1,3 @@
-module Callbacks
-
-using DocStringExtensions
-
-import ..lib
-import ..LibSSH as ssh
-
-
 function _c_to_jl(cvalue)
     if cvalue isa Cstring
         unsafe_string(cvalue)
@@ -16,11 +8,11 @@ function _c_to_jl(cvalue)
     elseif cvalue isa Cchar
         Char(cvalue)
     elseif cvalue isa lib.ssh_session
-        ssh.Session(cvalue; own=false)
+        Session(cvalue; own=false)
     elseif cvalue isa lib.ssh_channel
-        ssh.SshChannel(cvalue; own=false)
+        SshChannel(cvalue; own=false)
     elseif cvalue isa lib.ssh_key
-        ssh.PKI.SshKey(cvalue; own=false)
+        PKI.SshKey(cvalue; own=false)
     else
         cvalue
     end
@@ -70,7 +62,7 @@ function _callback_wrapper(key::Symbol, args...)
     # Unset the pointers in any non-owning wrappers to ensure that they aren't
     # used outside of the callback.
     for arg in converted_args
-        if arg isa ssh.Session || arg isa ssh.SshChannel || arg isa ssh.PKI.SshKey
+        if arg isa Session || arg isa SshChannel || arg isa PKI.SshKey
             arg.ptr = nothing
         end
     end
@@ -150,10 +142,10 @@ mutable struct ServerCallbacks
     - `gssapi_verify_mic_function`
 
     And `lib.ssh_key` arguments will be converted to a non-owning
-    [`ssh.PKI.SshKey`](@ref).
+    [`PKI.SshKey`](@ref).
 
     !!! warning
-        Do not use [`ssh.Session`](@ref) or [`ssh.PKI.SshKey`](@ref) arguments
+        Do not use [`Session`](@ref) or [`PKI.SshKey`](@ref) arguments
         outside the callback functions. They are temporary non-owning wrappers,
         and they will be unusable after the callback has been executed.
 
@@ -212,19 +204,19 @@ function Base.setproperty!(self::ServerCallbacks, name::Symbol, value)
 
     if name === :on_auth_password
         ptr.auth_password_function = @_gencb(:auth_password, value,
-                                             ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
+                                             AuthStatus, AuthStatus_Error, Cint,
                                              Cint, (lib.ssh_session, Cstring, Cstring, Ptr{Cvoid}))
     elseif name === :on_auth_none
         ptr.auth_none_function = @_gencb(:auth_none, value,
-                                         ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
+                                         AuthStatus, AuthStatus_Error, Cint,
                                          Cint, (lib.ssh_session, Cstring, Ptr{Cvoid}))
     elseif name === :on_auth_gssapi_mic
         ptr.auth_gssapi_mic_function = @_gencb(:auth_gssapi, value,
-                                               ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
+                                               AuthStatus, AuthStatus_Error, Cint,
                                                Cint, (lib.ssh_session, Cstring, Cstring, Ptr{Cvoid}))
     elseif name === :on_auth_pubkey
         ptr.auth_pubkey_function = @_gencb(:auth_pubkey, value,
-                                           ssh.AuthStatus, ssh.AuthStatus_Error, Cint,
+                                           AuthStatus, AuthStatus_Error, Cint,
                                            Cint, (lib.ssh_session, Cstring, lib.ssh_key, Cchar, Ptr{Cvoid}))
     elseif name === :on_service_request
         ptr.service_request_function = @_gencb(:service_request, value,
@@ -232,7 +224,7 @@ function Base.setproperty!(self::ServerCallbacks, name::Symbol, value)
                                                Cint, (lib.ssh_session, Cstring, Ptr{Cvoid}))
     elseif name === :on_channel_open_request_session
         ptr.channel_open_request_session_function = @_gencb(:channel_open, value,
-                                                            Union{ssh.SshChannel, Nothing}, nothing, ret -> isnothing(ret) ? lib.ssh_channel() : ret.ptr,
+                                                            Union{SshChannel, Nothing}, nothing, ret -> isnothing(ret) ? lib.ssh_channel() : ret.ptr,
                                                             lib.ssh_channel, (lib.ssh_session, Ptr{Cvoid}))
     else
         setfield!(self, name, value)
@@ -274,8 +266,8 @@ mutable struct ChannelCallbacks
     The callback functions should all match the signature `f(::Session,
     ::SshChannel, args..., userdata)`. Note that some argument types will
     automatically be converted from the C types:
-    - `lib.ssh_session` -> a non-owning [`ssh.Session`](@ref)
-    - `lib.ssh_channel` -> a non-owning [`ssh.SshChannel`](@ref)
+    - `lib.ssh_session` -> a non-owning [`Session`](@ref)
+    - `lib.ssh_channel` -> a non-owning [`SshChannel`](@ref)
     - `Cstring` -> `String`
     - `Cint`/`Cuint`/`Cchar` -> `Int`/`UInt`/`Char`
 
@@ -284,7 +276,7 @@ mutable struct ChannelCallbacks
     from their `Cint` types to `Bool`.
 
     !!! warning
-        Do not use [`ssh.Session`](@ref) or [`ssh.SshChannel`](@ref) arguments
+        Do not use [`Session`](@ref) or [`SshChannel`](@ref) arguments
         outside the callback functions. They are temporary non-owning wrappers,
         and they will be unusable after the callback has been executed.
 
@@ -454,6 +446,4 @@ function Base.setproperty!(self::ChannelCallbacks, name::Symbol, value)
     else
         setfield!(self, name, value)
     end
-end
-
 end

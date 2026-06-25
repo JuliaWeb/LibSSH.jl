@@ -44,8 +44,8 @@ listen
 handle_key_exchange
 set_auth_methods(::Session, ::Vector{AuthMethod})
 set_auth_methods(::lib.ssh_message, ::Vector{AuthMethod})
-Callbacks.ServerCallbacks
-Callbacks.ServerCallbacks()
+ServerCallbacks
+ServerCallbacks()
 set_server_callbacks
 set_message_callback
 get_error(::Bind)
