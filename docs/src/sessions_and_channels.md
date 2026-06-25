@@ -85,7 +85,7 @@ ChannelCallbacks
 ChannelCallbacks()
 set_channel_callbacks
 channel_request_send_exit_status
-poll_loop
+Base.wait(::SshChannel)
 
 Base.isassigned(::SshChannel)
 Base.isopen(::SshChannel)

@@ -75,7 +75,7 @@ mutable struct Session
     _requests::Channel{Union{_SessionRequest, Nothing}}
     # Condition for callers to wait() on (SSH_AGAIN waiters)
     _wakeup::CloseableCondition
-    # Channels registered for the actor to poll directly (see poll_loop), held
+    # Channels registered for the actor to poll directly (see wait(::SshChannel)), held
     # as Any because SshChannel is defined later. Guarded by _wakeup's lock.
     _poll_regs::Vector{Any}
     # Lazily-created fd-readiness poller (see _FdPoller). Only the actor task
@@ -766,7 +766,7 @@ function _actor_loop(session::Session)
             end
 
             # Check if anyone is waiting for I/O: either an SSH_AGAIN waiter on
-            # _wakeup, or a channel registered for direct polling (poll_loop).
+            # _wakeup, or a channel registered for direct polling (wait(::SshChannel)).
             has_waiters, has_regs = @lock session._wakeup begin
                 (!isempty(session._wakeup.cond.waitq), !isempty(session._poll_regs))
             end
@@ -826,7 +826,7 @@ function _actor_loop(session::Session)
     # disconnect(), e.g. closewait() or a remote-initiated disconnect).
     _teardown_fd_poller(session)
 
-    # Unblock any poll_loop callers waiting on a registered channel.
+    # Unblock any wait(::SshChannel) callers waiting on a registered channel.
     _finish_poll_regs(session)
 
     # Drain any remaining requests and send error responses so callers

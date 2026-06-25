@@ -415,8 +415,6 @@ function Base.closewrite(sshchan::SshChannel; allow_fail=false)
     sshchan.local_eof = true
 end
 
-@deprecate channel_send_eof(sshchan::SshChannel) closewrite(sshchan)
-
 """
 $(TYPEDSIGNATURES)
 
@@ -526,11 +524,8 @@ end
 $(TYPEDSIGNATURES)
 
 Wait until an owning channel finishes (its remote end sends EOF, an error
-occurs, or it is closed). Channels are polled automatically by the session's
-actor task once their callbacks are set, so this only blocks for the result —
-it does not itself drive the channel. Returns:
-- `nothing` if the channel/session was closed before EOF.
-- Otherwise the terminating [`lib.ssh_channel_poll()`](@ref) result.
+occurs, or it is closed). Returns `nothing` if the channel/session was closed
+before EOF, otherwise the terminating [`lib.ssh_channel_poll()`](@ref) result.
 
 # Throws
 - [`LibSSHException`](@ref): If `SSH_ERROR` is returned and `throw=true`.
@@ -568,15 +563,6 @@ function Base.wait(sshchan::SshChannel; throw=true)
 
     return ret
 end
-
-"""
-$(TYPEDSIGNATURES)
-
-Deprecated alias for [`wait(::SshChannel)`](@ref). Channels are now polled
-automatically once their callbacks are set, so an explicit poll loop is no
-longer needed; this just waits for the channel to finish.
-"""
-poll_loop(sshchan::SshChannel; throw=true) = wait(sshchan; throw)
 
 ## execute()
 
