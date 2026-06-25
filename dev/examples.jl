@@ -11,10 +11,7 @@ import LibSSH as ssh
 # Sadly there aren't many publicly available SSH servers out there so we'll
 # start our own [Demo server](@ref) locally with a Very Secure™ password:
 
-import LibSSH.Demo as demo
-
-demo_server = demo.DemoServer(2222; password="foo", auth_methods=[ssh.AuthMethod_Password])
-demo.start(demo_server)
+demo_server = ssh.DemoServer(2222; password="foo", auth_methods=[ssh.AuthMethod_Password])
 
 # This is just to have something to play with. Now we can create a
 # [`Session`](@ref) to connect to the server:
@@ -107,8 +104,8 @@ isreadable(file)
 #-
 iswritable(file)
 
-# After using it we have to close it explicitly because the finalizer won't do
-# it for us (see the [`Base.close(::SftpFile)`](@ref) docstring for details):
+# After using it we have to close it explicitly because there is no finalizer to
+# do it for us (see the [`Base.close(::SftpFile)`](@ref) docstring for details):
 
 close(file)
 
@@ -120,7 +117,7 @@ close(session)
 
 # And stop the server:
 
-demo.stop(demo_server)
+close(demo_server)
 
 # Note that sometimes the `DemoServer` will display a warning that closing an
 # `SshChannel` failed because of `Socket error: disconnected`. That can be
