@@ -148,11 +148,13 @@ end
 
         @test ssh.get_error(server) == ""
 
+        # Binding fails at construction if the port is already in use (`server`
+        # is still listening on 2222 here). Using an imported `key` also exercises
+        # the error path's guard against double-freeing the key.
+        @test_throws ssh.LibSSHException ssh.Bind(2222; key=pki.generate(pki.KeyType_ed25519))
+
         # Basic listener test
         t = errormonitor(Threads.@spawn ssh.listen(Returns(nothing), server))
-        ssh.wait_for_listener(server)
-
-        @test istaskstarted(t)
         ssh.defer_close(server)
         wait(t)
         close(server)

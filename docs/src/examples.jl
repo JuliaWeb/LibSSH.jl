@@ -14,7 +14,6 @@ import LibSSH as ssh
 import LibSSH.Demo as demo
 
 demo_server = demo.DemoServer(2222; password="foo", auth_methods=[ssh.AuthMethod_Password])
-demo.start(demo_server)
 
 # This is just to have something to play with. Now we can create a
 # [`Session`](@ref) to connect to the server:
@@ -120,7 +119,7 @@ close(session)
 
 # And stop the server:
 
-demo.stop(demo_server)
+close(demo_server)
 
 # Note that sometimes the `DemoServer` will display a warning that closing an
 # `SshChannel` failed because of `Socket error: disconnected`. That can be

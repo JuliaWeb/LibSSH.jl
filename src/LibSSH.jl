@@ -200,14 +200,13 @@ include("sftp.jl")
     port = Int(port)
     close(server)
     server = Demo.DemoServer(port; password="foo", auth_methods=[AuthMethod_Password])
-    Demo.start(server)
 
     session = Session(Sockets.localhost, port)
     @assert isconnected(session)
     @assert userauth_password(session, "foo") == AuthStatus_Success
     close(session)
 
-    Demo.stop(server)
+    close(server)
 end
 
 end

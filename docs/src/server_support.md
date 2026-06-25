@@ -41,7 +41,6 @@ authentication, also see [`message_auth_interactive_request`](@ref).
 ```@docs
 Bind
 listen
-wait_for_listener
 handle_key_exchange
 set_auth_methods(::Session, ::Vector{AuthMethod})
 set_auth_methods(::lib.ssh_message, ::Vector{AuthMethod})

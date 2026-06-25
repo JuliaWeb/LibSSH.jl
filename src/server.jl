@@ -135,8 +135,6 @@ mutable struct Bind
     log_verbosity::Int
 
     # Internal things
-    _listener_event::Base.Event
-    _listener_started::Bool
     _lock::ReentrantLock
     @atomic _pending_close::Bool
 
@@ -166,7 +164,7 @@ mutable struct Bind
         lib.ssh_bind_set_blocking(bind_ptr, 0)
 
         bind = new(bind_ptr, addr, port, hostkey, key, auth_methods, log_verbosity,
-                   Base.Event(), false, ReentrantLock(), false,
+                   ReentrantLock(), false,
                    nothing, nothing)
         bind.addr = addr
         bind.port = port
@@ -181,6 +179,19 @@ mutable struct Bind
 
         if !isnothing(message_callback)
             set_message_callback(message_callback, bind, message_callback_userdata)
+        end
+
+        ret = lib.ssh_bind_listen(bind)
+        if ret != SSH_OK
+            msg = get_error(bind)
+            lib.ssh_bind_free(bind)
+            bind.ptr = nothing
+            # ssh_bind_free() also frees an imported key, so null it out to stop
+            # the SshKey finalizer double-freeing it (see the finalizer below).
+            if !isnothing(bind.key)
+                bind.key.ptr = nothing
+            end
+            throw(LibSSHException("Error on LibSSH.lib.ssh_bind_listen(): $(msg)"))
         end
 
         finalizer(bind) do bind
@@ -362,25 +373,12 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
         throw(ArgumentError("poll_timeout=$(poll_timeout), it must be greater than 0"))
     end
 
-    ret = lib.ssh_bind_listen(bind)
-    if ret != SSH_OK
-        # If binding fails, we wake up any waiting tasks and throw an exception
-        notify(bind._listener_event)
-        throw(LibSSHException("Error on LibSSH.lib.ssh_bind_listen(): $(get_error(bind))"))
-    end
-
     message_callback_cfunc = @cfunction(_message_callback_wrapper,
                                         Cint,
                                         (lib.ssh_session, lib.ssh_message, Ptr{Cvoid}))
 
     fd = RawFD(lib.ssh_bind_get_fd(bind))
     while isopen(bind)
-        # Notify listeners that we've started
-        if !bind._listener_started
-            bind._listener_started = true
-            notify(bind._listener_event)
-        end
-
         poll_result = _safe_poll_fd(fd, poll_timeout; readable=true)
         if isnothing(poll_result)
             # This means the session's file descriptor has been closed (see the
@@ -430,15 +428,6 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
         end
         errormonitor(t)
     end
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Waits for the main loop of [`listen`](@ref) to begin running on the bind.
-"""
-function wait_for_listener(bind::Bind)
-    wait(bind._listener_event)
 end
 
 """
@@ -856,6 +845,12 @@ function DemoServer(port::Int; verbose::Bool=false,
 
     ssh.set_message_callback(on_message, bind, demo_server)
 
+    demo_server.listener_task = Threads.@spawn try
+        ssh.listen(session -> _handle_client(session, demo_server), bind)
+    catch ex
+        @error "Error during listen()" exception=(ex, catch_backtrace())
+    end
+
     return demo_server
 end
 
@@ -886,7 +881,6 @@ Hello world!
 """
 function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
     demo_server = DemoServer(args...; kwargs...)
-    start(demo_server)
 
     timer = Timer(timeout)
     parent_testsets = get(task_local_storage(), :__BASETESTNEXT__, [])
@@ -920,7 +914,7 @@ function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
     end
 
     # After attempting to kill the function we stop the server
-    stop(demo_server)
+    close(demo_server)
 
     # If there was a timeout we throw an exception, otherwise we wait() on
     # the task, which will cause any exeption thrown by f() to bubble up.
@@ -987,25 +981,11 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Start a [`DemoServer`](@ref), which means bind to a port and start the
-[`ssh.listen`](@ref) loop.
+Stop and clean up a [`DemoServer`](@ref). This closes the listener, any
+connected clients, and the underlying [`Bind`](@ref). It's safe to call multiple
+times.
 """
-function start(demo_server::DemoServer)
-    demo_server.listener_task = Threads.@spawn try
-        ssh.listen(session -> _handle_client(session, demo_server), demo_server.bind)
-    catch ex
-        @error "Error during listen()" exception=(ex, catch_backtrace())
-    end
-    errormonitor(demo_server.listener_task)
-    ssh.wait_for_listener(demo_server.bind)
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Stop a [`DemoServer`](@ref).
-"""
-function stop(demo_server::DemoServer)
+function Base.close(demo_server::DemoServer)
     if !isnothing(demo_server.listener_task)
         ssh.defer_close(demo_server.bind)
         wait(demo_server.listener_task)
