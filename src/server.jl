@@ -894,6 +894,15 @@ function DemoServer(f::Function, args...; timeout=10, kill_timeout=3, kwargs...)
     # If the function is still running, we attempt to kill it explicitly
     kill_failed = nothing
     if still_running
+        # TEMP diagnostic: the function hung. Dump every task's backtrace so we
+        # can see what's actually blocked (e.g. a wedged forwarder write vs. a
+        # deadlocked actor). Do this before interrupting so the stacks are
+        # intact. Remove once the WebSocket teardown flakiness is resolved.
+        @warn "DemoServer function timed out, dumping all task backtraces:"
+        flush(stderr); flush(stdout)
+        ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0)
+        flush(stderr); flush(stdout)
+
         Threads.@spawn Base.throwto(t, InterruptException())
         result = timedwait(() -> istaskdone(t), kill_timeout)
         kill_failed = result == :timed_out
