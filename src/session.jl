@@ -801,6 +801,16 @@ function _actor_loop(session::Session)
                 # :readable / :timeout / :woken — drive libssh and wake
                 # SSH_AGAIN waiters. Spurious wakes are harmless.
                 _actor_poll_channels(session)
+
+                # Push out any buffered session output. We don't watch the fd
+                # for writability (see _FdPoller), so a write that couldn't
+                # fully flush to the socket when it was issued would otherwise
+                # sit in libssh's out_buffer until something else happened to
+                # flush it. Forwarded data feeding a peer that blocks waiting
+                # for it (e.g. an HTTP/WebSocket request through a Forwarder)
+                # can deadlock on that, so attempt a non-blocking flush every
+                # time we poll. This is a no-op when the buffer is empty.
+                lib.ssh_blocking_flush(session, 0)
                 # Only wake the waiters when I/O could have made progress
                 # (:readable) or the retry tick elapsed (:timeout).
                 if result !== :woken
