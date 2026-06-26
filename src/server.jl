@@ -1181,6 +1181,14 @@ end
 
 function on_fwd_channel_close(session, sshchan, forwarder)::Nothing
     _add_log_event!(forwarder.client, :fwd_channel_close, true)
+
+    # The client closed the channel, so tear down the target socket. This is
+    # important: _forward_socket_data() may be parked in readavailable() waiting
+    # for the target to send data (e.g. an HTTP/WebSocket server sitting in its
+    # read loop), and it only checks for a closed channel between socket reads.
+    # Closing the socket here unblocks that read so the forwarder can shut down
+    # promptly instead of hanging until something else closes the connection.
+    close(forwarder.socket)
 end
 
 function on_fwd_channel_exit_status(session, sshchan, exitcode, forwarder)::Nothing
