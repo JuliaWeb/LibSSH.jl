@@ -1078,6 +1078,10 @@ Create a `Forwarder` object that will forward its data to a single
 available to other processes is not desirable. The socket will be stored in the
 `Forwarder.out` property, and it will be closed when the `Forwarder` is closed.
 
+This kind of `Forwarder` can be passed to [`HTTP.WebSockets.open`](@extref) to
+open a websocket directly on the socket: `ws = WebSockets.open(forwarder)`. The
+`host` argument will default to `Forwarder.remotehost`.
+
 All arguments mean the same as in [`Forwarder(::Session, ::Int, ::String,
 ::Int)`](@ref).
 """

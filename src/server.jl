@@ -1166,8 +1166,15 @@ end
 function on_fwd_channel_data(session, sshchan, data, is_stderr, forwarder)::Int
     _add_log_event!(forwarder.client, :fwd_channel_data, length(data))
 
-    # When we receive data from the channel, write it to the forwarding socket
-    write(forwarder.socket, data)
+    # When we receive data from the channel, hand it off to the forwarding task
+    # to be written to the socket. We can't write directly to the socket here
+    # because this callback runs on the session's actor task, and a blocking
+    # socket operation (e.g. a write before the socket has finished
+    # connecting) would stall the entire session and could cause a deadlock.
+    if isopen(forwarder.chan_to_sock)
+        # Copy the libssh-owned memory
+        put!(forwarder.chan_to_sock, copy(data))
+    end
 
     return length(data)
 end
@@ -1183,12 +1190,15 @@ end
 @kwdef mutable struct DemoServerForwarder
     client::Client
     sshchan::SshChannel
+    hostname::String
+    port::Int
+    chan_to_sock::Channel{Vector{UInt8}} = Channel{Vector{UInt8}}(1000)
     socket::Sockets.TCPSocket = Sockets.TCPSocket()
     task::Union{Task, Nothing} = nothing
 end
 
 function DemoServerForwarder(client::Client, sshchan::SshChannel, hostname::String, port::Integer)
-    self = DemoServerForwarder(; client, sshchan)
+    self = DemoServerForwarder(; client, sshchan, hostname=String(hostname), port=Int(port))
     channel_callbacks = ChannelCallbacks(self;
                                          on_eof=on_fwd_channel_eof,
                                          on_close=on_fwd_channel_close,
@@ -1196,16 +1206,14 @@ function DemoServerForwarder(client::Client, sshchan::SshChannel, hostname::Stri
                                          on_exit_status=on_fwd_channel_exit_status)
     set_channel_callbacks(sshchan, channel_callbacks)
 
-    # Set up the listener socket. Restrict ourselves to IPv4 for simplicity
-    # since the test HTTP servers bind to the IPv4 loopback interface (and
-    # you're not using this in production, right?).
-    self.socket = Sockets.connect(getaddrinfo(hostname, IPv4), port)
+    # Do all the blocking socket work on a separate task. We can't connect() (or
+    # otherwise block) on the actor task that invoked this constructor via the
+    # message callback because that would cause deadlocks.
     self.task = Threads.@spawn try
-        _forward_socket_data(self)
+        _run_forwarder(self)
     catch ex
-        @error "Error in port fowarding socket handler!" exception=(ex, catch_backtrace())
+        @error "Error in port forwarding socket handler!" exception=(ex, catch_backtrace())
     end
-    errormonitor(self.task)
 
     return self
 end
@@ -1213,8 +1221,42 @@ end
 getchannels(forwarder::DemoServerForwarder) = [forwarder.sshchan]
 
 function Base.close(forwarder::DemoServerForwarder)
+    close(forwarder.chan_to_sock)
     close(forwarder.socket)
     wait(forwarder.task)
+end
+
+function _run_forwarder(forwarder::DemoServerForwarder)
+    # Connect to the target. Restrict ourselves to IPv4 for simplicity since the
+    # test HTTP servers bind to the IPv4 loopback interface (and you're not using
+    # this in production, right?). This runs off the actor task (see the
+    # constructor) so it's safe to block here.
+    forwarder.socket = Sockets.connect(getaddrinfo(forwarder.hostname, IPv4), forwarder.port)
+    sock = forwarder.socket
+
+    # Drain channel -> socket data queued by on_fwd_channel_data()
+    writer = Threads.@spawn try
+        for data in forwarder.chan_to_sock
+            if !isopen(sock)
+                break
+            end
+
+            write(sock, data)
+        end
+    catch ex
+        if !(ex isa Base.IOError)
+            rethrow()
+        end
+    end
+    errormonitor(writer)
+
+    # Handle the socket -> channel direction. This returns once the socket is
+    # closed (by either end).
+    _forward_socket_data(forwarder)
+
+    # Stop the writer task and wait for it to finish
+    close(forwarder.chan_to_sock)
+    wait(writer)
 end
 
 function _forward_socket_data(forwarder::DemoServerForwarder)

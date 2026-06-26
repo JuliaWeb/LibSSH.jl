@@ -1,8 +1,7 @@
-import Revise
 import Literate
 import Changelog
-import Documenter
-import Documenter: Remotes, makedocs, deploydocs
+using Documenter: Documenter, Remotes, makedocs, deploydocs
+using DocumenterInterLinks: InterLinks
 
 import LibSSH
 
@@ -56,7 +55,9 @@ end
 
 # Always trigger a revise to pick up the latest docstrings. This is useful when
 # working with servedocs().
-Revise.revise()
+if hasproperty(Main, :Revise)
+    Revise.revise()
+end
 
 # Build the examples
 Literate.markdown(joinpath(@__DIR__, "src/examples.jl"),
@@ -71,6 +72,8 @@ Changelog.generate(
     joinpath(@__DIR__, "src/generated_changelog.md"),
     repo="JuliaWeb/LibSSH.jl"
 )
+
+links = InterLinks("HTTP" => "https://juliaweb.github.io/HTTP.jl/stable/")
 
 # Build and deploy the docs
 makedocs(;
@@ -92,6 +95,7 @@ makedocs(;
              "contributing.md"
          ],
          modules = [LibSSH],
-         warnonly = :missing_docs
+         warnonly = :missing_docs,
+         plugins=[links]
          )
 deploydocs(; repo="github.com/JuliaWeb/LibSSH.jl.git")

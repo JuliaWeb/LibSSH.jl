@@ -5,6 +5,7 @@ __revise_mode__ = :eval
 import Sockets: listen, accept, IPv4, localhost
 
 import Aqua
+import HTTP
 import Literate
 import CURL_jll: curl
 import OpenSSH_jll
@@ -773,6 +774,41 @@ end
         end
     end
     @info "Finished: SshChannel / Direct port forwarding"
+
+    @testset "WebSocket forwarding" begin
+        demo_server_with_session(2222) do session
+            # Simple websocket echo server
+            ws_server = HTTP.WebSockets.listen!("127.0.0.1", 9090) do ws
+                for msg in ws
+                    HTTP.WebSockets.send(ws, msg)
+                end
+            end
+
+            try
+                ssh.Forwarder(session, "127.0.0.1", 9090) do forwarder
+                    # Test passing a forwarder to open()
+                    HTTP.WebSockets.open(forwarder) do ws
+                        HTTP.WebSockets.send(ws, "foo")
+                        @test HTTP.WebSockets.receive(ws) == "foo"
+
+                        HTTP.WebSockets.send(ws, UInt8[1, 2, 3])
+                        @test HTTP.WebSockets.receive(ws) == UInt8[1, 2, 3]
+                    end
+                end
+            finally
+                close(ws_server)
+            end
+        end
+
+        # Forwarders with no single `.out` stream (the listening-port variant) aren't
+        # supported and should throw.
+        demo_server_with_session(2222) do session
+            ssh.Forwarder(session, 0, "localhost", 9090) do forwarder
+                @test_throws ArgumentError HTTP.WebSockets.open(_ -> nothing, forwarder)
+            end
+        end
+    end
+    @info "Finished: SshChannel / WebSocket forwarding"
 end
 
 @testset "SFTP" begin
