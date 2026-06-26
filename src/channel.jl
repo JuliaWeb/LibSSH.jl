@@ -920,7 +920,9 @@ function _handle_forwarding_client(client)
 
         if !isempty(data)
             try
-                write(client.sshchan, data)
+                # TEMP diagnostic: trace forwarded client->channel writes.
+                nw = write(client.sshchan, data)
+                @info "FWD-client: wrote $(length(data))B to channel, ret=$(nw)"; flush(stderr)
             catch ex
                 if !isopen(client.sshchan)
                     break

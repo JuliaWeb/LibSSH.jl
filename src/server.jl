@@ -644,6 +644,8 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
 
         # Create a channel for the port forward
         channel_ptr = lib.ssh_message_channel_request_open_reply_accept(msg)
+        # TEMP diagnostic: confirm the server accepted the direct-tcpip channel.
+        @info "FWD-server: accepted direct-tcpip channel to $(hostname):$(port), ptr=$(channel_ptr)"; flush(stderr)
         sshchan = SshChannel(channel_ptr, client.session)
         push!(client.channel_operations, DemoServerForwarder(client, sshchan, hostname, port))
 
@@ -1173,6 +1175,8 @@ function on_fwd_channel_eof(session, sshchan, forwarder)::Nothing
 end
 
 function on_fwd_channel_data(session, sshchan, data, is_stderr, forwarder)::Int
+    # TEMP diagnostic: trace channel->socket data arriving on the server.
+    @info "FWD-server: on_fwd_channel_data $(length(data))B"; flush(stderr)
     _add_log_event!(forwarder.client, :fwd_channel_data, length(data))
 
     # When we receive data from the channel, hand it off to the forwarding task
