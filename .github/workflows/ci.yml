@@ -45,7 +45,7 @@ jobs:
             allow_failure: true
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Install test dependencies
       - uses: awalsh128/cache-apt-pkgs-action@v1
@@ -82,7 +82,7 @@ jobs:
       statuses: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Install Julia and dependencies
       - uses: julia-actions/setup-julia@latest
