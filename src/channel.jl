@@ -920,7 +920,9 @@ function _handle_forwarding_client(client)
 
         if !isempty(data)
             try
-                write(client.sshchan, data)
+                # TEMP diagnostic: trace forwarded client->channel writes.
+                nw = write(client.sshchan, data)
+                @info "FWD-client: wrote $(length(data))B to channel, ret=$(nw)"; flush(stderr)
             catch ex
                 if !isopen(client.sshchan)
                     break
@@ -959,14 +961,19 @@ mutable struct _ForwardingClient
         remotehost = forwarder.remotehost
         remoteport = forwarder.remoteport
 
-        # Open a forwarding channel
         local_ip = string(getaddrinfo(gethostname()))
+        # Don't pass a port number of -1 because sshd doesn't like it and will
+        # reply with SSH_OPEN_ADMINISTRATIVELY_PROHIBITED. Instead we default to
+        # the remote port, which is as good as any.
+        sourceport = forwarder.localport < 0 ? remoteport : forwarder.localport
+
+        # Open a forwarding channel
         sshchan = SshChannel(forwarder._session)
         ret = _session_trywait(forwarder._session) do
             GC.@preserve remotehost local_ip begin
                 lib.ssh_channel_open_forward(sshchan,
                                              Base.unsafe_convert(Ptr{Cchar}, remotehost), remoteport,
-                                             Base.unsafe_convert(Ptr{Cchar}, local_ip), forwarder.localport)
+                                             Base.unsafe_convert(Ptr{Cchar}, local_ip), sourceport)
             end
         end
         if ret != SSH_OK
@@ -1072,6 +1079,10 @@ Create a `Forwarder` object that will forward its data to a single
 `TCPSocket`. This is useful if there is only one client and binding to a port
 available to other processes is not desirable. The socket will be stored in the
 `Forwarder.out` property, and it will be closed when the `Forwarder` is closed.
+
+This kind of `Forwarder` can be passed to [`HTTP.WebSockets.open`](@extref) to
+open a websocket directly on the socket: `ws = WebSockets.open(forwarder)`. The
+`host` argument will default to `Forwarder.remotehost`.
 
 All arguments mean the same as in [`Forwarder(::Session, ::Int, ::String,
 ::Int)`](@ref).

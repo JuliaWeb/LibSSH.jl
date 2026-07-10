@@ -770,44 +770,36 @@ function _actor_loop(session::Session)
                 _process_request(req)
             end
 
-            # Check if anyone is waiting for I/O: either an SSH_AGAIN waiter on
-            # _wakeup, or a channel registered for direct polling (wait(::SshChannel)).
-            has_waiters, has_regs = @lock session._wakeup begin
-                (!isempty(session._wakeup.cond.waitq), !isempty(session._poll_regs))
-            end
+            # Poll the session fd whenever it's live, even when there are no
+            # current SSH_AGAIN waiters or registered channels. We must NOT park
+            # indefinitely on take!(requests) while connected: a
+            # _session_trywait() caller (e.g. the demo server's event_dopoll
+            # loop) can register an SSH_AGAIN waiter in the tiny window right
+            # after the actor would have sampled has_waiters, and if the actor
+            # were blocked on take! it would never poll the fd to let that
+            # caller make progress — deadlock. Polling on the 100ms tick
+            # re-evaluates every cycle so a missed wakeup recovers within 100ms.
+            # The cost is a 100ms idle wake for sessions with no registered
+            # channels (essentially just the demo server's session).
+            fd = isopen(session) ? RawFD(lib.ssh_get_fd(session)) : RawFD(-1)
+            p = fd == RawFD(-1) ? nothing : _ensure_fd_poller(session, fd)
 
-            if (has_waiters || has_regs) && isopen(session)
-                # Poll the fd for I/O readiness — C calls are safe, we're the actor
-                fd = RawFD(lib.ssh_get_fd(session))
-                if fd == RawFD(-1)
-                    # Session has been disconnected, fd is invalid. Close the
-                    # wakeup condition so waiters get an InvalidStateException
-                    # rather than a spurious normal wakeup.
+            if isnothing(p)
+                # No fd to poll: either the session was disconnected (invalid
+                # fd) or the poller couldn't be created.
+                has_waiters, has_regs = @lock session._wakeup begin
+                    (!isempty(session._wakeup.cond.waitq), !isempty(session._poll_regs))
+                end
+                if (has_waiters || has_regs) && isopen(session)
+                    # Disconnected with waiters: close the wakeup condition so
+                    # they get an InvalidStateException rather than a spurious
+                    # normal wakeup.
                     @lock session._wakeup close(session._wakeup)
                     break
                 end
 
-                p = _ensure_fd_poller(session, fd)
-                if isnothing(p)
-                    # Couldn't watch the fd (closed/invalid)
-                    break
-                end
-
-                result = _poll_fd(p, 0.1)
-                if result === :closed || (@atomic session._stop_flag) || !isopen(session)
-                    break
-                end
-
-                # :readable / :timeout / :woken — drive libssh and wake
-                # SSH_AGAIN waiters. Spurious wakes are harmless.
-                _actor_poll_channels(session)
-                # Only wake the waiters when I/O could have made progress
-                # (:readable) or the retry tick elapsed (:timeout).
-                if result !== :woken
-                    @lock session._wakeup notify(session._wakeup)
-                end
-            else
-                # No waiters — block until a request arrives
+                # Nothing to poll yet (e.g. before connect()): block until a
+                # request arrives.
                 req = try
                     take!(requests)
                 catch ex
@@ -818,6 +810,31 @@ function _actor_loop(session::Session)
                     end
                 end
                 _process_request(req)
+            else
+                result = _poll_fd(p, 0.1)
+                if result === :closed || (@atomic session._stop_flag) || !isopen(session)
+                    break
+                end
+
+                # :readable / :timeout / :woken — drive libssh and wake
+                # SSH_AGAIN waiters. Spurious wakes are harmless.
+                _actor_poll_channels(session)
+
+                # Push out any buffered session output. We don't watch the fd
+                # for writability (see _FdPoller), so a write that couldn't
+                # fully flush to the socket when it was issued would otherwise
+                # sit in libssh's out_buffer until something else happened to
+                # flush it. Forwarded data feeding a peer that blocks waiting
+                # for it (e.g. an HTTP/WebSocket request through a Forwarder)
+                # can deadlock on that, so attempt a non-blocking flush every
+                # time we poll. This is a no-op when the buffer is empty.
+                lib.ssh_blocking_flush(session, 0)
+                # Only wake the waiters when I/O could have made progress
+                # (:readable) or the retry tick elapsed (:timeout). Harmless
+                # no-op when there are none.
+                if result !== :woken
+                    @lock session._wakeup notify(session._wakeup)
+                end
             end
         end
     catch ex

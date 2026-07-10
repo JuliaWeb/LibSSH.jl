@@ -1,6 +1,6 @@
 name = "LibSSH"
 uuid = "00483490-30f8-4353-8aba-35b82f51f4d0"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["James Wrigley <james@puiterwijk.org> and contributors"]
 
 [deps]
@@ -14,11 +14,18 @@ Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 libssh_jll = "a8d4f100-aa25-5708-be18-96e0805c2c9d"
 
+[weakdeps]
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+
+[extensions]
+LibSSHHTTPExt = "HTTP"
+
 [compat]
 CEnum = "0.4, 0.5"
 Dates = "1"
 DocStringExtensions = "0.9"
 FileWatching = "1"
+HTTP = "2.3.1"
 Kerberos_krb5_jll = "1"
 PrecompileTools = "1"
 Printf = "1"

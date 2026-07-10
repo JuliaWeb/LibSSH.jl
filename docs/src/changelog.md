@@ -7,6 +7,17 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## [v1.1.0] - 2026-06-26
+
+### Added
+- Added a package extension for HTTP.jl so that it's possible to open a
+  websocket from a forwarded port with `WebSockets.open(forwarder)` ([#41]).
+
+### Fixed
+- Fixed a bug in [`Forwarder(::Session, ::String, :Int)`](@ref) where it would
+  pass an invalid port when opening a forwarding channel ([#41]).
+- Fixed a rare deadlock in the [`DemoServer`](@ref)'s port forwarder ([#41]).
+
 ## [v1.0.0] - 2026-06-25
 
 ### Added

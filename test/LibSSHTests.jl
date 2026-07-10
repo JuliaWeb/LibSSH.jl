@@ -5,6 +5,7 @@ __revise_mode__ = :eval
 import Sockets: listen, accept, IPv4, localhost
 
 import Aqua
+import HTTP
 import Literate
 import CURL_jll: curl
 import OpenSSH_jll
@@ -773,6 +774,59 @@ end
         end
     end
     @info "Finished: SshChannel / Direct port forwarding"
+
+    @testset "WebSocket forwarding" begin
+        demo_server_with_session(2222) do session
+            # Simple websocket echo server
+            ws_server = HTTP.WebSockets.listen!("127.0.0.1", 9090) do ws
+                for msg in ws
+                    HTTP.WebSockets.send(ws, msg)
+                end
+            end
+
+            # TEMP instrumentation: log each potentially-blocking step (with a
+            # flush) so a CI hang shows the last step reached. Remove once the
+            # WebSocket teardown flakiness is resolved.
+            step(msg) = (@info "WS-step: $msg"; flush(stderr); flush(stdout))
+            try
+                step("opening forwarder")
+                ssh.Forwarder(session, "127.0.0.1", 9090) do forwarder
+                    # Test passing a forwarder to open()
+                    step("opening websocket")
+                    HTTP.WebSockets.open(forwarder) do ws
+                        step("sending/receiving")
+                        HTTP.WebSockets.send(ws, "foo")
+                        @test HTTP.WebSockets.receive(ws) == "foo"
+
+                        HTTP.WebSockets.send(ws, UInt8[1, 2, 3])
+                        @test HTTP.WebSockets.receive(ws) == UInt8[1, 2, 3]
+                        step("closing websocket (do-block returning)")
+                    end
+                    step("websocket closed; closing forwarder (do-block returning)")
+                end
+                step("forwarder closed")
+            finally
+                step("forceclosing ws_server")
+                # Use forceclose() instead of close(): close() also does
+                # wait(server), which blocks until every per-connection handler
+                # task finishes — and the echo handler can stay parked in
+                # `for msg in ws` if the WebSocket close handshake doesn't
+                # round-trip through the tunnel. forceclose() stops the listener
+                # and force-closes active connections without waiting.
+                HTTP.WebSockets.forceclose(ws_server)
+                step("ws_server forceclosed")
+            end
+        end
+
+        # Forwarders with no single `.out` stream (the listening-port variant) aren't
+        # supported and should throw.
+        demo_server_with_session(2222) do session
+            ssh.Forwarder(session, 0, "localhost", 9090) do forwarder
+                @test_throws ArgumentError HTTP.WebSockets.open(_ -> nothing, forwarder)
+            end
+        end
+    end
+    @info "Finished: SshChannel / WebSocket forwarding"
 end
 
 @testset "SFTP" begin
