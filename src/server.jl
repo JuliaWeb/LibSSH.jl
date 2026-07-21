@@ -569,6 +569,15 @@ function on_channel_open(session, client)::Union{SshChannel, Nothing}
     return sshchan
 end
 
+function on_channel_open_direct_tcpip(session, hostname, port, originator, originator_port, client)::Union{SshChannel, Nothing}
+    _add_log_event!(client, :channel_open_direct_tcpip, (hostname, port))
+
+    sshchan = SshChannel(client.session)
+    push!(client.channel_operations, DemoServerForwarder(client, sshchan, hostname, port))
+
+    return sshchan
+end
+
 function on_channel_env_request(session, sshchan, name, value, client)::Bool
     _add_log_event!(client, :channel_env_request, (name, value))
 
@@ -636,19 +645,6 @@ function on_message(session, msg::lib.ssh_message, demo_server)::Bool
     msg_type = message_type(msg)
     msg_subtype = message_subtype(msg)
     _add_log_event!(client, :message_request, (msg_type, msg_subtype))
-
-    # Handle direct port forwarding requests
-    if msg_type == RequestType_ChannelOpen && msg_subtype == lib.SSH_CHANNEL_DIRECT_TCPIP
-        hostname = unsafe_string(lib.ssh_message_channel_request_open_destination(msg))
-        port = lib.ssh_message_channel_request_open_destination_port(msg)
-
-        # Create a channel for the port forward
-        channel_ptr = lib.ssh_message_channel_request_open_reply_accept(msg)
-        sshchan = SshChannel(channel_ptr, client.session)
-        push!(client.channel_operations, DemoServerForwarder(client, sshchan, hostname, port))
-
-        return false
-    end
 
     # Handle keyboard-interactive authentication
     if msg_type == RequestType_Auth && msg_subtype == lib.SSH_AUTH_METHOD_INTERACTIVE
@@ -926,7 +922,8 @@ function _handle_client(session::Session, ds::DemoServer)
                                        on_auth_none=on_auth_none,
                                        on_auth_pubkey=on_auth_pubkey,
                                        on_service_request=on_service_request,
-                                       on_channel_open_request_session=on_channel_open)
+                                       on_channel_open_request_session=on_channel_open,
+                                       on_channel_open_request_direct_tcpip=on_channel_open_direct_tcpip)
     client.channel_callbacks = ChannelCallbacks(client;
                                                 on_eof=on_channel_eof,
                                                 on_close=on_channel_close,

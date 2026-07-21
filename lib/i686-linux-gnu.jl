@@ -1,6 +1,6 @@
 module lib
 
-using CEnum
+using CEnum: CEnum, @cenum
 
 using libssh_jll
 using DocStringExtensions
@@ -92,6 +92,9 @@ end
 
 mutable struct ssh_string_struct end
 
+"""
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html).
+"""
 const ssh_string = Ptr{ssh_string_struct}
 
 """
@@ -123,6 +126,19 @@ const ssh_buffer = Ptr{ssh_buffer_struct}
 """
 function ssh_buffer_free(buffer)
     @ccall libssh.ssh_buffer_free(buffer::ssh_buffer)::Cvoid
+end
+
+mutable struct ssh_pki_ctx_struct end
+
+const ssh_pki_ctx = Ptr{ssh_pki_ctx_struct}
+
+"""
+    ssh_pki_ctx_free(context)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gac6d1853b2e1812e21fe35e15e4da7f8f).
+"""
+function ssh_pki_ctx_free(context)
+    @ccall libssh.ssh_pki_ctx_free(context::ssh_pki_ctx)::Cvoid
 end
 
 mutable struct ssh_counter_struct
@@ -302,6 +318,12 @@ end
     SSH_CONTROL_MASTER_AUTOASK = 4
 end
 
+@cenum ssh_address_family_options_e::UInt32 begin
+    SSH_ADDRESS_FAMILY_ANY = 0
+    SSH_ADDRESS_FAMILY_INET = 1
+    SSH_ADDRESS_FAMILY_INET6 = 2
+end
+
 @cenum ssh_options_e::UInt32 begin
     SSH_OPTIONS_HOST = 0
     SSH_OPTIONS_PORT = 1
@@ -352,6 +374,11 @@ end
     SSH_OPTIONS_CERTIFICATE = 46
     SSH_OPTIONS_PROXYJUMP = 47
     SSH_OPTIONS_PROXYJUMP_CB_LIST_APPEND = 48
+    SSH_OPTIONS_PKI_CONTEXT = 49
+    SSH_OPTIONS_ADDRESS_FAMILY = 50
+    SSH_OPTIONS_GSSAPI_KEY_EXCHANGE = 51
+    SSH_OPTIONS_GSSAPI_KEY_EXCHANGE_ALGS = 52
+    SSH_OPTIONS_NEXT_IDENTITY = 53
 end
 
 @cenum __JL_Ctag_10::UInt32 begin
@@ -591,6 +618,11 @@ function ssh_channel_request_pty(channel)
     @ccall libssh.ssh_channel_request_pty(channel::ssh_channel)::Cint
 end
 
+"""
+    ssh_channel_request_pty_size(channel, term, cols, rows)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__channel.html#gabb175414352256e1602286e0ab50886c).
+"""
 function ssh_channel_request_pty_size(channel, term, cols, rows)
     @ccall libssh.ssh_channel_request_pty_size(channel::ssh_channel, term::Ptr{Cchar}, cols::Cint, rows::Cint)::Cint
 end
@@ -1578,12 +1610,48 @@ function ssh_key_dup(key)
 end
 
 """
+    ssh_key_get_sk_flags(key)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga65f00d4a0806f6933df838ec1ad5cd10).
+"""
+function ssh_key_get_sk_flags(key)
+    @ccall libssh.ssh_key_get_sk_flags(key::ssh_key)::UInt32
+end
+
+"""
+    ssh_key_get_sk_application(key)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga8c4ebe61dfd826f6ee5b68a7479a6062).
+"""
+function ssh_key_get_sk_application(key)
+    @ccall libssh.ssh_key_get_sk_application(key::ssh_key)::ssh_string
+end
+
+"""
+    ssh_key_get_sk_user_id(key)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gadfc0d584cb8b39028856da85a4f4b2cd).
+"""
+function ssh_key_get_sk_user_id(key)
+    @ccall libssh.ssh_key_get_sk_user_id(key::ssh_key)::ssh_string
+end
+
+"""
     ssh_pki_generate(type, parameter, pkey)
 
 [Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gae038fa1b34f9427c7ba84082a1a20bad).
 """
 function ssh_pki_generate(type, parameter, pkey)
     @ccall libssh.ssh_pki_generate(type::ssh_keytypes_e, parameter::Cint, pkey::Ptr{ssh_key})::Cint
+end
+
+"""
+    ssh_pki_generate_key(type, pki_context, pkey)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga517b022428a641430bc3f7f3dff578a7).
+"""
+function ssh_pki_generate_key(type, pki_context, pkey)
+    @ccall libssh.ssh_pki_generate_key(type::ssh_keytypes_e, pki_context::ssh_pki_ctx, pkey::Ptr{ssh_key})::Cint
 end
 
 """
@@ -2082,6 +2150,15 @@ function ssh_string_from_char(what)
 end
 
 """
+    ssh_string_from_data(data, len)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#ga431c5c636d8481ec4c4bd22654415cde).
+"""
+function ssh_string_from_data(data, len)
+    @ccall libssh.ssh_string_from_data(data::Ptr{Cvoid}, len::Csize_t)::ssh_string
+end
+
+"""
     ssh_string_len(str)
 
 [Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#ga331553369afbfcb4f5300729ed65d0fe).
@@ -2115,6 +2192,15 @@ end
 """
 function ssh_string_to_char(str)
     @ccall libssh.ssh_string_to_char(str::ssh_string)::Ptr{Cchar}
+end
+
+"""
+    ssh_string_cmp(s1, s2)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html#ga2cdcc3ef237f8aa5349b21001c04e41f).
+"""
+function ssh_string_cmp(s1, s2)
+    @ccall libssh.ssh_string_cmp(s1::ssh_string, s2::ssh_string)::Cint
 end
 
 """
@@ -2273,6 +2359,10 @@ function ssh_get_hmac_out(session)
     @ccall libssh.ssh_get_hmac_out(session::ssh_session)::Ptr{Cchar}
 end
 
+function ssh_get_supported_methods(type)
+    @ccall libssh.ssh_get_supported_methods(type::ssh_kex_types_e)::Ptr{Cchar}
+end
+
 """
     ssh_buffer_new()
 
@@ -2334,6 +2424,101 @@ end
 """
 function ssh_session_set_disconnect_message(session, message)
     @ccall libssh.ssh_session_set_disconnect_message(session::ssh_session, message::Ptr{Cchar})::Cint
+end
+
+@cenum sshsig_digest_e::UInt32 begin
+    SSHSIG_DIGEST_SHA2_256 = 0
+    SSHSIG_DIGEST_SHA2_512 = 1
+end
+
+"""
+    sshsig_sign(data, data_length, privkey, pki_context, sig_namespace, hash_alg, signature)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga86b1da0b996de80db5ba95291e71b18e).
+"""
+function sshsig_sign(data, data_length, privkey, pki_context, sig_namespace, hash_alg, signature)
+    @ccall libssh.sshsig_sign(data::Ptr{Cvoid}, data_length::Csize_t, privkey::ssh_key, pki_context::ssh_pki_ctx, sig_namespace::Ptr{Cchar}, hash_alg::sshsig_digest_e, signature::Ptr{Ptr{Cchar}})::Cint
+end
+
+"""
+    sshsig_verify(data, data_length, signature, sig_namespace, sign_key)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga6e8afa17fdc522d77cd5127922c223d2).
+"""
+function sshsig_verify(data, data_length, signature, sig_namespace, sign_key)
+    @ccall libssh.sshsig_verify(data::Ptr{Cvoid}, data_length::Csize_t, signature::Ptr{Cchar}, sig_namespace::Ptr{Cchar}, sign_key::Ptr{ssh_key})::Cint
+end
+
+@cenum ssh_pki_options_e::UInt32 begin
+    SSH_PKI_OPTION_RSA_KEY_SIZE = 0
+    SSH_PKI_OPTION_SK_APPLICATION = 1
+    SSH_PKI_OPTION_SK_FLAGS = 2
+    SSH_PKI_OPTION_SK_USER_ID = 3
+    SSH_PKI_OPTION_SK_CHALLENGE = 4
+    SSH_PKI_OPTION_SK_CALLBACKS = 5
+end
+
+"""
+    ssh_pki_ctx_new()
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga6965f1410c109904632c3721cf7f0868).
+"""
+function ssh_pki_ctx_new()
+    @ccall libssh.ssh_pki_ctx_new()::ssh_pki_ctx
+end
+
+"""
+    ssh_pki_ctx_options_set(context, option, value)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gaf7a2544925653f67f5f6dbe1b84ac1ee).
+"""
+function ssh_pki_ctx_options_set(context, option, value)
+    @ccall libssh.ssh_pki_ctx_options_set(context::ssh_pki_ctx, option::ssh_pki_options_e, value::Ptr{Cvoid})::Cint
+end
+
+"""
+    ssh_pki_ctx_set_sk_pin_callback(context, pin_callback, userdata)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga536129219f868b55b5e44346c664dd82).
+"""
+function ssh_pki_ctx_set_sk_pin_callback(context, pin_callback, userdata)
+    @ccall libssh.ssh_pki_ctx_set_sk_pin_callback(context::ssh_pki_ctx, pin_callback::ssh_auth_callback, userdata::Ptr{Cvoid})::Cint
+end
+
+"""
+    ssh_pki_ctx_sk_callbacks_option_set(context, name, value, required)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga3ac1610a678059377c3e46372c3a2e3a).
+"""
+function ssh_pki_ctx_sk_callbacks_option_set(context, name, value, required)
+    @ccall libssh.ssh_pki_ctx_sk_callbacks_option_set(context::ssh_pki_ctx, name::Ptr{Cchar}, value::Ptr{Cchar}, required::Bool)::Cint
+end
+
+"""
+    ssh_pki_ctx_sk_callbacks_options_clear(context)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga5ad9318764cbc4d3d4bfec4dd246ebd3).
+"""
+function ssh_pki_ctx_sk_callbacks_options_clear(context)
+    @ccall libssh.ssh_pki_ctx_sk_callbacks_options_clear(context::ssh_pki_ctx)::Cint
+end
+
+"""
+    ssh_pki_ctx_get_sk_attestation_buffer(context, attestation_buffer)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#gad8271057c2f47bb7ac9fab5446b567e4).
+"""
+function ssh_pki_ctx_get_sk_attestation_buffer(context, attestation_buffer)
+    @ccall libssh.ssh_pki_ctx_get_sk_attestation_buffer(context::Ptr{ssh_pki_ctx_struct}, attestation_buffer::Ptr{ssh_buffer})::Cint
+end
+
+"""
+    ssh_sk_resident_keys_load(pki_context, resident_keys_result, num_keys_found_result)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__pki.html#ga1674ef8e7323d57916f6ff75ea361ecf).
+"""
+function ssh_sk_resident_keys_load(pki_context, resident_keys_result, num_keys_found_result)
+    @ccall libssh.ssh_sk_resident_keys_load(pki_context::Ptr{ssh_pki_ctx_struct}, resident_keys_result::Ptr{Ptr{ssh_key}}, num_keys_found_result::Ptr{Csize_t})::Cint
 end
 
 mutable struct ssh_private_key_struct end
@@ -2729,9 +2914,11 @@ struct sftp_limits_struct
 end
 
 """
-Pointer to a [`sftp_limits_struct`](@ref)
+Pointer to a [`sftp_limits_struct`](@ref).
 """
 const sftp_limits_t = Ptr{sftp_limits_struct}
+
+mutable struct ssh_list end
 
 struct sftp_session_struct
     session::ssh_session
@@ -2746,8 +2933,19 @@ struct sftp_session_struct
     ext::sftp_ext
     read_packet::sftp_packet
     limits::sftp_limits_t
+    outstanding_ids::Ptr{ssh_list}
 end
 
+"""
+SFTP session handle.
+
+This type represents an active SFTP session associated with an SSH channel. It is created and destroyed via the libssh SFTP API and is internally managed by libssh. It is used by applications to perform SFTP operations such as file access and directory management.
+
+The internal structure of this type is opaque and must not be accessed directly by applications.
+
+# See also
+[`sftp_new`](@ref), [`sftp_free`](@ref)
+"""
 const sftp_session = Ptr{sftp_session_struct}
 
 mutable struct sftp_client_message_struct
@@ -2833,6 +3031,24 @@ end
 
 const sftp_statvfs_t = Ptr{sftp_statvfs_struct}
 
+"""
+    sftp_name_id_map_struct
+
+SFTP names map structure to store the mapping between ids and names.
+
+This is mainly for the use of [`sftp_get_users_groups_by_id`](@ref)() function.
+"""
+mutable struct sftp_name_id_map_struct
+    count::UInt32
+    ids::Ptr{UInt32}
+    names::Ptr{Ptr{Cchar}}
+end
+
+"""
+Pointer to a [`sftp_name_id_map_struct`](@ref).
+"""
+const sftp_name_id_map = Ptr{sftp_name_id_map_struct}
+
 mutable struct sftp_packet_struct
     sftp::sftp_session
     type::UInt8
@@ -2871,11 +3087,11 @@ Creates a new sftp session.
 This function creates a new sftp session and allocates a new sftp channel with the server inside of the provided ssh session. This function call is usually followed by the [`sftp_init`](@ref)(), which initializes SFTP protocol itself.
 
 # Arguments
-* `session`: The ssh session to use.
+* `session`: The ssh session to use. The session *must* be in blocking mode since most `sftp\\_*` functions do not support the non-blocking API.
 # Returns
 A new sftp session or NULL on error.
 # See also
-[`sftp_free`](@ref)(), [`sftp_init`](@ref)()
+[`sftp_free`](@ref)(), [`sftp_init`](@ref)(), [`ssh_set_blocking`](@ref)()
 """
 function sftp_new(session::ssh_session)
     cfunc = @cfunction(_threadcall_sftp_new, sftp_session, (ssh_session,))
@@ -2888,12 +3104,12 @@ end
 Start a new sftp session with an existing channel.
 
 # Arguments
-* `session`: The ssh session to use.
+* `session`: The ssh session to use. The session *must* be in blocking mode since most `sftp\\_*` functions do not support the non-blocking API.
 * `channel`:	An open session channel with subsystem already allocated
 # Returns
 A new sftp session or NULL on error.
 # See also
-[`sftp_free`](@ref)()
+[`sftp_free`](@ref)(), [`ssh_set_blocking`](@ref)()
 """
 function sftp_new_channel(session, channel)
     @ccall libssh.sftp_new_channel(session::ssh_session, channel::ssh_channel)::sftp_session
@@ -4074,6 +4290,63 @@ function sftp_home_directory(sftp::sftp_session, username::Ptr{Cchar})
 end
 
 """
+    sftp_name_id_map_new(count)
+
+Create a new [`sftp_name_id_map`](@ref) struct.
+
+# Arguments
+* `count`: The number of ids/names to store in the map.
+# Returns
+A pointer to the newly allocated [`sftp_name_id_map`](@ref) struct.
+"""
+function sftp_name_id_map_new(count)
+    @ccall libssh.sftp_name_id_map_new(count::UInt32)::sftp_name_id_map
+end
+
+"""
+    sftp_name_id_map_free(map)
+
+Free the memory of an allocated [`sftp_name_id_map`](@ref) struct.
+
+# Arguments
+* `map`: A pointer to the [`sftp_name_id_map`](@ref) struct to free.
+"""
+function sftp_name_id_map_free(map)
+    @ccall libssh.sftp_name_id_map_free(map::sftp_name_id_map)::Cvoid
+end
+
+"""
+    sftp_get_users_groups_by_id(sftp, users_map, groups_map)
+
+Retrieves usernames and group names based on provided user and group IDs.
+
+The retrieved names are stored in the `names` field of the [`sftp_name_id_map`](@ref) structure. In case a uid or gid is not found, an empty string is stored.
+
+This calls the "users-groups-by-id@openssh.com" extension. You should check if the extension is supported using:
+
+```c++
+ int supported = sftp_extension_supported(sftp,
+ "users-groups-by-id@openssh.com", "1");
+```
+
+!!! note
+
+    The caller needs to free the memory used for the maps later using `[`sftp_name_id_map_free`](@ref)()`.
+
+# Arguments
+* `sftp`: The SFTP session handle.
+* `users_map`: A pointer to a [`sftp_name_id_map`](@ref) struct with the user IDs. Can be NULL if only group names are needed.
+* `groups_map`: A pointer to a [`sftp_name_id_map`](@ref) struct with the group IDs. Can be NULL if only user names are needed.
+# Returns
+0 on success, < 0 on error with ssh and sftp error set.
+# See also
+[`sftp_get_error`](@ref)()
+"""
+function sftp_get_users_groups_by_id(sftp, users_map, groups_map)
+    @ccall libssh.sftp_get_users_groups_by_id(sftp::sftp_session, users_map::sftp_name_id_map, groups_map::sftp_name_id_map)::Cint
+end
+
+"""
     sftp_server_new(session, chan)
 
 Create a new sftp server session.
@@ -4114,74 +4387,164 @@ function sftp_server_free(sftp)
     @ccall libssh.sftp_server_free(sftp::sftp_session)::Cvoid
 end
 
+"""
+    sftp_get_client_message(sftp)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga80b49b1aa5e6f34397fcb90760aa74fc).
+"""
 function sftp_get_client_message(sftp)
     @ccall libssh.sftp_get_client_message(sftp::sftp_session)::sftp_client_message
 end
 
+"""
+    sftp_client_message_free(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga6c7cee6588b2d07d58ad634f71d454f6).
+"""
 function sftp_client_message_free(msg)
     @ccall libssh.sftp_client_message_free(msg::sftp_client_message)::Cvoid
 end
 
+"""
+    sftp_client_message_get_type(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gafda7d4bde8ac58627f5e16280fb51b76).
+"""
 function sftp_client_message_get_type(msg)
     @ccall libssh.sftp_client_message_get_type(msg::sftp_client_message)::UInt8
 end
 
+"""
+    sftp_client_message_get_filename(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga2604944c724d24600361645eb100a525).
+"""
 function sftp_client_message_get_filename(msg)
     @ccall libssh.sftp_client_message_get_filename(msg::sftp_client_message)::Ptr{Cchar}
 end
 
+"""
+    sftp_client_message_set_filename(msg, newname)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gad8fe130466c1d81463b1f654a35cced5).
+"""
 function sftp_client_message_set_filename(msg, newname)
     @ccall libssh.sftp_client_message_set_filename(msg::sftp_client_message, newname::Ptr{Cchar})::Cvoid
 end
 
+"""
+    sftp_client_message_get_data(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga32b669bc57c03d7f4bf84199852afc52).
+"""
 function sftp_client_message_get_data(msg)
     @ccall libssh.sftp_client_message_get_data(msg::sftp_client_message)::Ptr{Cchar}
 end
 
+"""
+    sftp_client_message_get_flags(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga5c506ce133e0a9027f79840d843a9962).
+"""
 function sftp_client_message_get_flags(msg)
     @ccall libssh.sftp_client_message_get_flags(msg::sftp_client_message)::UInt32
 end
 
+"""
+    sftp_client_message_get_submessage(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga2f682d38946c73a40660cc7606276723).
+"""
 function sftp_client_message_get_submessage(msg)
     @ccall libssh.sftp_client_message_get_submessage(msg::sftp_client_message)::Ptr{Cchar}
 end
 
+"""
+    sftp_send_client_message(sftp, msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga3232c38aa03febab53a39bd7b037295d).
+"""
 function sftp_send_client_message(sftp, msg)
     @ccall libssh.sftp_send_client_message(sftp::sftp_session, msg::sftp_client_message)::Cint
 end
 
+"""
+    sftp_reply_name(msg, name, attr)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga3371e02cde0962cef0eaf09c95e9f0f9).
+"""
 function sftp_reply_name(msg, name, attr)
     @ccall libssh.sftp_reply_name(msg::sftp_client_message, name::Ptr{Cchar}, attr::sftp_attributes)::Cint
 end
 
+"""
+    sftp_reply_handle(msg, handle)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga1cb075c0e2d230d780b34b9772cb86ee).
+"""
 function sftp_reply_handle(msg, handle)
     @ccall libssh.sftp_reply_handle(msg::sftp_client_message, handle::ssh_string)::Cint
 end
 
+"""
+    sftp_handle_alloc(sftp, info)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gab90f7a4e60c2769b3f53a3111e126da1).
+"""
 function sftp_handle_alloc(sftp, info)
     @ccall libssh.sftp_handle_alloc(sftp::sftp_session, info::Ptr{Cvoid})::ssh_string
 end
 
+"""
+    sftp_reply_attr(msg, attr)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#gab80b50be07b7939cc33745204be101cc).
+"""
 function sftp_reply_attr(msg, attr)
     @ccall libssh.sftp_reply_attr(msg::sftp_client_message, attr::sftp_attributes)::Cint
 end
 
+"""
+    sftp_handle(sftp, handle)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga9b76a7bb3585cb2c1f098f05afb92b03).
+"""
 function sftp_handle(sftp, handle)
     @ccall libssh.sftp_handle(sftp::sftp_session, handle::ssh_string)::Ptr{Cvoid}
 end
 
+"""
+    sftp_reply_status(msg, status, message)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga1c024542ae420f85bc146c20c19bedda).
+"""
 function sftp_reply_status(msg, status, message)
     @ccall libssh.sftp_reply_status(msg::sftp_client_message, status::UInt32, message::Ptr{Cchar})::Cint
 end
 
+"""
+    sftp_reply_names_add(msg, file, longname, attr)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga21a9b645e22ea8c763587032008351e4).
+"""
 function sftp_reply_names_add(msg, file, longname, attr)
     @ccall libssh.sftp_reply_names_add(msg::sftp_client_message, file::Ptr{Cchar}, longname::Ptr{Cchar}, attr::sftp_attributes)::Cint
 end
 
+"""
+    sftp_reply_names(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga5cdfcc9fc46062a623308046806b8ccf).
+"""
 function sftp_reply_names(msg)
     @ccall libssh.sftp_reply_names(msg::sftp_client_message)::Cint
 end
 
+"""
+    sftp_reply_data(msg, data, len)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__sftp.html#ga0f6244744ed38130420440b0775cd372).
+"""
 function sftp_reply_data(msg, data, len)
     @ccall libssh.sftp_reply_data(msg::sftp_client_message, data::Ptr{Cvoid}, len::Cint)::Cint
 end
@@ -4214,6 +4577,8 @@ end
     SSH_BIND_OPTIONS_MODULI = 20
     SSH_BIND_OPTIONS_RSA_MIN_SIZE = 21
     SSH_BIND_OPTIONS_IMPORT_KEY_STR = 22
+    SSH_BIND_OPTIONS_GSSAPI_KEY_EXCHANGE = 23
+    SSH_BIND_OPTIONS_GSSAPI_KEY_EXCHANGE_ALGS = 24
 end
 
 mutable struct ssh_bind_struct end
@@ -4470,7 +4835,7 @@ Set the acceptable authentication methods to be sent to the client.
 
 Supported methods are:
 
-[`SSH_AUTH_METHOD_PASSWORD`](@ref) [`SSH_AUTH_METHOD_PUBLICKEY`](@ref) [`SSH_AUTH_METHOD_HOSTBASED`](@ref) [`SSH_AUTH_METHOD_INTERACTIVE`](@ref) [`SSH_AUTH_METHOD_GSSAPI_MIC`](@ref)
+[`SSH_AUTH_METHOD_PASSWORD`](@ref) [`SSH_AUTH_METHOD_PUBLICKEY`](@ref) [`SSH_AUTH_METHOD_HOSTBASED`](@ref) [`SSH_AUTH_METHOD_INTERACTIVE`](@ref) [`SSH_AUTH_METHOD_GSSAPI_MIC`](@ref) [`SSH_AUTH_METHOD_GSSAPI_KEYEX`](@ref)
 
 # Arguments
 * `session`:\\[in\\] The server session
@@ -4630,7 +4995,7 @@ end
 """
     ssh_message_auth_reply_success(msg, partial; throw = true)
 
-Auto-generated wrapper around `ssh_message_auth_reply_success()`.
+Auto-generated wrapper around [`ssh_message_auth_reply_success()`](https://api.libssh.org/stable/group__libssh__server.html#gac338ce3b49e097a6b9b75b92666cac96).
 """
 function ssh_message_auth_reply_success(msg, partial; throw = true)
     ret = @ccall(libssh.ssh_message_auth_reply_success(msg::ssh_message, partial::Cint)::Cint)
@@ -4716,86 +5081,191 @@ function ssh_set_message_callback(session, ssh_bind_message_callback, data)
     @ccall libssh.ssh_set_message_callback(session::ssh_session, ssh_bind_message_callback::Ptr{Cvoid}, data::Ptr{Cvoid})::Cvoid
 end
 
+"""
+    ssh_execute_message_callbacks(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gac5c9893e27dad15af4bd2dd8abc4760c).
+"""
 function ssh_execute_message_callbacks(session)
     @ccall libssh.ssh_execute_message_callbacks(session::ssh_session)::Cint
 end
 
+"""
+    ssh_message_channel_request_open_originator(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga0df64acc64787532205f6e85e5fbc4fe).
+"""
 function ssh_message_channel_request_open_originator(msg)
     @ccall libssh.ssh_message_channel_request_open_originator(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_open_originator_port(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaf24d0f28aca42d1b26e5a08fe4abc9fd).
+"""
 function ssh_message_channel_request_open_originator_port(msg)
     @ccall libssh.ssh_message_channel_request_open_originator_port(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_open_destination(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga42f8b0980f73c9af36a0b5e4e3ba7a04).
+"""
 function ssh_message_channel_request_open_destination(msg)
     @ccall libssh.ssh_message_channel_request_open_destination(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_open_destination_port(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaf8b7350f50918f37f331efe2099ffa8b).
+"""
 function ssh_message_channel_request_open_destination_port(msg)
     @ccall libssh.ssh_message_channel_request_open_destination_port(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_channel(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga813cf45163230416cd179cd1dadc4118).
+"""
 function ssh_message_channel_request_channel(msg)
     @ccall libssh.ssh_message_channel_request_channel(msg::ssh_message)::ssh_channel
 end
 
+"""
+    ssh_message_channel_request_pty_term(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga06f1578033ad6f3741f1c3b8e2322d2d).
+"""
 function ssh_message_channel_request_pty_term(msg)
     @ccall libssh.ssh_message_channel_request_pty_term(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_pty_width(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga6f96b1cee5ae05dabea404c5d40b50e7).
+"""
 function ssh_message_channel_request_pty_width(msg)
     @ccall libssh.ssh_message_channel_request_pty_width(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_pty_height(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gac793c0d76e4b5856f15ad0ed0afaa1d5).
+"""
 function ssh_message_channel_request_pty_height(msg)
     @ccall libssh.ssh_message_channel_request_pty_height(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_pty_pxwidth(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga9fe9493be6347da72ec3d55d6d58b9c6).
+"""
 function ssh_message_channel_request_pty_pxwidth(msg)
     @ccall libssh.ssh_message_channel_request_pty_pxwidth(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_pty_pxheight(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gacc10bc19a556898628ca239fb013d3b2).
+"""
 function ssh_message_channel_request_pty_pxheight(msg)
     @ccall libssh.ssh_message_channel_request_pty_pxheight(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_env_name(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaa42c1e6e4224ca04ee34d9be1296ff44).
+"""
 function ssh_message_channel_request_env_name(msg)
     @ccall libssh.ssh_message_channel_request_env_name(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_env_value(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga88cd6877143ea23c371b19eed3b94474).
+"""
 function ssh_message_channel_request_env_value(msg)
     @ccall libssh.ssh_message_channel_request_env_value(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_command(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga9042b6943d0b34efb8a7deb82a275c55).
+"""
 function ssh_message_channel_request_command(msg)
     @ccall libssh.ssh_message_channel_request_command(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_subsystem(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaf0f6570120b742f303b974f4fca3288a).
+"""
 function ssh_message_channel_request_subsystem(msg)
     @ccall libssh.ssh_message_channel_request_subsystem(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_x11_single_connection(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaa0e03d4be51727ff7341efb48d0e3f98).
+"""
 function ssh_message_channel_request_x11_single_connection(msg)
     @ccall libssh.ssh_message_channel_request_x11_single_connection(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_channel_request_x11_auth_protocol(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaca48ee1e17dea412e136659f82051ef0).
+"""
 function ssh_message_channel_request_x11_auth_protocol(msg)
     @ccall libssh.ssh_message_channel_request_x11_auth_protocol(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_x11_auth_cookie(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga2b0f472aaa4ac8ed8562c167505e2534).
+"""
 function ssh_message_channel_request_x11_auth_cookie(msg)
     @ccall libssh.ssh_message_channel_request_x11_auth_cookie(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_channel_request_x11_screen_number(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#gaf802b2a7e21e1026cc50c13133a33344).
+"""
 function ssh_message_channel_request_x11_screen_number(msg)
     @ccall libssh.ssh_message_channel_request_x11_screen_number(msg::ssh_message)::Cint
 end
 
+"""
+    ssh_message_global_request_address(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga4b06e2be400a34f8b99e913fffc6b994).
+"""
 function ssh_message_global_request_address(msg)
     @ccall libssh.ssh_message_global_request_address(msg::ssh_message)::Ptr{Cchar}
 end
 
+"""
+    ssh_message_global_request_port(msg)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__server.html#ga2df15146bcf25bbf9e97bdd4b1728e40).
+"""
 function ssh_message_global_request_port(msg)
     @ccall libssh.ssh_message_global_request_port(msg::ssh_message)::Cint
 end
@@ -4931,6 +5401,16 @@ SSH global request callback. All global request will go through this callback.
 """
 const ssh_global_request_callback = Ptr{Cvoid}
 
+# typedef void ( * ssh_connect_status_callback ) ( void * userdata , float status )
+"""
+SSH connect status callback. These are functions that report the status of the connection i,e. a function indicating the completed percentage of the connection steps.
+
+# Arguments
+* `userdata`: Userdata to be passed to the callback function.
+* `status`: Percentage of connection status, going from 0.0 to 1.0 once connection is done.
+"""
+const ssh_connect_status_callback = Ptr{Cvoid}
+
 # typedef ssh_channel ( * ssh_channel_open_request_x11_callback ) ( ssh_session session , const char * originator_address , int originator_port , void * userdata )
 """
 Handles an SSH new channel open X11 request. This happens when the server sends back an X11 connection attempt. This is a client-side API
@@ -4995,7 +5475,7 @@ mutable struct ssh_callbacks_struct
     userdata::Ptr{Cvoid}
     auth_function::ssh_auth_callback
     log_function::ssh_log_callback
-    connect_status_function::Ptr{Cvoid}
+    connect_status_function::ssh_connect_status_callback
     global_request_function::ssh_global_request_callback
     channel_open_request_x11_function::ssh_channel_open_request_x11_callback
     channel_open_request_auth_agent_function::ssh_channel_open_request_auth_agent_callback
@@ -5014,7 +5494,7 @@ SSH authentication callback.
 * `password`: Password used for authentication
 * `userdata`: Userdata to be passed to the callback function.
 # Returns
-SSH\\_AUTH\\_DENIED Authentication failed.
+`SSH_AUTH_DENIED` Authentication failed.
 """
 const ssh_auth_password_callback = Ptr{Cvoid}
 
@@ -5027,17 +5507,17 @@ SSH authentication callback. Tries to authenticates user with the "none" method 
 * `user`: User that wants to authenticate
 * `userdata`: Userdata to be passed to the callback function.
 # Returns
-SSH\\_AUTH\\_DENIED Authentication failed.
+`SSH_AUTH_DENIED` Authentication failed.
 """
 const ssh_auth_none_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_auth_gssapi_mic_callback ) ( ssh_session session , const char * user , const char * principal , void * userdata )
 """
-SSH authentication callback. Tries to authenticates user with the "gssapi-with-mic" method
+SSH authentication callback. Tries to authenticate user with the "gssapi-with-mic" or "gssapi-keyex" method. This callback is dispatched after the server has already verified the authenticity of the principal.
 
 !!! warning
 
-    Implementations should verify that parameter user matches in some way the principal. user and principal can be different. Only the latter is guaranteed to be safe.
+    Using this callback, implementations should verify that the principal is allowed to log in as the local user, e.g. by checking that the username matches the principal in some way.
 
 # Arguments
 * `session`: Current session handler
@@ -5045,7 +5525,7 @@ SSH authentication callback. Tries to authenticates user with the "gssapi-with-m
 * `principal`: Authenticated principal of the user, including realm.
 * `userdata`: Userdata to be passed to the callback function.
 # Returns
-SSH\\_AUTH\\_DENIED Authentication failed.
+`SSH_AUTH_DENIED` Authentication failed.
 """
 const ssh_auth_gssapi_mic_callback = Ptr{Cvoid}
 
@@ -5057,12 +5537,25 @@ SSH authentication callback.
 * `session`: Current session handler
 * `user`: User that wants to authenticate
 * `pubkey`: public key used for authentication
-* `signature_state`: SSH\\_PUBLICKEY\\_STATE\\_NONE if the key is not signed (simple public key probe),	SSH\\_PUBLICKEY\\_STATE\\_VALID if the signature is valid. Others values should be	replied with a SSH\\_AUTH\\_DENIED.
+* `signature_state`: `SSH_PUBLICKEY_STATE_NONE` if the key is not signed (simple public key probe), `SSH_PUBLICKEY_STATE_VALID` if the signature is valid. Others values should be replied with a `SSH_AUTH_DENIED`.
+* `userdata`: Userdata to be passed to the callback function.
+# Returns
+`SSH_AUTH_DENIED` Authentication failed.
+"""
+const ssh_auth_pubkey_callback = Ptr{Cvoid}
+
+# typedef int ( * ssh_auth_kbdint_callback ) ( ssh_message message , ssh_session session , void * userdata )
+"""
+SSH authentication callback. Tries to authenticates user with the "keyboard-interactive" method
+
+# Arguments
+* `message`: Current message
+* `session`: Current session handler
 * `userdata`: Userdata to be passed to the callback function.
 # Returns
 SSH\\_AUTH\\_DENIED Authentication failed.
 """
-const ssh_auth_pubkey_callback = Ptr{Cvoid}
+const ssh_auth_kbdint_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_service_request_callback ) ( ssh_session session , const char * service , void * userdata )
 """
@@ -5094,13 +5587,77 @@ NULL if the request should not be allowed
 const ssh_channel_open_request_session_callback = Ptr{Cvoid}
 
 # typedef ssh_string ( * ssh_gssapi_select_oid_callback ) ( ssh_session session , const char * user , int n_oid , ssh_string * oids , void * userdata )
+"""
+handle the beginning of a GSSAPI authentication, server side. Callback should select the oid and also acquire the server credential.
+
+!!! warning
+
+    It is not necessary to fill this callback in if libssh is linked with libgssapi.
+
+# Arguments
+* `session`: current session handler
+* `user`: the username of the client
+* `n_oid`: number of available oids
+* `oids`: OIDs provided by the client
+# Returns
+an [`ssh_string`](@ref) containing the chosen OID, that's supported by both client and server.
+"""
 const ssh_gssapi_select_oid_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_gssapi_accept_sec_ctx_callback ) ( ssh_session session , ssh_string input_token , ssh_string * output_token , void * userdata )
+"""
+handle the negotiation of a security context, server side.
+
+!!! warning
+
+    It is not necessary to fill this callback in if libssh is linked with libgssapi.
+
+# Arguments
+* `session`: current session handler
+* `input_token`:\\[in\\] input token provided by client
+* `output_token`:\\[out\\] output of the gssapi accept\\_sec\\_context method,	NULL after completion.
+# Returns
+[`SSH_ERROR`](@ref) in case of error
+"""
 const ssh_gssapi_accept_sec_ctx_callback = Ptr{Cvoid}
 
 # typedef int ( * ssh_gssapi_verify_mic_callback ) ( ssh_session session , ssh_string mic , void * mic_buffer , size_t mic_buffer_size , void * userdata )
+"""
+Verify and authenticates a MIC, server side.
+
+!!! warning
+
+    It is not necessary to fill this callback in if libssh is linked with libgssapi.
+
+# Arguments
+* `session`: current session handler
+* `mic`:\\[in\\] input mic to be verified provided by client
+* `mic_buffer`:\\[in\\] buffer of data to be signed.
+* `mic_buffer_size`:\\[in\\] size of mic\\_buffer
+# Returns
+[`SSH_ERROR`](@ref) in case of error
+"""
 const ssh_gssapi_verify_mic_callback = Ptr{Cvoid}
+
+# typedef ssh_channel ( * ssh_channel_open_request_direct_tcpip_callback ) ( ssh_session session , const char * destination_address , int destination_port , const char * originator_address , int originator_port , void * userdata )
+"""
+Handles an SSH new channel open "direct-tcpip" request. This happens when the client forwards an incoming TCP connection on a port it wants to forward to the destination. This is a server-side API
+
+!!! warning
+
+    The channel pointer returned by this callback must be closed by the application.
+
+# Arguments
+* `session`: current session handler
+* `destination_address`: the address that the TCP connection connected to
+* `destination_port`: the port that the TCP connection connected to
+* `originator_address`: the originator IP address
+* `originator_port`: the originator port
+* `userdata`: Userdata to be passed to the callback function.
+# Returns
+NULL if the request should not be allowed
+"""
+const ssh_channel_open_request_direct_tcpip_callback = Ptr{Cvoid}
 
 """
     ssh_server_callbacks_struct
@@ -5119,6 +5676,8 @@ mutable struct ssh_server_callbacks_struct
     gssapi_select_oid_function::ssh_gssapi_select_oid_callback
     gssapi_accept_sec_ctx_function::ssh_gssapi_accept_sec_ctx_callback
     gssapi_verify_mic_function::ssh_gssapi_verify_mic_callback
+    channel_open_request_direct_tcpip_function::ssh_channel_open_request_direct_tcpip_callback
+    auth_kbdint_function::ssh_auth_kbdint_callback
 end
 function Base.getproperty(x::Ptr{ssh_server_callbacks_struct}, f::Symbol)
     f === :size && return Ptr{Csize_t}(x + 0)
@@ -5132,6 +5691,8 @@ function Base.getproperty(x::Ptr{ssh_server_callbacks_struct}, f::Symbol)
     f === :gssapi_select_oid_function && return Ptr{ssh_gssapi_select_oid_callback}(x + 32)
     f === :gssapi_accept_sec_ctx_function && return Ptr{ssh_gssapi_accept_sec_ctx_callback}(x + 36)
     f === :gssapi_verify_mic_function && return Ptr{ssh_gssapi_verify_mic_callback}(x + 40)
+    f === :channel_open_request_direct_tcpip_function && return Ptr{ssh_channel_open_request_direct_tcpip_callback}(x + 44)
+    f === :auth_kbdint_function && return Ptr{ssh_auth_kbdint_callback}(x + 48)
     return getfield(x, f)
 end
 
@@ -5748,6 +6309,114 @@ mutable struct ssh_jump_callbacks_struct
     authenticate::ssh_jump_authenticate_callback
 end
 
+mutable struct sk_enroll_response end
+
+mutable struct sk_sign_response end
+
+mutable struct sk_resident_key end
+
+mutable struct sk_option end
+
+# typedef uint32_t ( * sk_api_version_callback ) ( void )
+"""
+FIDO2/U2F SK API version callback.
+
+Returns the version of the FIDO2/U2F API that the callbacks implement. This callback allows custom callback implementations to specify their SK API version for compatibility checking with libssh's security key interface.
+
+Version compatibility is determined by comparing the major version portion (upper 16 bits) of the returned value with SSH\\_SK\\_VERSION\\_MAJOR.
+
+For compatibility, implementations should return a version where: (returned\\_version & SSH\\_SK\\_VERSION\\_MAJOR\\_MASK) == SSH\\_SK\\_VERSION\\_MAJOR
+
+This ensures that the callbacks' SK API matches the major version expected by libssh, while allowing minor version differences for backward compatibility.
+
+# See also
+[`LIBSSH_SK_API_VERSION_MAJOR`](@ref) Current expected major API version, SSH\\_SK\\_VERSION\\_MAJOR\\_MASK Mask for extracting major version (0xffff0000)
+"""
+const sk_api_version_callback = Ptr{Cvoid}
+
+# typedef int ( * sk_enroll_callback ) ( uint32_t alg , const uint8_t * challenge , size_t challenge_len , const char * application , uint8_t flags , const char * pin , struct sk_option * * options , struct sk_enroll_response * * enroll_response )
+"""
+FIDO2/U2F key enrollment callback.
+
+Enrolls a new FIDO2/U2F security key credential (private key generation). This callback handles the creation of new FIDO2/U2F credentials, including both resident and non-resident keys.
+
+# Arguments
+* `alg`:\\[in\\] The cryptographic algorithm to use
+* `challenge`:\\[in\\] Random challenge data for enrollment
+* `challenge_len`:\\[in\\] Length of the challenge data
+* `application`:\\[in\\] Application identifier (relying party ID)
+* `flags`:\\[in\\] Enrollment flags
+* `pin`:\\[in\\] PIN for user verification (may be NULL)
+* `options`:\\[in\\] Array of enrollment options (device path, user ID, etc.)
+* `enroll_response`:\\[out\\] Enrollment response containing public key, key handle, signature, and attestation data
+# Returns
+[`SSH_OK`](@ref) on success, SSH\\_SK\\_ERR\\_* codes on failure.
+"""
+const sk_enroll_callback = Ptr{Cvoid}
+
+# typedef int ( * sk_sign_callback ) ( uint32_t alg , const uint8_t * data , size_t data_len , const char * application , const uint8_t * key_handle , size_t key_handle_len , uint8_t flags , const char * pin , struct sk_option * * options , struct sk_sign_response * * sign_response )
+"""
+FIDO2/U2F security key signing callback.
+
+Signs data using a FIDO2 security key credential. This callback performs cryptographic signing operations using previously enrolled FIDO2/U2F credentials.
+
+# Arguments
+* `alg`:\\[in\\] The cryptographic algorithm used by the key
+* `data`:\\[in\\] Data to be signed
+* `data_len`:\\[in\\] Length of the data to sign
+* `application`:\\[in\\] Application identifier (relying party ID)
+* `key_handle`:\\[in\\] Key handle identifying the credential
+* `key_handle_len`:\\[in\\] Length of the key handle
+* `flags`:\\[in\\] Signing flags
+* `pin`:\\[in\\] PIN for user verification (may be NULL)
+* `options`:\\[in\\] Array of signing options (device path, etc.)
+* `sign_response`:\\[out\\] Signature response containing signature data, flags, and counter information
+# Returns
+[`SSH_OK`](@ref) on success, SSH\\_SK\\_ERR\\_* codes on failure.
+"""
+const sk_sign_callback = Ptr{Cvoid}
+
+# typedef int ( * sk_load_resident_keys_callback ) ( const char * pin , struct sk_option * * options , struct sk_resident_key * * * resident_keys , size_t * num_keys_found )
+"""
+FIDO2 security key resident keys loading callback.
+
+Enumerates and loads all resident keys (discoverable credentials) stored on FIDO2 devices. Resident keys are credentials stored directly on the device itself and can be discovered without prior knowledge of key handles.
+
+# Arguments
+* `pin`:\\[in\\] PIN for accessing resident keys (required for most operations)
+* `options`:\\[in\\] Array of options (device path, etc.)
+* `resident_keys`:\\[out\\] Array of resident key structures containing key data, application IDs, user information, and metadata
+* `num_keys_found`:\\[out\\] Number of resident keys found and loaded
+# Returns
+[`SSH_OK`](@ref) on success, SSH\\_SK\\_ERR\\_* codes on failure.
+"""
+const sk_load_resident_keys_callback = Ptr{Cvoid}
+
+"""
+    ssh_sk_callbacks_struct
+
+FIDO2/U2F security key callbacks structure.
+
+This structure contains callbacks for FIDO2/U2F operations. It allows applications to provide custom implementations of FIDO2/U2F operations to override the default libfido2-based implementation.
+
+!!! warning
+
+    These callbacks will only be called if libssh was built with FIDO2/U2F support enabled. (WITH\\_FIDO2 = ON).
+"""
+mutable struct ssh_sk_callbacks_struct
+    size::Csize_t
+    api_version::sk_api_version_callback
+    enroll::sk_enroll_callback
+    sign::sk_sign_callback
+    load_resident_keys::sk_load_resident_keys_callback
+end
+
+const ssh_sk_callbacks = Ptr{ssh_sk_callbacks_struct}
+
+function ssh_sk_get_default_callbacks()
+    @ccall libssh.ssh_sk_get_default_callbacks()::Ptr{ssh_sk_callbacks_struct}
+end
+
 # Skipping MacroDefinition: LIBSSH_API __attribute__ ( ( visibility ( "default" ) ) )
 
 # Skipping MacroDefinition: SSH_DEPRECATED __attribute__ ( ( deprecated ) )
@@ -5765,45 +6434,50 @@ const SSH_LANG = 5
 """
 Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
 """
-const SSH_AUTH_METHOD_UNKNOWN = Cuint(0)
+const SSH_AUTH_METHOD_UNKNOWN = Cuint(0x0000)
 
 """
 Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
 """
-const SSH_AUTH_METHOD_NONE = Cuint(1)
+const SSH_AUTH_METHOD_NONE = Cuint(0x0001)
 
 """
 Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
 """
-const SSH_AUTH_METHOD_PASSWORD = Cuint(2)
+const SSH_AUTH_METHOD_PASSWORD = Cuint(0x0002)
 
 """
 Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
 """
-const SSH_AUTH_METHOD_PUBLICKEY = Cuint(4)
+const SSH_AUTH_METHOD_PUBLICKEY = Cuint(0x0004)
 
 """
 Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
 """
-const SSH_AUTH_METHOD_HOSTBASED = Cuint(8)
+const SSH_AUTH_METHOD_HOSTBASED = Cuint(0x0008)
 
 """
 Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
 """
-const SSH_AUTH_METHOD_INTERACTIVE = Cuint(16)
+const SSH_AUTH_METHOD_INTERACTIVE = Cuint(0x0010)
 
 """
 Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
 """
-const SSH_AUTH_METHOD_GSSAPI_MIC = Cuint(32)
+const SSH_AUTH_METHOD_GSSAPI_MIC = Cuint(0x0020)
 
-const SSH_CLOSED = 1
+"""
+Auth method enum ([upstream documentation](https://api.libssh.org/stable/libssh_tutor_authentication.html)).
+"""
+const SSH_AUTH_METHOD_GSSAPI_KEYEX = Cuint(0x0040)
 
-const SSH_READ_PENDING = 2
+const SSH_CLOSED = 0x01
 
-const SSH_CLOSED_ERROR = 4
+const SSH_READ_PENDING = 0x02
 
-const SSH_WRITE_PENDING = 8
+const SSH_CLOSED_ERROR = 0x04
+
+const SSH_WRITE_PENDING = 0x08
 
 const MD5_DIGEST_LEN = 16
 
@@ -5838,6 +6512,18 @@ const SSH_LOG_DEBUG = 3
 
 const SSH_LOG_TRACE = 4
 
+const SSH_SK_USER_PRESENCE_REQD = 0x01
+
+const SSH_SK_USER_VERIFICATION_REQD = 0x04
+
+const SSH_SK_FORCE_OPERATION = 0x10
+
+const SSH_SK_RESIDENT_KEY = 0x20
+
+const SSH_SK_OPTION_NAME_DEVICE_PATH = "device"
+
+const SSH_SK_OPTION_NAME_USER_ID = "user"
+
 SSH_VERSION_INT(a, b, c) = (a << 16 | b << 8) | c
 
 SSH_VERSION_DOT(a, b, c) = a
@@ -5846,7 +6532,7 @@ SSH_VERSION(a, b, c) = SSH_VERSION_DOT(a, b, c)
 
 const LIBSSH_VERSION_MAJOR = 0
 
-const LIBSSH_VERSION_MINOR = 11
+const LIBSSH_VERSION_MINOR = 12
 
 const LIBSSH_VERSION_MICRO = 1
 
@@ -5910,27 +6596,27 @@ const SSH_FXP_EXTENDED = 200
 
 const SSH_FXP_EXTENDED_REPLY = 201
 
-const SSH_FILEXFER_ATTR_SIZE = 1
+const SSH_FILEXFER_ATTR_SIZE = 0x00000001
 
-const SSH_FILEXFER_ATTR_PERMISSIONS = 4
+const SSH_FILEXFER_ATTR_PERMISSIONS = 0x00000004
 
-const SSH_FILEXFER_ATTR_ACCESSTIME = 8
+const SSH_FILEXFER_ATTR_ACCESSTIME = 0x00000008
 
-const SSH_FILEXFER_ATTR_ACMODTIME = 8
+const SSH_FILEXFER_ATTR_ACMODTIME = 0x00000008
 
-const SSH_FILEXFER_ATTR_CREATETIME = 16
+const SSH_FILEXFER_ATTR_CREATETIME = 0x00000010
 
-const SSH_FILEXFER_ATTR_MODIFYTIME = 32
+const SSH_FILEXFER_ATTR_MODIFYTIME = 0x00000020
 
-const SSH_FILEXFER_ATTR_ACL = 64
+const SSH_FILEXFER_ATTR_ACL = 0x00000040
 
-const SSH_FILEXFER_ATTR_OWNERGROUP = 128
+const SSH_FILEXFER_ATTR_OWNERGROUP = 0x00000080
 
-const SSH_FILEXFER_ATTR_SUBSECOND_TIMES = 256
+const SSH_FILEXFER_ATTR_SUBSECOND_TIMES = 0x00000100
 
-const SSH_FILEXFER_ATTR_EXTENDED = 2147483648
+const SSH_FILEXFER_ATTR_EXTENDED = 0x80000000
 
-const SSH_FILEXFER_ATTR_UIDGID = 2
+const SSH_FILEXFER_ATTR_UIDGID = 0x00000002
 
 const SSH_FILEXFER_TYPE_REGULAR = 1
 
@@ -5970,41 +6656,41 @@ const SSH_FX_WRITE_PROTECT = 12
 
 const SSH_FX_NO_MEDIA = 13
 
-const SSH_FXF_READ = 1
+const SSH_FXF_READ = 0x01
 
-const SSH_FXF_WRITE = 2
+const SSH_FXF_WRITE = 0x02
 
-const SSH_FXF_APPEND = 4
+const SSH_FXF_APPEND = 0x04
 
-const SSH_FXF_CREAT = 8
+const SSH_FXF_CREAT = 0x08
 
-const SSH_FXF_TRUNC = 16
+const SSH_FXF_TRUNC = 0x10
 
-const SSH_FXF_EXCL = 32
+const SSH_FXF_EXCL = 0x20
 
-const SSH_FXF_TEXT = 64
+const SSH_FXF_TEXT = 0x40
 
-const SSH_S_IFMT = 61440
+const SSH_S_IFMT = 0x0000f000
 
-const SSH_S_IFSOCK = 49152
+const SSH_S_IFSOCK = 0x0000c000
 
-const SSH_S_IFLNK = 40960
+const SSH_S_IFLNK = 0x0000a000
 
-const SSH_S_IFREG = 32768
+const SSH_S_IFREG = 0x00008000
 
-const SSH_S_IFBLK = 24576
+const SSH_S_IFBLK = 0x00006000
 
-const SSH_S_IFDIR = 16384
+const SSH_S_IFDIR = 0x00004000
 
-const SSH_S_IFCHR = 8192
+const SSH_S_IFCHR = 0x00002000
 
-const SSH_S_IFIFO = 4096
+const SSH_S_IFIFO = 0x00001000
 
-const SSH_FXF_RENAME_OVERWRITE = 1
+const SSH_FXF_RENAME_OVERWRITE = 0x00000001
 
-const SSH_FXF_RENAME_ATOMIC = 2
+const SSH_FXF_RENAME_ATOMIC = 0x00000002
 
-const SSH_FXF_RENAME_NATIVE = 4
+const SSH_FXF_RENAME_NATIVE = 0x00000004
 
 const SFTP_OPEN = SSH_FXP_OPEN
 
@@ -6044,9 +6730,9 @@ const SFTP_SYMLINK = SSH_FXP_SYMLINK
 
 const SFTP_EXTENDED = SSH_FXP_EXTENDED
 
-const SSH_FXE_STATVFS_ST_RDONLY = 1
+const SSH_FXE_STATVFS_ST_RDONLY = 0x01
 
-const SSH_FXE_STATVFS_ST_NOSUID = 2
+const SSH_FXE_STATVFS_ST_NOSUID = 0x02
 
 const SSH_SOCKET_FLOW_WRITEWILLBLOCK = 1
 
@@ -6071,6 +6757,11 @@ const SSH_PACKET_USED = 1
 [Upstream documentation](https://api.libssh.org/stable/group__libssh__callbacks.html#ga4766917128a12b646a8aee7ebc019f8c).
 """
 const SSH_PACKET_NOT_USED = 2
+
+"""
+Security key API major version.
+"""
+const LIBSSH_SK_API_VERSION_MAJOR = 0x000a0000
 
 # Manually wrapped for now until this is merged:
 # https://gitlab.com/libssh/libssh-mirror/-/merge_requests/538

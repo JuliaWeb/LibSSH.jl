@@ -13,6 +13,13 @@ function _c_to_jl(cvalue)
         SshChannel(cvalue; own=false)
     elseif cvalue isa lib.ssh_key
         PKI.SshKey(cvalue; own=false)
+    elseif cvalue isa lib.ssh_string
+        if cvalue == C_NULL
+            ""
+        else
+            unsafe_string(Ptr{UInt8}(lib.ssh_string_get_char(cvalue)),
+                          lib.ssh_string_len(cvalue))
+        end
     else
         cvalue
     end
@@ -116,6 +123,24 @@ macro _gencb(args...)
     _gencb(args...)
 end
 
+#=
+Like @_gencb, but evaluates to C_NULL if the user didn't set a callback. libssh
+checks these pointers with ssh_callbacks_exists() and falls back to its own
+handling (the message callback, or its internal GSSAPI support) when they're
+NULL, so we mustn't install a stub unless the user asked for one.
+=#
+macro _gencb_opt(key, user_callback, args...)
+    cfunc = _gencb(key, user_callback, args...)
+
+    quote
+        if isnothing($(esc(user_callback)))
+            C_NULL
+        else
+            $cfunc
+        end
+    end
+end
+
 """
 $(TYPEDEF)
 
@@ -135,14 +160,12 @@ mutable struct ServerCallbacks
     $(TYPEDSIGNATURES)
 
     Create a callbacks object to set on a server. This has basically the same
-    behaviour as [`ChannelCallbacks()`](@ref), except that there are some
-    callbacks that are unsupported due to lack of documentation:
-    - `gssapi_select_oid_function`
-    - `gssapi_accept_sec_ctx_function`
-    - `gssapi_verify_mic_function`
+    behaviour as [`ChannelCallbacks()`](@ref), except that `lib.ssh_key`
+    arguments will be converted to a non-owning [`PKI.SshKey`](@ref), and
+    `lib.ssh_string` arguments to a `String`.
 
-    And `lib.ssh_key` arguments will be converted to a non-owning
-    [`PKI.SshKey`](@ref).
+    The GSSAPI callbacks don't need to be set if libssh was linked against
+    libgssapi, in which case libssh will handle GSSAPI itself.
 
     !!! warning
         Do not use [`Session`](@ref) or [`PKI.SshKey`](@ref) arguments
@@ -157,22 +180,26 @@ mutable struct ServerCallbacks
     - [`on_auth_none`](@ref lib.ssh_auth_none_callback): `f(::Session, ::String, userdata)::AuthStatus`
     - [`on_auth_gssapi_mic`](@ref lib.ssh_auth_gssapi_mic_callback): `f(::Session, ::String, ::String, userdata)::AuthStatus`
     - [`on_auth_pubkey`](@ref lib.ssh_auth_pubkey_callback): `f(::Session, ::String, ::SshKey, ::Char, userdata)::AuthStatus`
+    - [`on_auth_kbdint`](@ref lib.ssh_auth_kbdint_callback): `f(::lib.ssh_message, ::Session, userdata)::AuthStatus`
     - [`on_service_request`](@ref lib.ssh_service_request_callback): `f(::Session, ::String, userdata)::Bool`
     - [`on_channel_open_request_session`](@ref lib.ssh_channel_open_request_session_callback): `f(::Session, userdata)::Union{SshChannel, Nothing}`
+    - [`on_channel_open_request_direct_tcpip`](@ref lib.ssh_channel_open_request_direct_tcpip_callback): `f(::Session, ::String, ::Int, ::String, ::Int, userdata)::Union{SshChannel, Nothing}`
+    - [`on_gssapi_select_oid`](@ref lib.ssh_gssapi_select_oid_callback): `f(::Session, ::String, ::Int, ::Ptr{lib.ssh_string}, userdata)::lib.ssh_string`
+    - [`on_gssapi_accept_sec_ctx`](@ref lib.ssh_gssapi_accept_sec_ctx_callback): `f(::Session, ::String, ::Ptr{lib.ssh_string}, userdata)::Bool`
+    - [`on_gssapi_verify_mic`](@ref lib.ssh_gssapi_verify_mic_callback): `f(::Session, ::String, ::Ptr{Cvoid}, ::UInt, userdata)::Bool`
     """
     function ServerCallbacks(userdata=nothing;
                              on_auth_password::Union{Function, Nothing}=nothing,
                              on_auth_none::Union{Function, Nothing}=nothing,
                              on_auth_gssapi_mic::Union{Function, Nothing}=nothing,
                              on_auth_pubkey::Union{Function, Nothing}=nothing,
+                             on_auth_kbdint::Union{Function, Nothing}=nothing,
                              on_service_request::Union{Function, Nothing}=nothing,
                              on_channel_open_request_session::Union{Function, Nothing}=nothing,
-
-                             # These GSSAPI functions are disabled because they're currently undocumented
-                             # on_gssapi_select_oid=nothing,
-                             # on_gssapi_accept_sec_ctx=nothing,
-                             # on_gssapi_verify_mic=nothing
-                             )
+                             on_channel_open_request_direct_tcpip::Union{Function, Nothing}=nothing,
+                             on_gssapi_select_oid::Union{Function, Nothing}=nothing,
+                             on_gssapi_accept_sec_ctx::Union{Function, Nothing}=nothing,
+                             on_gssapi_verify_mic::Union{Function, Nothing}=nothing)
         self = new(nothing, userdata,
                    Dict{Symbol, Function}(),
                    Dict{Symbol, DataType}(),
@@ -187,13 +214,19 @@ mutable struct ServerCallbacks
                                                          C_NULL, C_NULL,
                                                          C_NULL, C_NULL,
                                                          C_NULL, C_NULL,
+                                                         C_NULL, C_NULL,
                                                          C_NULL)
         self.on_auth_password = on_auth_password
         self.on_auth_none = on_auth_none
         self.on_auth_gssapi_mic = on_auth_gssapi_mic
         self.on_auth_pubkey = on_auth_pubkey
+        self.on_auth_kbdint = on_auth_kbdint
         self.on_service_request = on_service_request
         self.on_channel_open_request_session = on_channel_open_request_session
+        self.on_channel_open_request_direct_tcpip = on_channel_open_request_direct_tcpip
+        self.on_gssapi_select_oid = on_gssapi_select_oid
+        self.on_gssapi_accept_sec_ctx = on_gssapi_accept_sec_ctx
+        self.on_gssapi_verify_mic = on_gssapi_verify_mic
 
         return self
     end
@@ -218,6 +251,10 @@ function Base.setproperty!(self::ServerCallbacks, name::Symbol, value)
         ptr.auth_pubkey_function = @_gencb(:auth_pubkey, value,
                                            AuthStatus, AuthStatus_Error, Cint,
                                            Cint, (lib.ssh_session, Cstring, lib.ssh_key, Cchar, Ptr{Cvoid}))
+    elseif name === :on_auth_kbdint
+        ptr.auth_kbdint_function = @_gencb_opt(:auth_kbdint, value,
+                                           AuthStatus, AuthStatus_Error, Cint,
+                                           Cint, (lib.ssh_message, lib.ssh_session, Ptr{Cvoid}))
     elseif name === :on_service_request
         ptr.service_request_function = @_gencb(:service_request, value,
                                                Bool, false, ret -> ret ? 0 : -1,
@@ -226,6 +263,22 @@ function Base.setproperty!(self::ServerCallbacks, name::Symbol, value)
         ptr.channel_open_request_session_function = @_gencb(:channel_open, value,
                                                             Union{SshChannel, Nothing}, nothing, ret -> isnothing(ret) ? lib.ssh_channel() : ret.ptr,
                                                             lib.ssh_channel, (lib.ssh_session, Ptr{Cvoid}))
+    elseif name === :on_channel_open_request_direct_tcpip
+        ptr.channel_open_request_direct_tcpip_function = @_gencb_opt(:channel_open_direct_tcpip, value,
+                                                                 Union{SshChannel, Nothing}, nothing, ret -> isnothing(ret) ? lib.ssh_channel() : ret.ptr,
+                                                                 lib.ssh_channel, (lib.ssh_session, Cstring, Cint, Cstring, Cint, Ptr{Cvoid}))
+    elseif name === :on_gssapi_select_oid
+        ptr.gssapi_select_oid_function = @_gencb_opt(:gssapi_select_oid, value,
+                                                 lib.ssh_string, lib.ssh_string(), identity,
+                                                 lib.ssh_string, (lib.ssh_session, Cstring, Cint, Ptr{lib.ssh_string}, Ptr{Cvoid}))
+    elseif name === :on_gssapi_accept_sec_ctx
+        ptr.gssapi_accept_sec_ctx_function = @_gencb_opt(:gssapi_accept_sec_ctx, value,
+                                                     Bool, false, ret -> Cint(ret ? lib.SSH_OK : lib.SSH_ERROR),
+                                                     Cint, (lib.ssh_session, lib.ssh_string, Ptr{lib.ssh_string}, Ptr{Cvoid}))
+    elseif name === :on_gssapi_verify_mic
+        ptr.gssapi_verify_mic_function = @_gencb_opt(:gssapi_verify_mic, value,
+                                                 Bool, false, ret -> Cint(ret ? lib.SSH_OK : lib.SSH_ERROR),
+                                                 Cint, (lib.ssh_session, lib.ssh_string, Ptr{Cvoid}, Csize_t, Ptr{Cvoid}))
     else
         setfield!(self, name, value)
     end
