@@ -335,7 +335,7 @@ end
         end
 
         client = demo_server.clients[1]
-        @test client.callback_log[:message_request] == [(ssh.RequestType_ChannelOpen, lib.SSH_CHANNEL_DIRECT_TCPIP)]
+        @test client.callback_log[:channel_open_direct_tcpip] == [("localhost", 9090)]
     end
     @info "Finished: Server / Direct port forwarding"
 

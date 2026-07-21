@@ -7,6 +7,12 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## [v1.1.0] - 2026-07-21
+
+### Changed
+- Updated to use libssh 0.12.1 (#45). The main change to LibSSH.jl is added
+  support for some more callbacks in [`ServerCallbacks`](@ref).
+
 ## [v1.0.0] - 2026-06-25
 
 ### Added

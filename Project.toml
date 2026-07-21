@@ -1,6 +1,6 @@
 name = "LibSSH"
 uuid = "00483490-30f8-4353-8aba-35b82f51f4d0"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["James Wrigley <james@puiterwijk.org> and contributors"]
 
 [deps]
@@ -24,4 +24,4 @@ PrecompileTools = "1"
 Printf = "1"
 Sockets = "1"
 julia = "1.11"
-libssh_jll = "0.11"
+libssh_jll = "0.12.1"

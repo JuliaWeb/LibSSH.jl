@@ -67,7 +67,13 @@ function get_docs(node::ExprNode, doc::Vector{String})
     elseif node.id == :ssh_message_auth_interactive_request
         String["Initiate keyboard-interactive authentication from a server."]
     elseif node.id == :sftp_limits_t
-        String["Pointer to a [`sftp_limits_struct`](@ref)"]
+        String["Pointer to a [`sftp_limits_struct`](@ref)."]
+    elseif node.id == :sftp_name_id_map
+        String["Pointer to a [`sftp_name_id_map_struct`](@ref)."]
+    elseif node.id == :ssh_string
+        String["[Upstream documentation](https://api.libssh.org/stable/group__libssh__string.html)."]
+    elseif node.id == :LIBSSH_SK_API_VERSION_MAJOR
+        String["Security key API major version."]
 
     # Internal Clang.jl structs and helper functions from us start with '_' and
     # we don't want to document them.
