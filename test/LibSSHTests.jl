@@ -987,6 +987,13 @@ end
                 @test write(file, data) == length(data)
                 @test read(path) == data
 
+                # Writing a DenseVector whose element type is wider than UInt8
+                # must send the array's actual bytes, not read out of bounds.
+                wide = Int32[1, 2, 3, 4]
+                seekstart(file)
+                @test write(file, wide) == sizeof(wide)
+                @test read(path)[1:sizeof(wide)] == collect(reinterpret(UInt8, wide))
+
                 # Shouldn't be able to write to a closed file
                 close(file)
                 @test_throws ArgumentError write(file, data)

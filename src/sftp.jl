@@ -1042,7 +1042,7 @@ function Base.write(file::SftpFile, data::T) where T <: DenseVector
     try
         while bytes_left > 0
             handle = Ref{lib.sftp_aio}()
-            offset = length(data) - bytes_left
+            offset = sizeof(data) - bytes_left
             ret = GC.@preserve data lib.sftp_aio_begin_write(file, Ptr{Cvoid}(pointer(data)) + offset, bytes_left, handle)
             if ret == SSH_ERROR
                 throw(SftpException("Attempted write to file failed", file))
