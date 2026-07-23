@@ -914,6 +914,32 @@ end
                 seekstart(file)
                 @test read(file) == data
 
+                # A short read (buffer larger than the file) must truncate `out`
+                # to the bytes actually read, not return uninitialized memory.
+                small = UInt8[0xaa, 0xbb, 0xcc]
+                write(path, small)
+                seekstart(file)
+                out = Vector{UInt8}(undef, 64)
+                @test read!(file, out) === out
+                @test out == small
+
+                # A file that is larger than a single request but still shorter
+                # than the buffer should also truncate the buffer.
+                data = rand(UInt8, limits.max_read_length + 1)
+                write(path, data)
+                seekstart(file)
+                out = Vector{UInt8}(undef, 2 * (limits.max_read_length + 1))
+                @test read!(file, out) === out
+                @test out == data
+
+                # Reading into an oversized buffer from an empty file truncates
+                # to zero bytes.
+                write(path, UInt8[])
+                seekstart(file)
+                out = Vector{UInt8}(undef, 64)
+                @test read!(file, out) === out
+                @test isempty(out)
+
                 # Shouldn't be able to read from a closed file
                 close(file)
                 @test_throws ArgumentError read(file)
