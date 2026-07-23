@@ -7,10 +7,25 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## [v1.2.0] - 2026-07-23
+
+*This release has some security fixes, we strongly recommend updating to it.*
+
+### Fixed
+- Fixed a bug in [`write(::SftpFile, ::DenseVector)`](@ref) where writing a
+  vector that didn't have a `UInt8` eltype could read out of bounds and send
+  heap memory to the remote server ([#46]).
+- `read!(::SftpFile, ::Vector{UInt8})` previously did not handle short reads
+  correctly and could return uninitialized memory to the caller ([#46]).
+- Writing to a channel can sometimes hang when the servers receive window is
+  empty. Previously [`write(::SshChannel, ::Vector)`](@ref) would only emit an
+  error log when this occurred but now it will retry until a certain timeout and
+  otherwise throw an exception ([#46]).
+
 ## [v1.1.0] - 2026-07-21
 
 ### Changed
-- Updated to use libssh 0.12.1 (#45). The main change to LibSSH.jl is added
+- Updated to use libssh 0.12.1 ([#45]). The main change to LibSSH.jl is added
   support for some more callbacks in [`ServerCallbacks`](@ref).
 
 ## [v1.0.0] - 2026-06-25

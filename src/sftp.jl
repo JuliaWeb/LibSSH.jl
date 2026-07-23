@@ -934,9 +934,12 @@ Base.read(filename::AbstractString, sftp::SftpSession) = open(read, filename, sf
 """
 $(TYPEDSIGNATURES)
 
-Read `length(out)` bytes from the remote [`SftpFile`](@ref) into `out`. This
-uses libssh's asynchronous IO functions under the hood so it may launch multiple
-parallel requests.
+Read up to `length(out)` bytes from the remote [`SftpFile`](@ref) into `out` and
+return `out`. This uses libssh's asynchronous IO functions under the hood so it
+may launch multiple parallel requests.
+
+If a short read occurs (e.g. EOF, or the file shrank since it was opened) then
+`out` is truncated to the number of bytes actually read.
 
 # Throws
 - `ArgumentError`: If `file` is closed.
@@ -970,9 +973,10 @@ function Base.read!(file::SftpFile, out::Vector{UInt8})
     end
 
     # Wait for the requests to be completed
+    bytes_read = 0
     try
         for (pos, chunk_size, handle) in handles
-            GC.@preserve handle out begin
+            short_read = GC.@preserve handle out begin
                 handle_ptr = Base.unsafe_convert(Ptr{lib.sftp_aio}, handle)
                 buffer_ptr = Ptr{Cvoid}(pointer(out, pos))
                 ret = _session_trywait(file.sftp.session) do
@@ -981,10 +985,24 @@ function Base.read!(file::SftpFile, out::Vector{UInt8})
                 if ret == SSH_ERROR
                     throw(SftpException("Reading file from $(pos):$(pos + chunk_size - 1)", file))
                 end
+
+                bytes_read += ret
+                ret < chunk_size
+            end
+
+            # A short read means the remaining chunks were queued at file
+            # offsets past the gap, so their data would land at the wrong
+            # position in `out`. Stop here and truncate below.
+            if short_read
+                break
             end
         end
     finally
         free_handles()
+    end
+
+    if bytes_read < length(out)
+        resize!(out, bytes_read)
     end
 
     return out
@@ -1024,7 +1042,7 @@ function Base.write(file::SftpFile, data::T) where T <: DenseVector
     try
         while bytes_left > 0
             handle = Ref{lib.sftp_aio}()
-            offset = length(data) - bytes_left
+            offset = sizeof(data) - bytes_left
             ret = GC.@preserve data lib.sftp_aio_begin_write(file, Ptr{Cvoid}(pointer(data)) + offset, bytes_left, handle)
             if ret == SSH_ERROR
                 throw(SftpException("Attempted write to file failed", file))
