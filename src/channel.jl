@@ -269,32 +269,68 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Write a byte array to the channel and return the number of bytes written (should
-always match the length of the array, unless there was an error, in which case
-this will throw an exception).
+Write a byte array to the channel and return the number of bytes written. In
+most cases this should match the length of the array, unless there was an error,
+in which case this will throw an exception.
+
+If the remote receive window is 0 then it will retry for `timeout` seconds
+before throwing an exception (pass -1 to disable the timeout). Note that this
+does not mean the total possible time to write the whole message is `timeout`
+seconds, but rather that we give the server `timeout` seconds to be ready each
+time it says it can't receive more data (which could be multiple times per
+message).
 
 Wrapper around
 [`lib.ssh_channel_write()`](@ref)/[`lib.ssh_channel_write_stderr()`](@ref).
 """
-function Base.write(sshchan::SshChannel, data::Vector{UInt8}; stderr::Bool=false)
+function Base.write(sshchan::SshChannel, data::Vector{UInt8}; stderr::Bool=false, timeout=30)
     if !isassigned(sshchan) || !isopen(sshchan)
         throw(ArgumentError("SshChannel has been closed, is not writeable"))
     end
 
     writer = stderr ? lib.ssh_channel_write_stderr : lib.ssh_channel_write
 
-    ret = GC.@preserve data begin
-        ptr = Ptr{Cvoid}(pointer(data))
-        _session_call(sshchan.session, () -> writer(sshchan, ptr, length(data)))
-    end
-    if ret != length(data)
-        @error "Not all data written"
-    end
-    if ret == SSH_ERROR
-        throw(LibSSHException("Error when writing to channel: $(ret)"))
+    deadline = time() + (timeout < 0 ? Inf : timeout)
+    written = 0
+    total = length(data)
+    while written < total
+        ret = GC.@preserve data begin
+            ptr = Ptr{Cvoid}(pointer(data) + written)
+            _session_call(sshchan.session, () -> writer(sshchan, ptr, total - written))
+        end
+
+        if ret == SSH_ERROR
+            throw(LibSSHException("Error when writing to channel: $(ret)"))
+        elseif ret > 0
+            # Reset the deadline when we successfully write
+            deadline = time() + (timeout < 0 ? Inf : timeout)
+        end
+
+        written += ret
+        if written < total
+            try
+                wait(sshchan.session)
+            catch ex
+                # The session was closed underneath us (shutdown or a dropped
+                # socket), fall through to the short-write exception below.
+                if ex isa InvalidStateException || ex isa Base.IOError
+                    break
+                else
+                    rethrow()
+                end
+            end
+        end
+
+        if time() > deadline
+            break
+        end
     end
 
-    return Int(ret)
+    if written < total
+        throw(LibSSHException("Could not write all data to $(sshchan) of $(sshchan.session): $(written)/$(total) bytes written"))
+    end
+
+    return written
 end
 
 """
