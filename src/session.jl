@@ -686,12 +686,14 @@ function _ensure_fd_poller(session::Session, fd::SocketFD)
     # dup() so the watcher's lifetime is decoupled from libssh's (see _FdPoller).
     dupfd = _dup_socketfd(fd)
     if isnothing(dupfd)
+        @error "Couldn't duplicate the session socket, cannot poll it" fd socket_error=_socket_error()
         return nothing
     end
 
     watcher = try
         FileWatching.FDWatcher(dupfd, true, false)
-    catch
+    catch ex
+        @error "Couldn't watch the session socket" dupfd exception=(ex, catch_backtrace())
         _close_socketfd(dupfd)
         return nothing
     end
@@ -793,7 +795,9 @@ function _actor_loop(session::Session)
 
                 p = _ensure_fd_poller(session, _socketfd(raw_fd))
                 if isnothing(p)
-                    # Couldn't watch the fd (closed/invalid)
+                    # Couldn't watch the fd. Close the wakeup condition for the
+                    # same reason as above, otherwise waiters block forever.
+                    @lock session._wakeup close(session._wakeup)
                     break
                 end
 

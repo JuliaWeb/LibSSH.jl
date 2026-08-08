@@ -236,6 +236,8 @@ end
     _close_socketfd(fd::SocketFD) =
         @ccall "ws2_32".closesocket(_handle_to_uint(fd)::UInt)::Cint
 
+    _socket_error() = @ccall "ws2_32".WSAGetLastError()::Cint
+
     _handle_to_uint(fd::SocketFD) = UInt(Base.cconvert(Ptr{Cvoid}, fd))
 
     _socket_t_value(fd::SocketFD) = lib.socket_t(_handle_to_uint(fd))
@@ -257,6 +259,8 @@ else
     end
 
     _close_socketfd(fd::SocketFD) = @ccall close(fd::Cint)::Cint
+
+    _socket_error() = Base.Libc.errno()
 end
 
 # libssh returns SSH_INVALID_SOCKET for a disconnected session. Note that this
