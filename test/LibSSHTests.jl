@@ -339,23 +339,25 @@ end
     end
     @info "Finished: Server / Direct port forwarding"
 
-    @testset "Keyboard-interactive authentication" begin
-        demo_server, _ = DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
-            # Run the script
-            script_path = joinpath(@__DIR__, "interactive_ssh.sh")
-            proc = run(`expect -f $script_path`; wait=false)
-            wait(proc)
+    if !Sys.iswindows()
+        @testset "Keyboard-interactive authentication" begin
+            demo_server, _ = DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
+                # Run the script
+                script_path = joinpath(@__DIR__, "interactive_ssh.sh")
+                proc = run(`expect -f $script_path`; wait=false)
+                wait(proc)
+            end
+
+            client = demo_server.clients[1]
+
+            # Check that authentication succeeded
+            @test client.authenticated
+
+            # And the command was executed
+            @test client.callback_log[:channel_exec_request] == ["'whoami'"]
         end
-
-        client = demo_server.clients[1]
-
-        # Check that authentication succeeded
-        @test client.authenticated
-
-        # And the command was executed
-        @test client.callback_log[:channel_exec_request] == ["'whoami'"]
+        @info "Finished: Server / Keyboard-interactive authentication"
     end
-    @info "Finished: Server / Keyboard-interactive authentication"
 
     @testset "Multiple connections" begin
         demo_server, _ = DemoServer(2222; password="bar") do
@@ -433,7 +435,7 @@ end
         @test session.known_hosts == "/tmp/foo"
         session.gssapi_server_identity = "foo.com"
         @test session.gssapi_server_identity == "foo.com"
-        @test session.fd == RawFD(-1)
+        @test session.fd == ssh._socketfd(-1)
         session.process_config = false
         @test !session.process_config
 

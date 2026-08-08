@@ -376,7 +376,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
                                         Cint,
                                         (lib.ssh_session, lib.ssh_message, Ptr{Cvoid}))
 
-    fd = RawFD(lib.ssh_bind_get_fd(bind))
+    fd = _socketfd(lib.ssh_bind_get_fd(bind))
     while isopen(bind)
         poll_result = _safe_poll_fd(fd, poll_timeout; readable=true)
         if isnothing(poll_result)

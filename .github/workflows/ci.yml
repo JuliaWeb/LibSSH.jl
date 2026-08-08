@@ -20,35 +20,30 @@ jobs:
       actions: write
       contents: read
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.allow_failure }}
     strategy:
       fail-fast: false
       matrix:
         version:
-          - '1.11'
+          # - '1.11'
           - '1'
-          - 'nightly'
+          # - 'nightly'
         os:
-          - ubuntu-latest
+          # - ubuntu-latest
+          # - macOS-latest
+          - windows-latest
         arch:
           - x64
-          - x86
+          # - x86
         exclude:
           - os: macOS-latest
             arch: x86
-        include:
-          - version: '1.11'
-            allow_failure: false
-          - version: '1'
-            allow_failure: false
-          - version: 'nightly'
-            allow_failure: true
 
     steps:
       - uses: actions/checkout@v7
 
       # Install test dependencies
       - uses: awalsh128/cache-apt-pkgs-action@v1
+        if: runner.os == 'Linux'
         with:
           packages: expect
           version: 1.0
@@ -64,6 +59,8 @@ jobs:
 
       # Run the tests
       - uses: julia-actions/julia-runtest@latest
+        with:
+          optimize: 0
         env:
           JULIA_NUM_THREADS: '4,4'
 

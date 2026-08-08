@@ -28,7 +28,7 @@ end
 # fd can't pull libuv's poll handle out from under us. See
 # _teardown_fd_poller for the close-ordering race that remains.
 @kwdef mutable struct _FdPoller
-    const dupfd::RawFD
+    const dupfd::SocketFD
     const watcher::FileWatching.FDWatcher
     const timer::Timer
     const cond::Threads.Condition
@@ -238,9 +238,10 @@ server.
 # Arguments
 - `host`: The host to connect to.
 - `port=22`: The port to connect to.
-- `socket=nothing`: Can be an open `TCPSocket` or `RawFD` to connect to
-  directly. If this is not `nothing` it will be used instead of `port`. You will
-  need to close the socket afterwards, the `Session` will not do it for you.
+- `socket=nothing`: Can be an open `TCPSocket` or a raw socket handle (`RawFD`
+  on POSIX, `Base.Libc.WindowsRawSocket` on Windows) to connect to directly. If
+  this is not `nothing` it will be used instead of `port`. You will need to
+  close the socket afterwards, the `Session` will not do it for you.
 - `user=nothing`: Set the user to connect as. If unset the current
    username will be used.
 - `log_verbosity=nothing`: Set the log verbosity for the session. You can still
@@ -264,7 +265,7 @@ julia> session = ssh.Session(ip"12.34.56.78", 2222)
 ```
 """
 function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
-                 socket::Union{Sockets.TCPSocket, RawFD, Nothing}=nothing,
+                 socket::Union{Sockets.TCPSocket, RawFD, SocketFD, Nothing}=nothing,
                  user=nothing, log_verbosity=nothing, auto_connect=true,
                  process_config=true, pin_tid::Union{Nothing, Integer}=nothing)
     session_ptr = lib.ssh_new()
@@ -284,7 +285,7 @@ function Session(host::Union{AbstractString, Sockets.IPAddr}, port=22;
         if isnothing(socket)
             session.port = port
         else
-            session.fd = socket isa RawFD ? socket : Base._fd(socket)
+            session.fd = socket isa Sockets.TCPSocket ? Base._fd(socket) : socket
         end
 
         if isnothing(user)
@@ -404,7 +405,7 @@ end
 # Mapping from option name to the corresponding enum and C type
 const SESSION_PROPERTY_OPTIONS = Dict(:host => (SSH_OPTIONS_HOST, Cstring),
                                       :port => (SSH_OPTIONS_PORT, Cuint),
-                                      :fd => (SSH_OPTIONS_FD, Cint),
+                                      :fd => (SSH_OPTIONS_FD, lib.socket_t),
                                       :user => (SSH_OPTIONS_USER, Cstring),
                                       :ssh_dir => (SSH_OPTIONS_SSH_DIR, Cstring),
                                       :known_hosts => (SSH_OPTIONS_KNOWNHOSTS, Cstring),
@@ -442,7 +443,7 @@ function Base.getproperty(session::Session, name::Symbol)
             ret = lib.ssh_options_get_port(session, port; throw=false)
             value = UInt(port[])
         elseif name === :fd
-            value = RawFD(lib.ssh_get_fd(session))
+            value = _socketfd(lib.ssh_get_fd(session))
         else
             # All properties supported by ssh_options_get() are strings, so we know
             # that this option must be a string.
@@ -490,6 +491,9 @@ function Base.setproperty!(session::Session, name::Symbol, value)
             cvalue = Base.unsafe_convert(ctype, value_str)
             _session_call(session, () -> lib.ssh_options_set(session, option, Ptr{Cvoid}(cvalue); throw=false))
         end
+    elseif name === :fd
+        cvalue = _socket_t_value(value)
+        _session_call(session, () -> lib.ssh_options_set(session, option, Ref(cvalue); throw=false))
     else
         GC.@preserve value begin
             cvalue = Base.cconvert(ctype, value)
@@ -675,20 +679,20 @@ end
 # keep it for the session's lifetime (the socket fd is stable per session).
 # Only ever called on the actor task. Returns nothing if the FDWatcher
 # couldn't be created (treated like a closed fd by the caller).
-function _ensure_fd_poller(session::Session, fd::RawFD)
+function _ensure_fd_poller(session::Session, fd::SocketFD)
     p = session._fd_poller
     isnothing(p) || return p
 
     # dup() so the watcher's lifetime is decoupled from libssh's (see _FdPoller).
-    dupfd = Base.Libc.dup(fd)
-    if dupfd == RawFD(-1)
+    dupfd = _dup_socketfd(fd)
+    if isnothing(dupfd)
         return nothing
     end
 
     watcher = try
         FileWatching.FDWatcher(dupfd, true, false)
     catch
-        ccall(:close, Cint, (Cint,), dupfd)
+        _close_socketfd(dupfd)
         return nothing
     end
 
@@ -738,7 +742,7 @@ function _teardown_fd_poller(session::Session)
     # teardown also leaks a Timer/libuv handle.
     dupfd = p.dupfd
     Timer(0.5) do _
-        ccall(:close, Cint, (Cint,), dupfd)
+        _close_socketfd(dupfd)
     end
     # Unblock the watcher task if it's parked in wait(cond) for ready to clear.
     @lock p.cond notify(p.cond; all=true)
@@ -778,8 +782,8 @@ function _actor_loop(session::Session)
 
             if (has_waiters || has_regs) && isopen(session)
                 # Poll the fd for I/O readiness — C calls are safe, we're the actor
-                fd = RawFD(lib.ssh_get_fd(session))
-                if fd == RawFD(-1)
+                raw_fd = lib.ssh_get_fd(session)
+                if _is_invalid_fd(raw_fd)
                     # Session has been disconnected, fd is invalid. Close the
                     # wakeup condition so waiters get an InvalidStateException
                     # rather than a spurious normal wakeup.
@@ -787,7 +791,7 @@ function _actor_loop(session::Session)
                     break
                 end
 
-                p = _ensure_fd_poller(session, fd)
+                p = _ensure_fd_poller(session, _socketfd(raw_fd))
                 if isnothing(p)
                     # Couldn't watch the fd (closed/invalid)
                     break
