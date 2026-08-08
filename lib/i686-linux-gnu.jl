@@ -2096,6 +2096,15 @@ function ssh_userauth_gssapi(session)
 end
 
 """
+    ssh_userauth_gssapi_keyex(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__auth.html#gae22b2fa5d865b8efcbbaba6e7376596b).
+"""
+function ssh_userauth_gssapi_keyex(session)
+    @ccall libssh.ssh_userauth_gssapi_keyex(session::ssh_session)::Cint
+end
+
+"""
     ssh_version(req_version)
 
 [Upstream documentation](https://api.libssh.org/stable/group__libssh__misc.html#gaf6fc133fcb6792f93b1197b15acf66b0).
@@ -2321,6 +2330,15 @@ end
 """
 function ssh_get_kex_algo(session)
     @ccall libssh.ssh_get_kex_algo(session::ssh_session)::Ptr{Cchar}
+end
+
+"""
+    ssh_session_kex_is_gss(session)
+
+[Upstream documentation](https://api.libssh.org/stable/group__libssh__session.html#gab9dbb045c47d4910495c8d5e0d6ae774).
+"""
+function ssh_session_kex_is_gss(session)
+    @ccall libssh.ssh_session_kex_is_gss(session::ssh_session)::Bool
 end
 
 """
@@ -6534,7 +6552,7 @@ const LIBSSH_VERSION_MAJOR = 0
 
 const LIBSSH_VERSION_MINOR = 12
 
-const LIBSSH_VERSION_MICRO = 1
+const LIBSSH_VERSION_MICRO = 2
 
 const LIBSSH_VERSION_INT = SSH_VERSION_INT(LIBSSH_VERSION_MAJOR, LIBSSH_VERSION_MINOR, LIBSSH_VERSION_MICRO)
 
