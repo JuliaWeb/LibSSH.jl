@@ -57,10 +57,13 @@ jobs:
       # Cache everything
       - uses: julia-actions/cache@v3
 
+      # - name: Setup tmate session
+      #   uses: mxschmitt/action-tmate@v3
+
       # Run the tests
       - uses: julia-actions/julia-runtest@latest
-        with:
-          optimize: 0
+        # with:
+        #   optimize: 0
         env:
           JULIA_NUM_THREADS: '4,4'
 

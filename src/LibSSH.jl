@@ -279,18 +279,18 @@ include("server.jl")
 import Base: Filesystem
 include("sftp.jl")
 
-# @compile_workload begin
-#     port, server = Sockets.listenany(Sockets.localhost, 2222)
-#     port = Int(port)
-#     close(server)
-#     server = DemoServer(port; password="foo", auth_methods=[AuthMethod_Password])
+@compile_workload begin
+    port, server = Sockets.listenany(Sockets.localhost, 2222)
+    port = Int(port)
+    close(server)
+    server = DemoServer(port; password="foo", auth_methods=[AuthMethod_Password])
 
-#     session = Session(Sockets.localhost, port)
-#     @assert isconnected(session)
-#     @assert userauth_password(session, "foo") == AuthStatus_Success
-#     close(session)
+    session = Session(Sockets.localhost, port)
+    @assert isconnected(session)
+    @assert userauth_password(session, "foo") == AuthStatus_Success
+    close(session)
 
-#     close(server)
-# end
+    close(server)
+end
 
 end

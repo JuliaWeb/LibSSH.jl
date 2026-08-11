@@ -700,9 +700,7 @@ end
             @test_throws ssh.SshProcessFailedException run(`foo`, session)
 
             # Test passing a String instead of a Cmd
-            mktempdir() do tmpdir
-                @test readchomp("cd $(tmpdir) && pwd", session) == tmpdir
-            end
+            @test readchomp("echo foo", session) == "foo"
 
             sshchan = ssh.SshChannel(session)
             close(sshchan)
@@ -778,6 +776,15 @@ end
 end
 
 @testset "SFTP" begin
+    if Sys.iswindows()
+        # libssh doesn't implement the SFTP server API on Windows (the whole
+        # implementation in src/sftpserver.c is inside a `#ifndef _WIN32`, and the
+        # Windows stubs return SSH_ERROR unconditionally), so the DemoServer can't
+        # serve SFTP there and every one of these testsets would hang.
+        @warn "Skipping SFTP tests on windows"
+        return
+    end
+
     @testset "Initialization and finalizing" begin
         demo_server_with_session(2222; verbose=false) do session
             # session.log_verbosity = ssh.SSH_LOG_TRACE
@@ -1238,6 +1245,11 @@ end
 end
 
 @testset "Examples" begin
+    # The examples use the SFTP server, which isn't supported on Windows
+    if Sys.iswindows()
+        return
+    end
+
     mktempdir() do tempdir
         # Test and generate the examples
         Literate.markdown(joinpath(@__DIR__, "../docs/src/examples.jl"),
