@@ -8,7 +8,15 @@ import FileWatching
 using DocStringExtensions
 using PrecompileTools: @compile_workload
 
-@static if Sys.WORD_SIZE == 64
+@static if Sys.iswindows()
+    # Windows needs its own bindings because some types differ, most importantly
+    # socket_t.
+    if Sys.WORD_SIZE == 64
+        include(joinpath(@__DIR__, "..", "lib", "x86_64-w64-mingw32.jl"))
+    else
+        include(joinpath(@__DIR__, "..", "lib", "i686-w64-mingw32.jl"))
+    end
+elseif Sys.WORD_SIZE == 64
     include(joinpath(@__DIR__, "..", "lib", "x86_64-linux-gnu.jl"))
 else
     include(joinpath(@__DIR__, "..", "lib", "i686-linux-gnu.jl"))
@@ -182,6 +190,82 @@ function _safe_poll_fd(args...; kwargs...)
 
     return result
 end
+
+# libssh's socket_t is a file descriptor on POSIX but a Windows SOCKET, which is
+# not a CRT fd. Wrapping a SOCKET in RawFD makes FileWatching try to convert it
+# with _get_osfhandle() and fail, so Windows uses WindowsRawSocket instead.
+# See https://github.com/JuliaWeb/LibSSH.jl/issues/34.
+@static if Sys.iswindows()
+    const SocketFD = Base.Libc.WindowsRawSocket
+
+    _socketfd(fd::Integer) = Base.Libc.WindowsRawSocket(Ptr{Cvoid}(fd % UInt))
+
+    # dup(2) doesn't work on a SOCKET, the winsock equivalent is
+    # WSADuplicateSocketW() into our own process + WSASocketW(). Like dup(2) it
+    # returns a second reference to the same socket. Note that DuplicateHandle()
+    # (what Base.Libc.dup does) is not supported for sockets.
+    const _WSA_FLAG_OVERLAPPED = UInt32(0x01)
+    const _FROM_PROTOCOL_INFO = Cint(-1)
+    const _INVALID_SOCKET = ~UInt(0)
+
+    function _dup_socketfd(fd::SocketFD)
+        # WSAPROTOCOL_INFOW is 372 bytes, we over-allocate rather than
+        # transcribe the layout since we only pass it back to winsock.
+        info = zeros(UInt8, 512)
+        pid = @ccall "kernel32".GetCurrentProcessId()::UInt32
+        ret = @ccall "ws2_32".WSADuplicateSocketW(_handle_to_uint(fd)::UInt,
+                                                  pid::UInt32,
+                                                  info::Ptr{Cvoid})::Cint
+        if ret != 0
+            return nothing
+        end
+
+        dupfd = @ccall "ws2_32".WSASocketW(_FROM_PROTOCOL_INFO::Cint,
+                                           _FROM_PROTOCOL_INFO::Cint,
+                                           _FROM_PROTOCOL_INFO::Cint,
+                                           info::Ptr{Cvoid},
+                                           0::UInt32,
+                                           _WSA_FLAG_OVERLAPPED::UInt32)::UInt
+        if dupfd == _INVALID_SOCKET
+            return nothing
+        end
+
+        return _socketfd(dupfd)
+    end
+
+    _close_socketfd(fd::SocketFD) =
+        @ccall "ws2_32".closesocket(_handle_to_uint(fd)::UInt)::Cint
+
+    _socket_error() = @ccall "ws2_32".WSAGetLastError()::Cint
+
+    _handle_to_uint(fd::SocketFD) = UInt(Base.cconvert(Ptr{Cvoid}, fd))
+
+    _socket_t_value(fd::SocketFD) = lib.socket_t(_handle_to_uint(fd))
+    # A RawFD is a CRT fd, so it needs converting to a handle first.
+    _socket_t_value(fd::RawFD) = _socket_t_value(Base.Libc._get_osfhandle(fd))
+    _socket_t_value(fd::Integer) = lib.socket_t(fd)
+else
+    const SocketFD = RawFD
+
+    _socketfd(fd::Integer) = RawFD(fd)
+
+    # RawFD is a primitive type, Cint(::RawFD) doesn't exist.
+    _socket_t_value(fd::RawFD) = Base.cconvert(lib.socket_t, fd)
+    _socket_t_value(fd::Integer) = lib.socket_t(fd)
+
+    function _dup_socketfd(fd::SocketFD)
+        dupfd = Base.Libc.dup(fd)
+        return dupfd == RawFD(-1) ? nothing : dupfd
+    end
+
+    _close_socketfd(fd::SocketFD) = @ccall close(fd::Cint)::Cint
+
+    _socket_error() = Base.Libc.errno()
+end
+
+# libssh returns SSH_INVALID_SOCKET for a disconnected session. Note that this
+# must be checked on the raw socket_t, before converting it with _socketfd().
+_is_invalid_fd(fd::Integer) = fd == lib.SSH_INVALID_SOCKET
 
 include("utils.jl")
 include("gssapi.jl")
