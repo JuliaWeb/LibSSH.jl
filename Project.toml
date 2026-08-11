@@ -14,6 +14,9 @@ Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 libssh_jll = "a8d4f100-aa25-5708-be18-96e0805c2c9d"
 
+[sources]
+libssh_jll = {rev = "main", url = "https://github.com/JamesWrigley/libssh_jll.jl"}
+
 [compat]
 CEnum = "0.4, 0.5"
 Dates = "1"
