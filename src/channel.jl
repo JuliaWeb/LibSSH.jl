@@ -911,10 +911,14 @@ Base.success(cmd::Union{Cmd, String}, session::Session) = success(run(cmd, sessi
 function _on_client_channel_data(session, sshchan, data, is_stderr, client)
     _logcb(client, "Received $(length(data)) bytes from server")
 
-    if isopen(client.sock)
+    try
         write(client.sock, data)
-    else
-        @warn "Client socket has been closed, dropping $(length(data)) bytes from the remote forwarded port"
+    catch ex
+        if ex isa Base.IOError
+            @warn "Client socket has been closed, dropping $(length(data)) bytes from the remote forwarded port"
+        else
+            rethrow()
+        end
     end
 
     return length(data)
