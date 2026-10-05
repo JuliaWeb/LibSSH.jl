@@ -149,8 +149,11 @@ end
 
         # Binding fails at construction if the port is already in use (`server`
         # is still listening on 2222 here). Using an imported `key` also exercises
-        # the error path's guard against double-freeing the key.
-        @test_throws ssh.LibSSHException ssh.Bind(2222; key=pki.generate(pki.KeyType_ed25519))
+        # the error path's guard against double-freeing the key. Not on Windows,
+        # where libssh's SO_REUSEADDR lets the second bind succeed.
+        if !Sys.iswindows()
+            @test_throws ssh.LibSSHException ssh.Bind(2222; key=pki.generate(pki.KeyType_ed25519))
+        end
 
         # Basic listener test
         t = errormonitor(Threads.@spawn ssh.listen(Returns(nothing), server))
@@ -194,30 +197,34 @@ end
     ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`$(sshpass()) -p bar $(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
     passwordless_ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`$(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
 
-    @testset "Command execution" begin
-        DemoServer(2222; password="bar", verbose=false) do
-            # Test exitcodes
-            @test run(ssh_cmd(`foo@localhost exit 0`)).exitcode == 0
-            @test run(ssh_cmd(`foo@localhost exit 42`)).exitcode == 42
+    # sshpass_jll isn't available on Windows, so skip the tests using
+    # password auth with the OpenSSH client there.
+    if !Sys.iswindows()
+        @testset "Command execution" begin
+            DemoServer(2222; password="bar", verbose=false) do
+                # Test exitcodes
+                @test run(ssh_cmd(`foo@localhost exit 0`)).exitcode == 0
+                @test run(ssh_cmd(`foo@localhost exit 42`)).exitcode == 42
 
-            # Test passing environment variables
-            cmd_out = IOBuffer()
-            cmd = ssh_cmd(`foo@localhost -o SendEnv=foo echo \$foo`)
-            cmd = addenv(cmd, "foo" => "bar")
-            cmd_result = run(pipeline(cmd; stdout=cmd_out))
+                # Test passing environment variables
+                cmd_out = IOBuffer()
+                cmd = ssh_cmd(`foo@localhost -o SendEnv=foo echo \$foo`)
+                cmd = addenv(cmd, "foo" => "bar")
+                cmd_result = run(pipeline(cmd; stdout=cmd_out))
 
-            @test strip(String(take!(cmd_out))) == "bar"
+                @test strip(String(take!(cmd_out))) == "bar"
 
-            # Test writing data to stdin
-            read_cmd = "read var && echo \$var"
-            cmd_out = IOBuffer()
-            open(ssh_cmd(`foo@localhost $read_cmd`), cmd_out; write=true) do io
-                write(io, "foo\n")
+                # Test writing data to stdin
+                read_cmd = "read var && echo \$var"
+                cmd_out = IOBuffer()
+                open(ssh_cmd(`foo@localhost $read_cmd`), cmd_out; write=true) do io
+                    write(io, "foo\n")
+                end
+                @test String(take!(cmd_out)) == "foo\n"
             end
-            @test String(take!(cmd_out)) == "foo\n"
         end
+        @info "Finished: Server / Command execution"
     end
-    @info "Finished: Server / Command execution"
 
     @testset "allow_auth_none" begin
         DemoServer(2222; auth_methods=[ssh.AuthMethod_None], allow_auth_none=true) do
@@ -265,123 +272,132 @@ end
     end
     @info "Finished: Server / Public key authentication"
 
-    @testset "Password authentication and session channels" begin
-        # More complicated test, where we run a command and check the output
-        demo_server, _ = DemoServer(2222; password="bar") do
-            cmd_out = IOBuffer()
-            cmd = ssh_cmd(`foo@localhost whoami`)
-            cmd_result = run(pipeline(cmd; stdout=cmd_out))
+    # These need sshpass too
+    if !Sys.iswindows()
+        @testset "Password authentication and session channels" begin
+            # More complicated test, where we run a command and check the output
+            demo_server, _ = DemoServer(2222; password="bar") do
+                cmd_out = IOBuffer()
+                cmd = ssh_cmd(`foo@localhost whoami`)
+                cmd_result = run(pipeline(cmd; stdout=cmd_out))
 
-            @test cmd_result.exitcode == 0
-            @test strip(String(take!(cmd_out))) == username()
-        end
+                @test cmd_result.exitcode == 0
+                @test strip(String(take!(cmd_out))) == username()
+            end
 
-        client = demo_server.clients[1]
-        logs = client.callback_log
+            client = demo_server.clients[1]
+            logs = client.callback_log
 
-        # Smoke tests
-        show(IOBuffer(), demo_server)
-        show(IOBuffer(), client)
+            # Smoke tests
+            show(IOBuffer(), demo_server)
+            show(IOBuffer(), client)
 
-        # Check that the authentication methods were called
-        @test logs[:auth_none] == [true]
-        @test logs[:auth_password] == [("foo", "bar")]
-        @test client.authenticated
+            # Check that the authentication methods were called
+            @test logs[:auth_none] == [true]
+            @test logs[:auth_password] == [("foo", "bar")]
+            @test client.authenticated
 
-        # And a command was executed
-        @test typeof.(client.channel_operations) == [ssh.CommandExecutor]
+            # And a command was executed
+            @test typeof.(client.channel_operations) == [ssh.CommandExecutor]
 
-        # Make sure that it can handle errors too
-        DemoServer(2222; password="bar") do
-            cmd = ssh_cmd(`foo@localhost exit 42`)
-            cmd_result = run(pipeline(ignorestatus(cmd)))
-            @test cmd_result.exitcode == 42
-        end
-    end
-    @info "Finished: Server / Password authentication and session channels"
-
-    @testset "Direct port forwarding" begin
-        # Test the dummy HTTP server we'll use later
-        http_server(9090) do
-            @test run(`$(curl_cmd) localhost:9090`).exitcode == 0
-        end
-
-        # Test direct port forwarding
-        demo_server, _ = DemoServer(2222; password="bar") do
-            mktempdir() do tmpdir
-                tmpfile = joinpath(tmpdir, "foo")
-
-                # Start a client and wait for it
-                cmd = ssh_cmd(`-L 8080:localhost:9090 foo@localhost "touch $tmpfile; while [ -f $tmpfile ]; do sleep 0.1; done"`)
-                ssh_process = run(cmd; wait=false)
-                if timedwait(() -> isfile(tmpfile), 5) == :timed_out
-                    error("Timeout waiting for sentinel file $tmpfile to be created")
-                end
-
-                # At this point the client will be listening on port 8080, so we make a
-                # request to trigger a forward request to the server. Note that the
-                # client only requests a port forward when it accepts a connection
-                # on the listening port, so we only need the HTTP server running
-                # while we're making the request.
-                http_server(9090) do
-                    curl_process = run(ignorestatus(`$(curl_cmd) localhost:8080`))
-                    @test curl_process.exitcode == 0
-                end
-
-                # Afterwards we close the client and cleanup
-                rm(tmpfile)
-                wait(ssh_process)
+            # Make sure that it can handle errors too
+            DemoServer(2222; password="bar") do
+                cmd = ssh_cmd(`foo@localhost exit 42`)
+                cmd_result = run(pipeline(ignorestatus(cmd)))
+                @test cmd_result.exitcode == 42
             end
         end
+        @info "Finished: Server / Password authentication and session channels"
 
-        client = demo_server.clients[1]
-        @test client.callback_log[:channel_open_direct_tcpip] == [("localhost", 9090)]
-    end
-    @info "Finished: Server / Direct port forwarding"
+        @testset "Direct port forwarding" begin
+            # Test the dummy HTTP server we'll use later
+            http_server(9090) do
+                @test run(`$(curl_cmd) localhost:9090`).exitcode == 0
+            end
 
-    @testset "Keyboard-interactive authentication" begin
-        demo_server, _ = DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
-            # Run the script
-            script_path = joinpath(@__DIR__, "interactive_ssh.sh")
-            proc = run(`expect -f $script_path`; wait=false)
-            wait(proc)
+            # Test direct port forwarding
+            demo_server, _ = DemoServer(2222; password="bar") do
+                mktempdir() do tmpdir
+                    tmpfile = joinpath(tmpdir, "foo")
+
+                    # Start a client and wait for it
+                    cmd = ssh_cmd(`-L 8080:localhost:9090 foo@localhost "touch $tmpfile; while [ -f $tmpfile ]; do sleep 0.1; done"`)
+                    ssh_process = run(cmd; wait=false)
+                    if timedwait(() -> isfile(tmpfile), 5) == :timed_out
+                        error("Timeout waiting for sentinel file $tmpfile to be created")
+                    end
+
+                    # At this point the client will be listening on port 8080, so we make a
+                    # request to trigger a forward request to the server. Note that the
+                    # client only requests a port forward when it accepts a connection
+                    # on the listening port, so we only need the HTTP server running
+                    # while we're making the request.
+                    http_server(9090) do
+                        curl_process = run(ignorestatus(`$(curl_cmd) localhost:8080`))
+                        @test curl_process.exitcode == 0
+                    end
+
+                    # Afterwards we close the client and cleanup
+                    rm(tmpfile)
+                    wait(ssh_process)
+                end
+            end
+
+            client = demo_server.clients[1]
+            @test client.callback_log[:channel_open_direct_tcpip] == [("localhost", 9090)]
         end
-
-        client = demo_server.clients[1]
-
-        # Check that authentication succeeded
-        @test client.authenticated
-
-        # And the command was executed
-        @test client.callback_log[:channel_exec_request] == ["'whoami'"]
+        @info "Finished: Server / Direct port forwarding"
     end
-    @info "Finished: Server / Keyboard-interactive authentication"
 
-    @testset "Multiple connections" begin
-        demo_server, _ = DemoServer(2222; password="bar") do
-            run(ssh_cmd(`foo@localhost exit 0`))
-            run(ssh_cmd(`foo@localhost exit 0`))
+    # Only linux has `expect`
+    if Sys.islinux()
+        @testset "Keyboard-interactive authentication" begin
+            demo_server, _ = DemoServer(2222; auth_methods=[ssh.AuthMethod_Interactive]) do
+                # Run the script
+                script_path = joinpath(@__DIR__, "interactive_ssh.sh")
+                proc = run(`expect -f $script_path`; wait=false)
+                wait(proc)
+            end
+
+            client = demo_server.clients[1]
+
+            # Check that authentication succeeded
+            @test client.authenticated
+
+            # And the command was executed
+            @test client.callback_log[:channel_exec_request] == ["'whoami'"]
         end
-        @test length(demo_server.clients) == 2
+        @info "Finished: Server / Keyboard-interactive authentication"
     end
-    @info "Finished: Server / Multiple connections"
 
-    sftp_cmd(cmd::Cmd) = ignorestatus(`$(sshpass()) -p bar sftp -F none -o NoHostAuthenticationForLocalhost=yes -P 2222 $cmd`)
+    # These need sshpass too
+    if !Sys.iswindows()
+        @testset "Multiple connections" begin
+            demo_server, _ = DemoServer(2222; password="bar") do
+                run(ssh_cmd(`foo@localhost exit 0`))
+                run(ssh_cmd(`foo@localhost exit 0`))
+            end
+            @test length(demo_server.clients) == 2
+        end
+        @info "Finished: Server / Multiple connections"
 
-    @testset "SFTP" begin
-        DemoServer(2222; verbose=false, log_verbosity=ssh.SSH_LOG_NOLOG, password="bar") do
-            mktempdir() do tmpdir
-                src = joinpath(tmpdir, "foo")
-                dest = joinpath(tmpdir, "bar")
-                touch(src)
+        sftp_cmd(cmd::Cmd) = ignorestatus(`$(sshpass()) -p bar sftp -F none -o NoHostAuthenticationForLocalhost=yes -P 2222 $cmd`)
 
-                proc = run(sftp_cmd(`localhost:$(src) $(dest)`))
-                @test success(proc)
-                @test isfile(dest)
+        @testset "SFTP" begin
+            DemoServer(2222; verbose=false, log_verbosity=ssh.SSH_LOG_NOLOG, password="bar") do
+                mktempdir() do tmpdir
+                    src = joinpath(tmpdir, "foo")
+                    dest = joinpath(tmpdir, "bar")
+                    touch(src)
+
+                    proc = run(sftp_cmd(`localhost:$(src) $(dest)`))
+                    @test success(proc)
+                    @test isfile(dest)
+                end
             end
         end
+        @info "Finished: Server / SFTP"
     end
-    @info "Finished: Server / SFTP"
 
     # Test that the DemoServer cleans up lingering sessions
     server_task = Threads.@spawn DemoServer(2222; password="foo") do
@@ -394,8 +410,11 @@ end
 end
 
 @testset "Session" begin
-    # Connecting to a nonexistent ssh server should fail
-    @test_throws ssh.LibSSHException ssh.Session("localhost", 42)
+    # Connecting to a nonexistent ssh server should fail. Except on windows,
+    # where there's currently a bug in libssh that makes it hang instead.
+    if !Sys.iswindows()
+        @test_throws ssh.LibSSHException ssh.Session("localhost", 42)
+    end
 
     session = ssh.Session("localhost"; auto_connect=false, log_verbosity=lib.SSH_LOG_NOLOG)
     @test !ssh.isconnected(session)
@@ -433,7 +452,7 @@ end
         @test session.known_hosts == "/tmp/foo"
         session.gssapi_server_identity = "foo.com"
         @test session.gssapi_server_identity == "foo.com"
-        @test session.fd == RawFD(-1)
+        @test session.fd == ssh._socketfd(-1)
         session.process_config = false
         @test !session.process_config
 
@@ -698,9 +717,7 @@ end
             @test_throws ssh.SshProcessFailedException run(`foo`, session)
 
             # Test passing a String instead of a Cmd
-            mktempdir() do tmpdir
-                @test readchomp("cd $(tmpdir) && pwd", session) == tmpdir
-            end
+            @test readchomp("echo foo", session) == "foo"
 
             sshchan = ssh.SshChannel(session)
             close(sshchan)
@@ -776,6 +793,15 @@ end
 end
 
 @testset "SFTP" begin
+    if Sys.iswindows()
+        # libssh doesn't implement the SFTP server API on Windows (the whole
+        # implementation in src/sftpserver.c is inside a `#ifndef _WIN32`, and the
+        # Windows stubs return SSH_ERROR unconditionally), so the DemoServer can't
+        # serve SFTP there and every one of these testsets would hang.
+        @warn "Skipping SFTP tests on windows"
+        return
+    end
+
     @testset "Initialization and finalizing" begin
         demo_server_with_session(2222; verbose=false) do session
             # session.log_verbosity = ssh.SSH_LOG_TRACE
@@ -1236,6 +1262,11 @@ end
 end
 
 @testset "Examples" begin
+    # The examples use the SFTP server, which isn't supported on Windows
+    if Sys.iswindows()
+        return
+    end
+
     mktempdir() do tempdir
         # Test and generate the examples
         Literate.markdown(joinpath(@__DIR__, "../docs/src/examples.jl"),

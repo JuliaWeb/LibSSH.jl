@@ -376,7 +376,7 @@ function listen(handler::Function, bind::Bind; poll_timeout=0.1)
                                         Cint,
                                         (lib.ssh_session, lib.ssh_message, Ptr{Cvoid}))
 
-    fd = RawFD(lib.ssh_bind_get_fd(bind))
+    fd = _socketfd(lib.ssh_bind_get_fd(bind))
     while isopen(bind)
         poll_result = _safe_poll_fd(fd, poll_timeout; readable=true)
         if isnothing(poll_result)
@@ -1250,6 +1250,15 @@ function on_channel_subsystem_request(session, sshchan, subsystem, client)::Bool
     _add_log_event!(client, :channel_subsystem_request, subsystem)
 
     if subsystem == "sftp"
+        # libssh's SFTP server implementation is guarded by a `#ifndef _WIN32`
+        # in src/sftpserver.c, and the Windows stub of
+        # sftp_channel_default_data_callback() returns SSH_ERROR for every
+        # packet. That means we would never reply to the client's SSH_FXP_INIT
+        # and it would block forever in sftp_init(), so fail loudly instead.
+        if Sys.iswindows()
+            throw(LibSSHException("The Demo server doesn't support SFTP on Windows because libssh doesn't implement the SFTP server API there"))
+        end
+
         ptr = lib.sftp_server_new(session, sshchan)
         if ptr == C_NULL
             @error "Call to lib.sftp_server_new() failed"

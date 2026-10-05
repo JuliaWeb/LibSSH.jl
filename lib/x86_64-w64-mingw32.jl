@@ -15,25 +15,22 @@ struct LibSSHException <: Exception
 end
 
 
-const __uid_t = Cuint
+const _mode_t = Cushort
 
-const __gid_t = Cuint
+const mode_t = _mode_t
 
-const __mode_t = Cuint
+const UINT_PTR = Culonglong
 
-const gid_t = __gid_t
+const u_int = Cuint
 
-const uid_t = __uid_t
-
-const mode_t = __mode_t
-
-const __fd_mask = Clong
+const SOCKET = UINT_PTR
 
 mutable struct fd_set
-    __fds_bits::NTuple{16, __fd_mask}
+    fd_count::u_int
+    fd_array::NTuple{64, SOCKET}
 end
 
-const socket_t = Cint
+const socket_t = SOCKET
 
 mutable struct ssh_channel_struct end
 
@@ -297,7 +294,7 @@ end
     SSH_KEY_CMP_CERTIFICATE = 2
 end
 
-@cenum __JL_Ctag_9::UInt32 begin
+@cenum __JL_Ctag_2::UInt32 begin
     SSH_LOG_NOLOG = 0
     SSH_LOG_WARNING = 1
     SSH_LOG_PROTOCOL = 2
@@ -381,7 +378,7 @@ end
     SSH_OPTIONS_NEXT_IDENTITY = 53
 end
 
-@cenum __JL_Ctag_10::UInt32 begin
+@cenum __JL_Ctag_3::UInt32 begin
     SSH_SCP_WRITE = 0
     SSH_SCP_READ = 1
     SSH_SCP_RECURSIVE = 16
@@ -2559,10 +2556,6 @@ function ssh_userauth_pubkey(session, username, publickey, privatekey)
     @ccall libssh.ssh_userauth_pubkey(session::ssh_session, username::Ptr{Cchar}, publickey::ssh_string, privatekey::ssh_private_key)::Cint
 end
 
-function ssh_userauth_agent_pubkey(session, username, publickey)
-    @ccall libssh.ssh_userauth_agent_pubkey(session::ssh_session, username::Ptr{Cchar}, publickey::ssh_public_key)::Cint
-end
-
 function ssh_userauth_autopubkey(session, passphrase)
     @ccall libssh.ssh_userauth_autopubkey(session::ssh_session, passphrase::Ptr{Cchar})::Cint
 end
@@ -2823,6 +2816,10 @@ This function deallocates memory corresponding to the aio handle returned by the
 function sftp_aio_free(aio)
     @ccall libssh.sftp_aio_free(aio::sftp_aio)::Cvoid
 end
+
+const uid_t = UInt32
+
+const gid_t = UInt32
 
 struct sftp_attributes_struct
     name::Ptr{Cchar}
@@ -6435,7 +6432,7 @@ function ssh_sk_get_default_callbacks()
     @ccall libssh.ssh_sk_get_default_callbacks()::Ptr{ssh_sk_callbacks_struct}
 end
 
-# Skipping MacroDefinition: LIBSSH_API __attribute__ ( ( visibility ( "default" ) ) )
+# Skipping MacroDefinition: LIBSSH_API __attribute__ ( ( dllimport ) )
 
 # Skipping MacroDefinition: SSH_DEPRECATED __attribute__ ( ( deprecated ) )
 
