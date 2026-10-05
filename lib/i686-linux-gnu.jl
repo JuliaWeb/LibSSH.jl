@@ -6439,8 +6439,6 @@ end
 
 # Skipping MacroDefinition: SSH_DEPRECATED __attribute__ ( ( deprecated ) )
 
-const SSH_INVALID_SOCKET = socket_t(-1)
-
 const SSH_CRYPT = 2
 
 const SSH_MAC = 3
@@ -6780,6 +6778,12 @@ const SSH_PACKET_NOT_USED = 2
 Security key API major version.
 """
 const LIBSSH_SK_API_VERSION_MAJOR = 0x000a0000
+
+# Wrapped manually because the generated `socket_t(-1)` throws an InexactError
+# on Windows, where socket_t is unsigned. The C definition is `((socket_t) -1)`,
+# i.e. a cast that wraps around. This can't go in the prologue because socket_t
+# isn't defined until later in the module.
+const SSH_INVALID_SOCKET = -1 % socket_t
 
 # Manually wrapped for now until this is merged:
 # https://gitlab.com/libssh/libssh-mirror/-/merge_requests/538

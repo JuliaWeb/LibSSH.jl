@@ -14,7 +14,15 @@ else
     using DocStringExtensions: TYPEDSIGNATURES
 end
 
-@static if Sys.WORD_SIZE == 64
+@static if Sys.iswindows()
+    # Windows needs its own bindings because some types differ, most importantly
+    # socket_t.
+    if Sys.WORD_SIZE == 64
+        include(joinpath(@__DIR__, "..", "lib", "x86_64-w64-mingw32.jl"))
+    else
+        include(joinpath(@__DIR__, "..", "lib", "i686-w64-mingw32.jl"))
+    end
+elseif Sys.WORD_SIZE == 64
     include(joinpath(@__DIR__, "..", "lib", "x86_64-linux-gnu.jl"))
 else
     include(joinpath(@__DIR__, "..", "lib", "i686-linux-gnu.jl"))
@@ -188,6 +196,93 @@ function _safe_poll_fd(args...; kwargs...)
 
     return result
 end
+
+# libssh's socket_t is a file descriptor on POSIX but a Windows SOCKET, which is
+# not a CRT fd. Wrapping a SOCKET in RawFD makes FileWatching try to convert it
+# with _get_osfhandle() and fail, so Windows uses WindowsRawSocket instead.
+# See https://github.com/JuliaWeb/LibSSH.jl/issues/34.
+@static if Sys.iswindows()
+    const SocketFD = Base.Libc.WindowsRawSocket
+
+    _socketfd(fd::Integer) = Base.Libc.WindowsRawSocket(Ptr{Cvoid}(fd % UInt))
+
+    # dup(2) doesn't work on a SOCKET, the winsock equivalent is
+    # WSADuplicateSocketW() into our own process + WSASocketW(). Like dup(2) it
+    # returns a second reference to the same socket. Note that DuplicateHandle()
+    # (what Base.Libc.dup does) is not supported for sockets.
+    #
+    # Note that winsock functions are stdcall, which matters on 32bit Windows.
+    # @ccall doesn't support calling conventions so we use ccall() instead.
+    const _WSA_FLAG_OVERLAPPED = UInt32(0x01)
+    # Without this the duplicate would be inherited by spawned processes, which
+    # would keep the connection open after the session is closed.
+    const _WSA_FLAG_NO_HANDLE_INHERIT = UInt32(0x80)
+    const _FROM_PROTOCOL_INFO = Cint(-1)
+    const _INVALID_SOCKET = _socketfd(-1)
+
+    # See definition in WinSock2.h
+    const _WSAPROTOCOL_INFOW_SIZE = 628
+
+    # Throws a SystemError on failure. WSAGetLastError() is an alias for
+    # GetLastError(), so windowserror() picks up the right error code.
+    function _dup_socketfd(fd::SocketFD)
+        # We don't write out the layout since we only pass it back to winsock
+        info = zeros(UInt8, _WSAPROTOCOL_INFOW_SIZE)
+        ret = ccall((:WSADuplicateSocketW, "ws2_32"), stdcall, Cint,
+                    (SocketFD, UInt32, Ptr{Cvoid}),
+                    fd, getpid(), info)
+        Base.windowserror("WSADuplicateSocketW", ret != 0)
+
+        dupfd = ccall((:WSASocketW, "ws2_32"), stdcall, SocketFD,
+                      (Cint, Cint, Cint, Ptr{Cvoid}, UInt32, UInt32),
+                      _FROM_PROTOCOL_INFO, _FROM_PROTOCOL_INFO, _FROM_PROTOCOL_INFO,
+                      info, 0, _WSA_FLAG_OVERLAPPED | _WSA_FLAG_NO_HANDLE_INHERIT)
+        Base.windowserror("WSASocketW", dupfd == _INVALID_SOCKET)
+
+        return dupfd
+    end
+
+    _close_socketfd(fd::SocketFD) = ccall((:closesocket, "ws2_32"), stdcall, Cint, (SocketFD,), fd)
+
+    # WindowsRawSocket and socket_t are both pointer-sized
+    _socket_t_value(fd::SocketFD) = reinterpret(lib.socket_t, fd)
+else
+    const SocketFD = RawFD
+
+    _socketfd(fd::Integer) = RawFD(fd)
+
+    # RawFD is a primitive type, Cint(::RawFD) doesn't exist.
+    _socket_t_value(fd::RawFD) = Base.cconvert(lib.socket_t, fd)
+
+    # These are the same on Linux, macOS, and the BSDs
+    const _F_SETFD = Cint(2)
+    const _FD_CLOEXEC = Cint(1)
+
+    # Throws a SystemError on failure. The dup is marked close-on-exec so that
+    # it isn't inherited by spawned processes, which would keep the connection
+    # open after the session is closed.
+    function _dup_socketfd(fd::SocketFD)
+        dupfd = Base.Libc.dup(fd)
+        Base.systemerror("dup", dupfd == RawFD(-1))
+
+        ret = @ccall fcntl(dupfd::Cint, _F_SETFD::Cint; _FD_CLOEXEC::Cint)::Cint
+        if ret == -1
+            err = Base.Libc.errno()
+            _close_socketfd(dupfd)
+            throw(SystemError("fcntl", err))
+        end
+
+        return dupfd
+    end
+
+    _close_socketfd(fd::SocketFD) = @ccall close(fd::Cint)::Cint
+end
+
+_socket_t_value(fd::Integer) = lib.socket_t(fd)
+
+# libssh returns SSH_INVALID_SOCKET for a disconnected session. Note that this
+# must be checked on the raw socket_t, before converting it with _socketfd().
+_is_invalid_fd(fd::Integer) = fd == lib.SSH_INVALID_SOCKET
 
 include("utils.jl")
 include("gssapi.jl")
