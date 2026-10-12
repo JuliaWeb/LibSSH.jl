@@ -319,7 +319,17 @@ function get_limits(sftp::SftpSession)
     return limits
 end
 
-# Undocumented for now because it's difficult to test
+"""
+$(TYPEDSIGNATURES)
+
+Get the home directory of `username` (defaulting to the session user if not passed).
+
+# Throws
+- `ArgumentError`: If `sftp` is closed.
+- `ErrorException`: If the SSH server doesn't support the `home-directory`
+  extension.
+- [`SftpException`](@ref): If getting the home directory failed.
+"""
 function Base.homedir(sftp::SftpSession, username=nothing)
     if !isassigned(sftp)
         throw(ArgumentError("The SftpSession doesn't have a valid pointer, cannot get the home directory"))
@@ -331,7 +341,7 @@ function Base.homedir(sftp::SftpSession, username=nothing)
 
     ret = C_NULL
     GC.@preserve username begin
-        arg = isnothing(username) ? C_NULL : Base.unsafe_convert(Ptr{Cchar}, username)
+        arg = isnothing(username) ? Ptr{Cchar}(C_NULL) : Base.unsafe_convert(Ptr{Cchar}, username)
         ret = @lockandblock sftp.session lib.sftp_home_directory(sftp.ptr, arg)
     end
 
