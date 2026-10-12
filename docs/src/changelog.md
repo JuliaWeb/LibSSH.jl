@@ -7,6 +7,12 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## [v1.2.1] - 2026-10-12
+
+### Fixed
+- Fixed a bug in [`homedir(::SftpSession)`](@ref) that would cause it to throw
+  an exception if the username was not explicitly passed to it ([#49]).
+
 ## [v1.2.0] - 2026-07-23
 
 *This release has some security fixes, we strongly recommend updating to it.*

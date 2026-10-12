@@ -1,4 +1,3 @@
-import Revise
 import Literate
 import Changelog
 import Documenter
@@ -56,7 +55,9 @@ end
 
 # Always trigger a revise to pick up the latest docstrings. This is useful when
 # working with servedocs().
-Revise.revise()
+if isdefined(Main, :Revise)
+    Revise.revise()
+end
 
 # Build the examples
 Literate.markdown(joinpath(@__DIR__, "src/examples.jl"),
