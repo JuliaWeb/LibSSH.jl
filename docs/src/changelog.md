@@ -7,6 +7,14 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## [v1.2.2] - 2026-10-18
+
+### Changed
+- Updated bindings for libssh 0.12.2 ([#52]).
+
+### Fixed
+- Added proper support for Windows ([#52]).
+
 ## [v1.2.1] - 2026-10-12
 
 ### Fixed
