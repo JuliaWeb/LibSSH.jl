@@ -241,9 +241,9 @@ end
 cd(@__DIR__) do
     # There are some parts of the bindings where the difference in pointer size
     # on 32bit/64bit platforms is important, like the generated getproperty()
-    # methods. Hence we generate 32bit and 64bit bindings for Linux only (they
-    # should only be architecture-dependent, not OS-dependent).
-    for target in ("x86_64-linux-gnu", "i686-linux-gnu")
+    # methods. Hence we generate 32bit and 64bit bindings. Windows needs its own
+    # bindings too because some types differ, most importantly socket_t.
+    for target in ("x86_64-linux-gnu", "i686-linux-gnu", "x86_64-w64-mingw32", "i686-w64-mingw32")
         # Load the doxygen tags
         ctx_objects[:tags] = read_tags()
 
