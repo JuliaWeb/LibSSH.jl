@@ -8,7 +8,6 @@ import Aqua
 import Literate
 import CURL_jll: curl
 import OpenSSH_jll
-import sshpass_jll: sshpass
 import ReTest: @testset, @test, @test_throws, @test_nowarn, @test_broken, @test_logs
 
 import LibSSH as ssh
@@ -194,11 +193,20 @@ end
     # Also note that we set `-F none` to disabling reading user config files.
     openssh_cmd = OpenSSH_jll.ssh()
     ssh_args = `-F none -o NoHostAuthenticationForLocalhost=yes -p 2222`
-    ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`$(sshpass()) -p bar $(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
     passwordless_ssh_cmd(cmd::Cmd) = ignorestatus(Cmd(`$(openssh_cmd.exec) $(ssh_args) $cmd`; env=openssh_cmd.env))
 
-    # sshpass_jll isn't available on Windows, so skip the tests using
-    # password auth with the OpenSSH client there.
+    # We supply the password through SSH_ASKPASS
+    askpass = joinpath(mktempdir(), Sys.iswindows() ? "askpass.bat" : "askpass.sh")
+    if Sys.iswindows()
+        write(askpass, "@echo bar\r\n")
+    else
+        write(askpass, "#!/bin/sh\necho bar\n")
+        chmod(askpass, 0o755)
+    end
+    askpass_env = ("SSH_ASKPASS" => askpass, "SSH_ASKPASS_REQUIRE" => "force")
+    ssh_cmd(cmd::Cmd) = addenv(passwordless_ssh_cmd(cmd), askpass_env...)
+
+    # These tests rely on a POSIX shell on the server side
     if !Sys.iswindows()
         @testset "Command execution" begin
             DemoServer(2222; password="bar", verbose=false) do
@@ -272,7 +280,7 @@ end
     end
     @info "Finished: Server / Public key authentication"
 
-    # These need sshpass too
+    # These rely on a POSIX shell too
     if !Sys.iswindows()
         @testset "Password authentication and session channels" begin
             # More complicated test, where we run a command and check the output
@@ -370,7 +378,7 @@ end
         @info "Finished: Server / Keyboard-interactive authentication"
     end
 
-    # These need sshpass too
+    # These rely on a POSIX shell too
     if !Sys.iswindows()
         @testset "Multiple connections" begin
             demo_server, _ = DemoServer(2222; password="bar") do
@@ -381,7 +389,10 @@ end
         end
         @info "Finished: Server / Multiple connections"
 
-        sftp_cmd(cmd::Cmd) = ignorestatus(`$(sshpass()) -p bar sftp -F none -o NoHostAuthenticationForLocalhost=yes -P 2222 $cmd`)
+        openssh_sftp = OpenSSH_jll.sftp()
+        sftp_cmd(cmd::Cmd) = addenv(ignorestatus(Cmd(`$(openssh_sftp.exec) -S $(openssh_cmd.exec[1]) -F none -o NoHostAuthenticationForLocalhost=yes -P 2222 $cmd`;
+                                                     env=openssh_sftp.env)),
+                                    askpass_env...)
 
         @testset "SFTP" begin
             DemoServer(2222; verbose=false, log_verbosity=ssh.SSH_LOG_NOLOG, password="bar") do
