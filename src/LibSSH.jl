@@ -5,8 +5,14 @@ export SSH_LOG_NOLOG, SSH_LOG_WARNING, SSH_LOG_PROTOCOL, SSH_LOG_PACKET, SSH_LOG
 import Sockets
 import FileWatching
 
-using DocStringExtensions
 using PrecompileTools: @compile_workload
+
+using DocStringExtensions: DocStringExtensions, TYPEDEF, TYPEDFIELDS
+@static if pkgversion(DocStringExtensions) >= v"0.10"
+    const TYPEDSIGNATURES = DocStringExtensions.TypedMethodSignatures(defaults=true)
+else
+    using DocStringExtensions: TYPEDSIGNATURES
+end
 
 @static if Sys.WORD_SIZE == 64
     include(joinpath(@__DIR__, "..", "lib", "x86_64-linux-gnu.jl"))
