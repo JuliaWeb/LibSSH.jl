@@ -17,7 +17,7 @@ libssh_jll = "a8d4f100-aa25-5708-be18-96e0805c2c9d"
 [compat]
 CEnum = "0.4, 0.5, 1.0"
 Dates = "1"
-DocStringExtensions = "0.9"
+DocStringExtensions = "0.9, 0.10"
 FileWatching = "1"
 Kerberos_krb5_jll = "1"
 PrecompileTools = "1"
