@@ -534,6 +534,31 @@ end
 """
 $(TYPEDSIGNATURES)
 
+Change the permissions of a remote path.
+
+# Throws
+- `ArgumentError`: If `sftp` is closed.
+- [`SftpException`](@ref): If changing the permissions fails.
+"""
+function Base.chmod(path::AbstractString, sftp::SftpSession, mode::Integer)
+    if !isopen(sftp)
+        throw(ArgumentError("$(sftp) is closed, cannot use it to chmod()"))
+    end
+
+    ret = GC.@preserve path begin
+        cstr = Base.unsafe_convert(Ptr{Cchar}, path)
+        @lockandblock sftp.session lib.sftp_chmod(sftp.ptr, cstr, lib.mode_t(mode))
+    end
+    if ret != 0
+        throw(SftpException("Changing permissions failed", path, sftp))
+    end
+
+    return path
+end
+
+"""
+$(TYPEDSIGNATURES)
+
 Create a remote path. This behaves in exactly the same way as `Base.mkpath()`.
 
 # Throws

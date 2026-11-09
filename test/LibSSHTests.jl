@@ -1169,6 +1169,17 @@ end
                 @test_throws ssh.SftpException mkpath(path, sftp)
             end
 
+            # Test chmod()
+            mktempdir() do tmpdir
+                path = joinpath(tmpdir, "foo")
+                touch(path)
+                @test chmod(path, sftp, 0o640) == path
+                @test filemode(path) & 0o7777 == 0o640
+
+                rm(path)
+                @test_throws ssh.SftpException chmod(path, sftp, 0o640)
+            end
+
             # Test mv()
             mktempdir() do tmpdir
                 src = joinpath(tmpdir, "foo")
