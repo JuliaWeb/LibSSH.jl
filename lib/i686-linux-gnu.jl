@@ -3722,8 +3722,19 @@ function sftp_aio_wait_read(aio::Ptr{sftp_aio}, buf::Ptr{Cvoid}, buf_size::Csize
     return @threadcall(cfunc, Cssize_t, (Ptr{sftp_aio}, Ptr{Cvoid}, Csize_t), aio, buf, buf_size)
 end
 
+function _threadcall_sftp_aio_begin_write(file::sftp_file, buf::Ptr{Cvoid}, len::Csize_t, aio::Ptr{sftp_aio})
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_aio_begin_write(file::sftp_file, buf::Ptr{Cvoid}, len::Csize_t, aio::Ptr{sftp_aio})::Cssize_t)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_aio_begin_write(file, buf, len, aio)
+    sftp_aio_begin_write(file::sftp_file, buf::Ptr{Cvoid}, len::Csize_t, aio::Ptr{sftp_aio})
+
+Auto-generated wrapper around `sftp_aio_begin_write()`. Original upstream documentation is below.
+
+---
 
 Start an asynchronous write to a file using an opened sftp file handle.
 
@@ -3761,8 +3772,9 @@ On success, the number of bytes the server is requested to write (value of len p
 # See also
 [`sftp_aio_wait_write`](@ref)(), [`sftp_aio_free`](@ref)(), [`sftp_open`](@ref)(), [`sftp_close`](@ref)(), [`sftp_get_error`](@ref)(), [`ssh_get_error`](@ref)()
 """
-function sftp_aio_begin_write(file, buf, len, aio)
-    @ccall libssh.sftp_aio_begin_write(file::sftp_file, buf::Ptr{Cvoid}, len::Csize_t, aio::Ptr{sftp_aio})::Cssize_t
+function sftp_aio_begin_write(file::sftp_file, buf::Ptr{Cvoid}, len::Csize_t, aio::Ptr{sftp_aio})
+    cfunc = @cfunction(_threadcall_sftp_aio_begin_write, Cssize_t, (sftp_file, Ptr{Cvoid}, Csize_t, Ptr{sftp_aio}))
+    return @threadcall(cfunc, Cssize_t, (sftp_file, Ptr{Cvoid}, Csize_t, Ptr{sftp_aio}), file, buf, len, aio)
 end
 
 function _threadcall_sftp_aio_wait_write(aio::Ptr{sftp_aio})
@@ -4048,8 +4060,19 @@ function sftp_chown(sftp, file, owner, group)
     @ccall libssh.sftp_chown(sftp::sftp_session, file::Ptr{Cchar}, owner::uid_t, group::gid_t)::Cint
 end
 
+function _threadcall_sftp_chmod(sftp::sftp_session, file::Ptr{Cchar}, mode::mode_t)
+    gc_state = @ccall(jl_gc_safe_enter()::Int8)
+    ret = @ccall(libssh.sftp_chmod(sftp::sftp_session, file::Ptr{Cchar}, mode::mode_t)::Cint)
+    @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+    return ret
+end
+
 """
-    sftp_chmod(sftp, file, mode)
+    sftp_chmod(sftp::sftp_session, file::Ptr{Cchar}, mode::mode_t)
+
+Auto-generated wrapper around `sftp_chmod()`. Original upstream documentation is below.
+
+---
 
 Change permissions of a file
 
@@ -4062,8 +4085,9 @@ Change permissions of a file
 # See also
 [`sftp_get_error`](@ref)()
 """
-function sftp_chmod(sftp, file, mode)
-    @ccall libssh.sftp_chmod(sftp::sftp_session, file::Ptr{Cchar}, mode::mode_t)::Cint
+function sftp_chmod(sftp::sftp_session, file::Ptr{Cchar}, mode::mode_t)
+    cfunc = @cfunction(_threadcall_sftp_chmod, Cint, (sftp_session, Ptr{Cchar}, mode_t))
+    return @threadcall(cfunc, Cint, (sftp_session, Ptr{Cchar}, mode_t), sftp, file, mode)
 end
 
 """

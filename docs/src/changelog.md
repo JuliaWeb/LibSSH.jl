@@ -7,6 +7,13 @@ CurrentModule = LibSSH
 This documents notable changes in LibSSH.jl. The format is based on [Keep a
 Changelog](https://keepachangelog.com).
 
+## [v1.3.1] - 2026-11-09
+
+### Fixed
+- Fixed a bug in v1.3.0 that could cause deadlocks for both
+  [`chmod(::AbstractString, SftpSession)`](@ref) and [`write(::SftpFile,
+  ::DenseVector)`](@ref) ([#53]).
+
 ## [v1.3.0] - 2026-11-09
 
 ### Added

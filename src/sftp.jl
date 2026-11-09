@@ -1083,8 +1083,11 @@ function Base.write(file::SftpFile, data::T) where T <: DenseVector
             # This must be blocking, in non-blocking mode libssh will silently
             # send a partial packet if the channel window is full or the
             # session is rekeying, which desyncs the SFTP stream.
-            ret = GC.@preserve data begin
-                @lockandblock file.sftp.session lib.sftp_aio_begin_write(file, Ptr{Cvoid}(pointer(data)) + offset, bytes_left, handle)
+            ret = GC.@preserve data handle begin
+                file_ptr = Base.unsafe_convert(lib.sftp_file, file)
+                data_ptr = Ptr{Cvoid}(pointer(data)) + offset
+                handle_ptr = Base.unsafe_convert(Ptr{lib.sftp_aio}, handle)
+                @lockandblock file.sftp.session lib.sftp_aio_begin_write(file_ptr, data_ptr, Csize_t(bytes_left), handle_ptr)
             end
             if ret < 0
                 throw(SftpException("Attempted write to file failed", file))
