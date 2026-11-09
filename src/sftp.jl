@@ -163,7 +163,7 @@ mutable struct SftpSession
             throw(LibSSHException("Couldn't initialize the SFTP session, call to lib.sftp_init() failed with $(ret): $(error_code)"))
         end
 
-        push!(session.closeables, self)
+        @lock session.closeables push!(session.closeables[], self)
         self
     end
 end
@@ -238,10 +238,11 @@ function Base.close(sftp::SftpSession)
         end
 
         # Remove from the parent session
-        @lock sftp.session begin
-            idx = findfirst(x -> x === sftp, sftp.session.closeables)
+        @lock sftp.session.closeables begin
+            closeables = sftp.session.closeables[]
+            idx = findfirst(x -> x === sftp, closeables)
             if !isnothing(idx)
-                popat!(sftp.session.closeables, idx)
+                popat!(closeables, idx)
             else
                 Threads.@spawn @error "Couldn't find $(sftp) in the parent Session, this may be a memory leak."
             end

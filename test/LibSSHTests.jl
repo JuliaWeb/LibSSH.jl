@@ -675,7 +675,7 @@ end
         demo_server_with_session(2222) do session
             # Create a channel
             sshchan = ssh.SshChannel(session)
-            @test only(session.closeables) === sshchan
+            @test @lock(session.closeables, only(session.closeables[])) === sshchan
 
             # Create a non-owning channel and make sure that we can't close it
             non_owning_sshchan = ssh.SshChannel(sshchan.ptr; own=false)
@@ -687,7 +687,7 @@ end
 
             close(sshchan)
             @test isnothing(sshchan.ptr)
-            @test isempty(session.closeables)
+            @test @lock(session.closeables, isempty(session.closeables[]))
         end
 
         # SshChannel has no finalizer — must be closed explicitly
@@ -696,7 +696,7 @@ end
             @test isassigned(sshchan)
             close(sshchan)
             @test !isassigned(sshchan)
-            @test isempty(session.closeables)
+            @test @lock(session.closeables, isempty(session.closeables[]))
         end
     end
     @info "Finished: SshChannel / Creating/closing channels"
