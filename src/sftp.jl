@@ -1079,8 +1079,14 @@ function Base.write(file::SftpFile, data::T) where T <: DenseVector
         while bytes_left > 0
             handle = Ref{lib.sftp_aio}()
             offset = sizeof(data) - bytes_left
-            ret = GC.@preserve data lib.sftp_aio_begin_write(file, Ptr{Cvoid}(pointer(data)) + offset, bytes_left, handle)
-            if ret == SSH_ERROR
+
+            # This must be blocking, in non-blocking mode libssh will silently
+            # send a partial packet if the channel window is full or the
+            # session is rekeying, which desyncs the SFTP stream.
+            ret = GC.@preserve data begin
+                @lockandblock file.sftp.session lib.sftp_aio_begin_write(file, Ptr{Cvoid}(pointer(data)) + offset, bytes_left, handle)
+            end
+            if ret < 0
                 throw(SftpException("Attempted write to file failed", file))
             end
 
@@ -1100,7 +1106,8 @@ function Base.write(file::SftpFile, data::T) where T <: DenseVector
                 ret = _session_trywait(file.sftp.session) do
                     @lockandblock file.sftp.session lib.sftp_aio_wait_write(handle_ptr)
                 end
-                if ret == SSH_ERROR
+                # _session_trywait() may return SSH_AGAIN if the socket closed
+                if ret < 0
                     throw(SftpException("Write to file failed", file))
                 end
             end
