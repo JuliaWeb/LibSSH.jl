@@ -55,7 +55,7 @@ be owning or non-owning of its internal pointer to a `lib.ssh_session`.
 mutable struct Session
     ptr::Union{lib.ssh_session, Nothing}
     owning::Bool
-    closeables::Vector{Any}
+    closeables::Base.Lockable{Vector{Any}, ReentrantLock}
     server_callbacks::Union{ServerCallbacks, Nothing}
 
     log_verbosity::Int
@@ -106,7 +106,7 @@ mutable struct Session
     """
     function Session(ptr::lib.ssh_session; log_verbosity=nothing, own::Bool=true,
                      pin_tid::Union{Nothing, Integer}=nothing)
-        session = new(ptr, own, [], nothing,
+        session = new(ptr, own, Base.Lockable(Any[]), nothing,
                       -1, nothing, nothing, true,
                       ReentrantLock(), nothing, AuthMethod[], true,
                       Channel{Union{_SessionRequest, Nothing}}(256), CloseableCondition(), Any[], nothing, false,
@@ -911,15 +911,17 @@ function disconnect(session::Session)
 
     try
         if isconnected(session)
-            # We close all the closeables in reverse order because closing them will
-            # delete each object from the vector and we don't want to invalidate any
-            # indices while deleting. The channels in particular need to be closed
-            # here because lib.ssh_disconnect() will free all of them.
-            for i in reverse(eachindex(session.closeables))
+            # Close a snapshot of the closeables since closing them deletes them
+            # from the vector, and we can't hold the lock while closing because
+            # close() calls into the actor, which also takes it. The channels in
+            # particular need to be closed here because lib.ssh_disconnect() will
+            # free all of them.
+            closeables = @lock session.closeables copy(session.closeables[])
+            for obj in Iterators.reverse(closeables)
                 # Note that only owning channels are added to session.closeables, which
                 # means that this should never throw because the channel is non-owning
                 # (of course it may still throw for other reasons).
-                close(session.closeables[i])
+                close(obj)
             end
 
             _session_call(session, () -> lib.ssh_disconnect(session))

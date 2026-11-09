@@ -54,7 +54,7 @@ mutable struct SshChannel
                    false, Channel{Union{Int, Nothing}}(1))
 
         if own
-            push!(session.closeables, self)
+            @lock session.closeables push!(session.closeables[], self)
         end
 
         return self
@@ -156,7 +156,7 @@ end
 
 # Close any channels that had defer_close() called on them
 function _do_deferred_channel_closes(session::Session)
-    for obj in copy(session.closeables)
+    for obj in @lock(session.closeables, copy(session.closeables[]))
         if obj isa SshChannel && obj._pending_close
             obj._pending_close = false
             close(obj; allow_fail=true)
@@ -201,9 +201,12 @@ function Base.close(sshchan::SshChannel; allow_fail=false)
             # Remove from the sessions list of active channels. findfirst()
             # should only return nothing if the function is being called
             # recursively (i.e. through a callback) and it was already removed.
-            idx = findfirst(x -> x === sshchan, sshchan.session.closeables)
-            if !isnothing(idx)
-                popat!(sshchan.session.closeables, idx)
+            @lock sshchan.session.closeables begin
+                closeables = sshchan.session.closeables[]
+                idx = findfirst(x -> x === sshchan, closeables)
+                if !isnothing(idx)
+                    popat!(closeables, idx)
+                end
             end
 
             if !isnothing(sshchan.session) && !isconnected(sshchan.session)
