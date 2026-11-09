@@ -26,9 +26,9 @@ ssh_ok_functions = [:ssh_message_auth_reply_success, :ssh_message_auth_set_metho
 # call them with @threadcall.
 threadcall_functions = [:sftp_new, :sftp_init, :sftp_open, :sftp_close,
                         :sftp_home_directory, :sftp_stat,
-                        :sftp_aio_wait_read, :sftp_aio_wait_write,
+                        :sftp_aio_begin_write, :sftp_aio_wait_read, :sftp_aio_wait_write,
                         :sftp_opendir, :sftp_readdir, :sftp_closedir,
-                        :sftp_unlink, :sftp_rmdir, :sftp_mkdir, :sftp_rename]
+                        :sftp_unlink, :sftp_rmdir, :sftp_mkdir, :sftp_rename, :sftp_chmod]
 all_rewritable_functions = vcat(string_functions, bool_functions, ssh_ok_functions, threadcall_functions)
 
 """
